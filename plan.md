@@ -162,54 +162,76 @@ Auto-benchmark controls *inputs*; profiler-analysis interprets *outputs*; debug-
 
 ### 8.1 Filesystem layout
 
+**Directory purpose rule:** `logs/` = infrastructure side-effects (server stderr, kernel-API boundary trails) — consult on failure, never cited in analysis. `experiments/` = research artifacts deliberately produced by the experiment protocol — cited in analysis and reports.
+
 ```
 /data/profiling_lab/
-├── plan.md                     this document
-├── README.md                   layout + reviewer reading order
-├── configs/                    YAML configs for auto_benchmark sweeps
+├── plan.md                          this document
+├── README.md                        layout + reviewer reading order
+│
+├── configs/                         YAML configs for auto_benchmark sweeps
 │   ├── phase2_shaping/
 │   └── phase5_validation/
-├── datasets/                   canonical autobench JSONL (shared input)
+│
+├── datasets/                        canonical autobench JSONL (shared across frameworks)
 │   ├── caseA_short.jsonl
 │   ├── caseB_long_prefill.jsonl
 │   ├── caseC_batched.jsonl
 │   ├── caseD_decode_heavy.jsonl
-│   └── README.md               schema + generation command + SHA-256
-├── logs/                       raw kernel-API boundary logs + server stderr
+│   └── README.md                    schema + generation command + SHA-256
+│
+├── logs/                            infrastructure side-effects (consult on failure)
+│   ├── phase0/
+│   │   ├── sglang_server.log        SGLang startup stderr (Phase 0)
+│   │   ├── vllm_server.log          vLLM startup stderr (Phase 0)
+│   │   ├── kernel_api_7067.log      L1 kernel-API boundary log PID 7067 (empty)
+│   │   ├── kernel_api_7208.log      L1 kernel-API boundary log PID 7208 (16 MB, live run)
+│   │   └── kernel_api_7209.log      L1 kernel-API boundary log PID 7209 (empty)
 │   ├── phase1/
 │   ├── phase2/
 │   ├── phase3/
 │   └── phase5/
-├── experiments/                metric artifacts (processed)
-│   ├── env_snapshot.md
-│   ├── phase0_equivalence.md
+│
+├── experiments/                     research artifacts (cited in analysis)
+│   ├── env_snapshot.md              global: versions, backends, memory — all phases
+│   ├── phase0/
+│   │   ├── equivalence.md           Tier A/B/C results — Phase-0 deliverable
+│   │   ├── sglang_outputs.json      Tier-B greedy outputs from SGLang
+│   │   ├── vllm_outputs.json        Tier-B greedy outputs from vLLM
+│   │   └── scripts/                 reproducible scripts for Phase 0
+│   │       ├── tier_a_tokenizer.py  tokenizer + vocab checks
+│   │       ├── tier_b_sglang.py     query SGLang, save sglang_outputs.json
+│   │       └── tier_b_vllm_compare.py  query vLLM, compare, exit 1 on fail
 │   ├── phase1/
-│   │   ├── raw/                raw bench_serving JSON + per-run meta.json
-│   │   └── summary.md          4×2 baseline table
-│   ├── phase2_shaping/         auto_benchmark output dir (live_results.jsonl etc.)
+│   │   ├── raw/                     raw bench_serving JSON + per-run meta.json
+│   │   └── summary.md               4×2 baseline table
+│   ├── phase2_shaping/              auto_benchmark output dir
 │   ├── phase2/
-│   │   └── selected_cases.md   Phase-3 entry gate
+│   │   └── selected_cases.md        Phase-3 entry gate
 │   └── phase5/
-│       └── {hypothesis}/       per-hypothesis validation sweep outputs
-├── traces/                     raw torch profiler artifacts
+│       └── {hypothesis}/
+│
+├── traces/                          raw torch profiler artifacts
 │   └── {case}/
-│       ├── sglang_mapping/     graph-off, stage-split (EXTEND/DECODE)
-│       ├── sglang_formal/      graph-on, stage-split
+│       ├── sglang_mapping/          graph-off, --profile-by-stage (EXTEND / DECODE)
+│       ├── sglang_formal/           graph-on,  --profile-by-stage (EXTEND / DECODE)
 │       ├── vllm/
-│       │   ├── prefill_like/   concurrency=1 long-prompt window
-│       │   └── decode_like/    concurrency=16 steady-state window
-│       └── collection_notes.md warmup, iteration count, anomalies
-├── analysis/                   interpretation (processed)
+│       │   ├── prefill_like/        concurrency=1 long-prompt window
+│       │   └── decode_like/         concurrency=16 steady-state window
+│       └── collection_notes.md
+│
+├── analysis/                        interpretation layer (processed from traces)
 │   ├── {case}/
 │   │   ├── extend_triage.md
 │   │   ├── decode_triage.md
-│   │   ├── breakdown.md        category-level (attn/gemm/comm/norm/quant/mem/sched)
-│   │   └── vllm_crosscheck.md  falsification/corroboration record
-│   ├── category_regex.md       shared regex rules applied to both frameworks
-│   ├── vllm_source_map.md      curated vLLM kernel-name → module path
-│   ├── hypotheses.md           structured hypotheses, de-duplicated
-│   └── ranked_recommendations.md   top 5–10, sorted by confidence × impact × feasibility
-└── reports/                    final deliverables (human-facing)
+│   │   ├── breakdown.md             category split: attn/gemm/comm/norm/quant/mem/sched
+│   │   └── vllm_crosscheck.md       falsification / corroboration record
+│   ├── category_regex.md            shared regex applied symmetrically to both frameworks
+│   ├── vllm_source_map.md           curated kernel-name → vllm/ module path
+│   ├── hypotheses.md                structured hypotheses, de-duplicated
+│   └── ranked_recommendations.md    top 5–10, sorted by confidence × impact × feasibility
+│
+└── reports/                         final deliverables (human-facing)
     ├── 01_experiment_summary.md
     ├── 02_benchmark_table.md
     ├── 03_profiling_analysis.md
@@ -569,7 +591,58 @@ Never invert a row. Auto-benchmark does not read kernels; profiler-analysis does
 
 ---
 
-## 15. Prioritized Next-Step Checklist
+## 15. Results
+
+### Phase 0 — Environment & Functional Equivalence (completed 2026-04-17)
+
+#### Run conditions
+- GPU: H200 index 6, `CUDA_VISIBLE_DEVICES=6`
+- `HF_HUB_OFFLINE=1`, direct snapshot path (no network)
+- Servers run sequentially (SGLang first, then vLLM after full shutdown)
+
+#### Produced files
+
+| File | Layer | Contents |
+|---|---|---|
+| `experiments/env_snapshot.md` | Deliverable | Full version table (SGLang, vLLM, torch, FlashInfer, CUDA), attention backends, chunked-prefill defaults, idle GPU memory per framework, fairness tier assignments |
+| `experiments/phase0/equivalence.md` | Deliverable | Tier A/B/C equivalence matrix with pass/fail per check, tokenizer probe table, greedy output comparison table, conclusion |
+| `experiments/phase0/sglang_outputs.json` | Raw | 3 prompts + SGLang greedy responses (temperature=0, top_p=1, max_tokens=128) |
+| `experiments/phase0/vllm_outputs.json` | Raw | 3 prompts + vLLM greedy responses (same settings) |
+| `experiments/phase0/scripts/tier_a_tokenizer.py` | Script | Reproducible tokenizer + vocab check; run against any snapshot path |
+| `experiments/phase0/scripts/tier_b_sglang.py` | Script | Queries SGLang port 30000, saves `sglang_outputs.json` |
+| `experiments/phase0/scripts/tier_b_vllm_compare.py` | Script | Queries vLLM port 30001, saves `vllm_outputs.json`, compares against SGLang reference; exit 1 on first-token divergence |
+| `logs/phase0/sglang_server.log` | Log | SGLang server startup stderr (42 KB); contains full `ServerArgs`, CUDA graph capture progress, ready message |
+| `logs/phase0/vllm_server.log` | Log | vLLM server startup stderr (19 KB); contains engine config, attention backend selection, KV cache size, CUDA graph capture |
+| `logs/phase0/kernel_api_7208.log` | Log | L1 kernel-API boundary trail from live SGLang run (16 MB); passively records last API boundary before any potential crash |
+| `logs/phase0/kernel_api_7067.log` | Log | Empty — server process that was killed before serving |
+| `logs/phase0/kernel_api_7209.log` | Log | Empty — server process that was killed before serving |
+
+#### Equivalence results
+
+| Tier | Check | Result |
+|---|---|---|
+| A | Tokenizer byte-equality (5 probes) | ✅ PASS |
+| A | Model weights (same snapshot path) | ✅ PASS |
+| A | Vocab size (151,643), EOS/BOS/PAD ids | ✅ PASS |
+| A | Chat template (ChatML) | ✅ PASS |
+| B | Top-1 first token on 3 greedy prompts | ✅ PASS |
+| B | Full 128-token output | ✅ **EXACT MATCH** on all 3 prompts |
+| B | Coherent continuation | ✅ PASS |
+
+#### Key environment findings (carry into Phase 1+)
+
+| Finding | Variable tier | Impact on conclusions |
+|---|---|---|
+| SGLang attention backend: **FlashInfer 0.6.7.post3** (text) + FA3 (multimodal) | Measured | Any Phase-4 attention-kernel difference has confidence ceiling M until backends are aligned |
+| vLLM attention backend: **FlashAttention v3** (text + multimodal) | Measured | Same as above |
+| torch version differs: SGLang 2.9.1+cu129 vs vLLM 2.10.0+cu128 | Measured | Log in every run meta.json; re-confirm if version changes |
+| KV cache: SGLang ~102 GB vs vLLM ~105.9 GB | Measured | Not a practical constraint at Phase-1 concurrency (≤16); no fairness action needed |
+| SGLang `chunked_prefill_size=8192`, `piecewise_cuda_graph=disabled` | Controlled (logged) | Pinned; record in Phase-1 meta.json |
+| Both frameworks: **EXACT greedy output match** at temperature=0 | — | No downstream "semantic-level only" annotation needed |
+
+---
+
+## 16. Prioritized Next-Step Checklist
 
 1. ✅ Create the filesystem layout from §8.1 (placeholder READMEs in each directory).
 2. ✅ Phase 0 — servers up, equivalence matrix run. All Tier-A/B pass; outputs EXACT match.
