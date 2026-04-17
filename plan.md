@@ -256,21 +256,35 @@ A human reviewer validating the project should inspect artifacts in this sequenc
 
 **Goal.** Establish that both servers are comparable — weights, tokenizer, vocab identical; decoding behavior equivalent under a realistic equivalence standard.
 
+**Operational constants (this run).**
+- GPU: `CUDA_VISIBLE_DEVICES=6` (H200, 139 GB free at run start)
+- Model snapshot: `/root/.cache/huggingface/hub/models--Qwen--Qwen3-VL-8B-Instruct/snapshots/0c351dd01ed87e9c1b53cbc748cba10e6187ff3b`
+- `HF_HUB_OFFLINE=1` — model is fully cached; no network call or token needed
+- Servers run **sequentially** (SGLang first, then vLLM after shutdown) so each gets full GPU memory and there is no cross-process interference during the equivalence test. Phase 1 benchmarks follow the same pattern.
+
 **Actions.**
 
-1. Launch SGLang:
+1. Launch SGLang (background, log to `logs/phase1/sglang_server_phase0.log`):
    ```
-   python3 -m sglang.launch_server --model-path Qwen/Qwen3-VL-8B-Instruct \
+   CUDA_VISIBLE_DEVICES=6 HF_HUB_OFFLINE=1 \
+   SGLANG_KERNEL_API_LOGLEVEL=1 \
+   SGLANG_KERNEL_API_LOGDEST=logs/phase1/sglang_%i.log \
+   python3 -m sglang.launch_server \
+     --model-path <snapshot_path> \
      --dtype bfloat16 --port 30000 --tp 1 --attention-backend flashinfer
    ```
-2. Launch vLLM (conda env):
+   Wait for `server is fired up` in log. Record FlashInfer version, chunked-prefill default, idle GPU memory.
+2. Run equivalence tiers (Tier A tokenizer check + Tier B greedy outputs). Save outputs to `experiments/phase0_sglang_outputs.json`.
+3. Kill SGLang. Launch vLLM:
    ```
+   CUDA_VISIBLE_DEVICES=6 HF_HUB_OFFLINE=1 \
    /opt/miniconda3/envs/vllm/bin/python -m vllm.entrypoints.openai.api_server \
-     --model Qwen/Qwen3-VL-8B-Instruct --dtype bfloat16 \
+     --model <snapshot_path> --dtype bfloat16 \
      --port 30001 --tensor-parallel-size 1
    ```
-3. Record versions, attention backend, chunked-prefill defaults, idle post-load memory into `experiments/env_snapshot.md`.
-4. Run the three equivalence tiers below; record in `experiments/phase0_equivalence.md`.
+   Wait for `Application startup complete`. Record attention backend, idle GPU memory.
+4. Run same Tier B prompts against vLLM. Save to `experiments/phase0_vllm_outputs.json`. Compare.
+5. Record all findings in `experiments/env_snapshot.md` and `experiments/phase0_equivalence.md`.
 
 **Equivalence framework.** Byte-identical greedy decoding across frameworks is not a realistic target — attention kernel, matmul tiling, and reduction order all legitimately differ, and bf16 accumulation order compounds the divergence. The correct standard is tiered:
 
@@ -557,8 +571,8 @@ Never invert a row. Auto-benchmark does not read kernels; profiler-analysis does
 
 ## 15. Prioritized Next-Step Checklist
 
-1. Create the filesystem layout from §8.1 (placeholder READMEs in each directory).
-2. Phase 0 — servers up, equivalence matrix run (≤2 h).
+1. ✅ Create the filesystem layout from §8.1 (placeholder READMEs in each directory).
+2. ✅ Phase 0 — servers up, equivalence matrix run. All Tier-A/B pass; outputs EXACT match.
 3. Generate `datasets/case{A..D}.jsonl` via `auto_benchmark convert`, log SHA-256 (≤1 h).
 4. Phase 1 — 8 runs × 3 reps with passive L1 crash logging; `experiments/phase1/summary.md` (½–1 day).
 5. Apply Phase-2 decision rule; run tier-1 shaping on 5–15 % cases; produce `selected_cases.md` (½ day).

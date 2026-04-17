@@ -1,0 +1,53 @@
+{
+  "framework": "sglang",
+  "model_id": "/root/.cache/huggingface/hub/models--Qwen--Qwen3-VL-8B-Instruct/snapshots/0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+  "prompts": [
+    "What is 2+2? Answer in one word.",
+    "Explain gradient descent in exactly one sentence.",
+    "Write a Python function that reverses a string. Just the code."
+  ],
+  "outputs": [
+    "Four",
+    "Gradient descent is an iterative optimization algorithm that updates parameters in the direction opposite to the gradient of a loss function to minimize it.",
+    "```python\ndef reverse_string(s):\n    return s[::-1]\n```"
+  ],
+  "tier_a": {
+    "vocab_size": 151643,
+    "eos_token_id": 151645,
+    "bos_token_id": null,
+    "pad_token_id": 151643,
+    "chat_template_sample": "<|im_start|>user\nHello<|im_end|>\n<|im_start|>assistant\n",
+    "token_probes": {
+      "Hello world": [
+        9707,
+        1879
+      ],
+      "\u4f60\u597d\u4e16\u754c": [
+        108386,
+        99489
+      ],
+      "def foo(): return 42": [
+        750,
+        15229,
+        4555,
+        470,
+        220,
+        19,
+        17
+      ],
+      "\ud83d\ude80": [
+        145836
+      ],
+      "The quick brown fox ": [
+        785,
+        3974,
+        13876,
+        38835,
+        34208,
+        916,
+        279,
+        15678
+      ]
+    }
+  }
+}

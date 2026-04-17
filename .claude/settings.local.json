@@ -32,7 +32,9 @@
       "Bash(conda create *)",
       "Bash(conda run *)",
       "Bash(conda tos *)",
-      "Bash(echo \"vLLM install PID: $!\")"
+      "Bash(echo \"vLLM install PID: $!\")",
+      "Bash(ssh radixark02 *)",
+      "Bash(nvidia-smi *)"
     ]
   }
 }

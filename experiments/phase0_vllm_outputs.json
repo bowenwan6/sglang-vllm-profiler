@@ -1,0 +1,15 @@
+{
+  "framework": "vllm",
+  "model_id": "/root/.cache/huggingface/hub/models--Qwen--Qwen3-VL-8B-Instruct/snapshots/0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+  "prompts": [
+    "What is 2+2? Answer in one word.",
+    "Explain gradient descent in exactly one sentence.",
+    "Write a Python function that reverses a string. Just the code."
+  ],
+  "outputs": [
+    "Four",
+    "Gradient descent is an iterative optimization algorithm that updates parameters in the direction opposite to the gradient of a loss function to minimize it.",
+    "```python\ndef reverse_string(s):\n    return s[::-1]\n```"
+  ],
+  "idle_gpu_mem_csv": "6, 129933, 13224"
+}
