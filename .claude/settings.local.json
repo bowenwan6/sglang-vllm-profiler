@@ -34,7 +34,26 @@
       "Bash(conda tos *)",
       "Bash(echo \"vLLM install PID: $!\")",
       "Bash(ssh radixark02 *)",
-      "Bash(nvidia-smi *)"
+      "Bash(nvidia-smi *)",
+      "Bash(python3 -m sglang.auto_benchmark convert --help)",
+      "Bash(python3 -m sglang.auto_benchmark validate --help)",
+      "Bash(nohup python3 *)",
+      "Bash(echo \"PID=$!\")",
+      "Bash(kill 20413)",
+      "Bash(python3 -m sglang.auto_benchmark convert --kind random --random-input-len 128 --random-output-len 128 --num-prompts 5 --tokenizer /root/.cache/huggingface/hub/models--Qwen--Qwen3-VL-8B-Instruct/snapshots/0c351dd01ed87e9c1b53cbc748cba10e6187ff3b --seed 1 --output /tmp/test_case.jsonl)",
+      "Bash(echo \"RC=$?\")",
+      "Bash(python3 -m sglang.auto_benchmark convert --kind random --random-input-len 128 --output-len 128 --num-prompts 5 --tokenizer /root/.cache/huggingface/hub/models--Qwen--Qwen3-VL-8B-Instruct/snapshots/0c351dd01ed87e9c1b53cbc748cba10e6187ff3b --seed 1 --output /tmp/test_case.jsonl)",
+      "Bash(python3 -c \"import sys, json; [print\\(json.dumps\\({k:v for k,v in json.loads\\(l\\).items\\(\\) if k in ['output_len','prompt_len','input_len']}, indent=2\\)\\) for l in sys.stdin]\")",
+      "Bash(python3 -c \"import sys, json; d = json.loads\\(sys.stdin.read\\(\\)\\); print\\(json.dumps\\(d, indent=2\\)\\)\")",
+      "Bash(python3 -m sglang.auto_benchmark convert --kind random --random-input-len 128 --output-len 128 --num-prompts 20 --tokenizer /root/.cache/huggingface/hub/models--Qwen--Qwen3-VL-8B-Instruct/snapshots/0c351dd01ed87e9c1b53cbc748cba10e6187ff3b --seed 1 --output /tmp/test_case20.jsonl)",
+      "Bash(python3 -c ' *)",
+      "Bash(python3 -m sglang.auto_benchmark convert --kind random --random-input-len 128 --output-len 128 --random-range-ratio 1.0 --num-prompts 10 --tokenizer /root/.cache/huggingface/hub/models--Qwen--Qwen3-VL-8B-Instruct/snapshots/0c351dd01ed87e9c1b53cbc748cba10e6187ff3b --seed 1 --output /tmp/test_fixed.jsonl)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('status'\\), d.get\\('returncode'\\), repr\\(d.get\\('stderr_tail',''\\)[:500]\\)\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('status:', d.get\\('status'\\)\\); print\\('elapsed:', d.get\\('elapsed_s'\\)\\)\")",
+      "Bash(python3 *)",
+      "Bash(pkill -f \"run_phase1.py\")",
+      "Bash(rm -f datasets/case*.jsonl experiments/phase1/raw/*.json experiments/phase1/raw/*.txt)",
+      "Bash(HF_HUB_OFFLINE=1 python3 experiments/phase1/scripts/gen_datasets.py)"
     ]
   }
 }

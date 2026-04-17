@@ -1,0 +1,26 @@
+{
+  "status": "OK",
+  "elapsed_s": 156.48,
+  "framework": "sglang-oai",
+  "case": "caseB_longprefill",
+  "rep": 2,
+  "prompt_len": 2048,
+  "output_len": 128,
+  "concurrency": 1,
+  "num_prompts": 200,
+  "warmup_requests": 30,
+  "seed": 1,
+  "port": 30000,
+  "dataset_path": "/data/profiling_lab/datasets/caseB_longprefill.jsonl",
+  "dataset_sha256": "7d25d285ab71982d2ed91749a65d28339e6d6c4688d831c6620bc247f6937349",
+  "output_file": "/data/profiling_lab/experiments/phase1/raw/caseB_longprefill_sglang-oai_rep2.json",
+  "timestamp_utc": "2026-04-17T03:14:07.417300+00:00",
+  "snapshot_sha": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+  "versions": {
+    "sglang": "0.0.0.dev1+ga4cf2ea12",
+    "torch": "2.9.1+cu129",
+    "flashinfer": "0.6.7.post3"
+  },
+  "cuda_visible_devices": "6",
+  "hf_hub_offline": "1"
+}

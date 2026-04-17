@@ -55,7 +55,7 @@ Every dimension falls into exactly one tier. Conclusions are only admissible whe
 
 | Dimension | Pinned value | Enforcement |
 |---|---|---|
-| GPU | Single H200, GPU 0 | `CUDA_VISIBLE_DEVICES=0` on every server + every client |
+| GPU | Single H200, GPU 6 | `CUDA_VISIBLE_DEVICES=6` on every server + every client |
 | Model weights | `Qwen/Qwen3-VL-8B-Instruct` at a fixed HF revision | Record commit-sha of HF snapshot in `env_snapshot.md`; re-verify hash before Phase 3 |
 | Tokenizer | Same HF snapshot as weights | Byte-equality check in Phase 0 |
 | Dtype | BF16 | Pass `--dtype bfloat16` explicitly on both servers |
@@ -245,7 +245,7 @@ Auto-benchmark controls *inputs*; profiler-analysis interprets *outputs*; debug-
 |---|---|---|---|
 | **Raw** | `datasets/`, `logs/`, `traces/`, `experiments/*/raw/`, `experiments/phase2_shaping/live_results.jsonl` | Append-only, never edited by hand | Never — raw evidence is the ground truth |
 | **Processed** | `experiments/*/summary.md`, `analysis/**`, `experiments/phase2/selected_cases.md` | Regenerated from raw | Yes, on rerun of the source phase |
-| **Deliverable** | `reports/**`, `plan.md`, `experiments/env_snapshot.md`, `experiments/phase0_equivalence.md` | Hand-edited, reviewed | No — edited in place |
+| **Deliverable** | `reports/**`, `plan.md`, `experiments/env_snapshot.md`, `experiments/phase0/equivalence.md` | Hand-edited, reviewed | No — edited in place |
 
 ### 8.3 Reviewer reading order
 
@@ -286,17 +286,17 @@ A human reviewer validating the project should inspect artifacts in this sequenc
 
 **Actions.**
 
-1. Launch SGLang (background, log to `logs/phase1/sglang_server_phase0.log`):
+1. Launch SGLang (background, log to `logs/phase0/sglang_server.log`):
    ```
    CUDA_VISIBLE_DEVICES=6 HF_HUB_OFFLINE=1 \
    SGLANG_KERNEL_API_LOGLEVEL=1 \
-   SGLANG_KERNEL_API_LOGDEST=logs/phase1/sglang_%i.log \
+   SGLANG_KERNEL_API_LOGDEST=logs/phase0/sglang_%i.log \
    python3 -m sglang.launch_server \
      --model-path <snapshot_path> \
      --dtype bfloat16 --port 30000 --tp 1 --attention-backend flashinfer
    ```
    Wait for `server is fired up` in log. Record FlashInfer version, chunked-prefill default, idle GPU memory.
-2. Run equivalence tiers (Tier A tokenizer check + Tier B greedy outputs). Save outputs to `experiments/phase0_sglang_outputs.json`.
+2. Run equivalence tiers (Tier A tokenizer check + Tier B greedy outputs). Save outputs to `experiments/phase0/sglang_outputs.json`.
 3. Kill SGLang. Launch vLLM:
    ```
    CUDA_VISIBLE_DEVICES=6 HF_HUB_OFFLINE=1 \
@@ -305,8 +305,8 @@ A human reviewer validating the project should inspect artifacts in this sequenc
      --port 30001 --tensor-parallel-size 1
    ```
    Wait for `Application startup complete`. Record attention backend, idle GPU memory.
-4. Run same Tier B prompts against vLLM. Save to `experiments/phase0_vllm_outputs.json`. Compare.
-5. Record all findings in `experiments/env_snapshot.md` and `experiments/phase0_equivalence.md`.
+4. Run same Tier B prompts against vLLM. Save to `experiments/phase0/vllm_outputs.json`. Compare.
+5. Record all findings in `experiments/env_snapshot.md` and `experiments/phase0/equivalence.md`.
 
 **Equivalence framework.** Byte-identical greedy decoding across frameworks is not a realistic target — attention kernel, matmul tiling, and reduction order all legitimately differ, and bf16 accumulation order compounds the divergence. The correct standard is tiered:
 
@@ -349,27 +349,50 @@ A human reviewer validating the project should inspect artifacts in this sequenc
 
 **Actions.**
 
-1. Generate byte-identical dataset per case:
+1. Generate byte-identical dataset per case (run once; repeat for each case changing `--prompt-len`, `--output-len`, `--num-prompts` per the matrix):
    ```
    python -m sglang.auto_benchmark convert \
      --input-format random --prompt-len 512 --output-len 128 \
      --num-prompts 400 --output datasets/caseC_batched.jsonl
    python -m sglang.auto_benchmark validate --input datasets/caseC_batched.jsonl
+   sha256sum datasets/case*.jsonl >> experiments/phase1/raw/dataset_sha256.txt
    ```
-   Log SHA-256 of each JSONL.
-2. Run the two frameworks against the same JSONL:
+   Log SHA-256 of each JSONL in `experiments/phase1/raw/dataset_sha256.txt`.
+
+2. Launch servers sequentially (one at a time; do not co-run).
+
+   SGLang:
+   ```
+   CUDA_VISIBLE_DEVICES=6 HF_HUB_OFFLINE=1 \
+   SGLANG_KERNEL_API_LOGLEVEL=1 \
+   SGLANG_KERNEL_API_LOGDEST=logs/phase1/sglang_%i.log \
+   python3 -m sglang.launch_server \
+     --model-path /root/.cache/huggingface/hub/models--Qwen--Qwen3-VL-8B-Instruct/snapshots/0c351dd01ed87e9c1b53cbc748cba10e6187ff3b \
+     --dtype bfloat16 --port 30000 --tp 1 --attention-backend flashinfer \
+     2>&1 | tee logs/phase1/sglang_server.log
+   ```
+
+   vLLM (after shutting down SGLang):
+   ```
+   CUDA_VISIBLE_DEVICES=6 HF_HUB_OFFLINE=1 \
+   /opt/miniconda3/envs/vllm/bin/python -m vllm.entrypoints.openai.api_server \
+     --model /root/.cache/huggingface/hub/models--Qwen--Qwen3-VL-8B-Instruct/snapshots/0c351dd01ed87e9c1b53cbc748cba10e6187ff3b \
+     --dtype bfloat16 --port 30001 --tensor-parallel-size 1 \
+     2>&1 | tee logs/phase1/vllm_server.log
+   ```
+
+3. Run the two frameworks against the same JSONL (`ignore_eos` is the **default** in bench_serving — do not pass `--disable-ignore-eos` unless intentionally testing variable-length output):
    ```
    python -m sglang.bench_serving --backend sglang-oai \
      --base-url http://127.0.0.1:30000 \
      --dataset-name autobench --dataset-path datasets/caseC_batched.jsonl \
-     --max-concurrency 16 --ignore-eos --random-seed 1
+     --max-concurrency 16 --seed 1 --warmup-requests 30
    python -m sglang.bench_serving --backend vllm \
      --base-url http://127.0.0.1:30001 \
      --dataset-name autobench --dataset-path datasets/caseC_batched.jsonl \
-     --max-concurrency 16 --ignore-eos --random-seed 1
+     --max-concurrency 16 --seed 1 --warmup-requests 30
    ```
-3. SGLang side: `SGLANG_KERNEL_API_LOGLEVEL=1`, `SGLANG_KERNEL_API_LOGDEST=logs/phase1/sglang_%i.log`.
-4. Write `experiments/phase1/raw/{case}_{framework}_{rep}.json` per run with meta.json (versions, attn backend, dataset sha, seed).
+4. Write `experiments/phase1/raw/{case}_{framework}_{rep}.json` per run with `meta.json` (versions, attn backend, dataset sha, seed).
 
 **Skill usage.**
 
@@ -642,13 +665,63 @@ Never invert a row. Auto-benchmark does not read kernels; profiler-analysis does
 
 ---
 
+### Phase 1 — Minimal Fair Baseline (completed 2026-04-17)
+
+#### Run conditions
+- GPU: H200 index 6, `CUDA_VISIBLE_DEVICES=6`, `HF_HUB_OFFLINE=1`
+- Servers run sequentially; 3 reps per (case × framework); median taken
+- Dataset: text-only random prompts (token IDs 0–151642, special tokens excluded)
+
+#### Key engineering issue resolved
+The `sglang.auto_benchmark convert --kind random` sampler draws from the full tokenizer vocabulary including multimodal special tokens (`<|image_pad|>` ID 151655, `<|vision_start|>` 151652, etc.). These trigger `general_mm_embed_routine` in Qwen3-VL, exhausting GPU activation memory and causing OOM crashes. Fixed with a custom generator (`experiments/phase1/scripts/gen_datasets.py`) that restricts sampling to IDs 0–151642.
+
+#### Produced files
+
+| File | Contents |
+|---|---|
+| `datasets/case{A,B,C,D}.jsonl` | Byte-identical fixed-length datasets (text-only) |
+| `experiments/phase1/raw/dataset_sha256.txt` | SHA-256 of each JSONL |
+| `experiments/phase1/raw/{case}_{framework}_rep{1,2,3}.json` | Raw bench_serving output |
+| `experiments/phase1/raw/{case}_{framework}_rep{1,2,3}_meta.json` | Versions, backend, seed, dataset SHA |
+| `experiments/phase1/summary.md` | 4×2 table with ratios and CV flags |
+| `logs/phase1/sglang_server.log` | SGLang Phase-1 startup log |
+| `logs/phase1/vllm_server.log` | vLLM Phase-1 startup log |
+
+#### Results summary (SGLang / vLLM ratios)
+
+| Case | TTFT p50 ratio | TPOT p50 ratio | Req/s ratio | Verdict |
+|---|---|---|---|---|
+| A — Short (128→128, c=1) | **3.89×** ↑ SGLang slower | 1.00× parity | 0.95× | Gap >15% → Phase 3 candidate |
+| B — Long prefill (2048→128, c=1) | **2.59×** ↑ SGLang slower | 0.99× parity | 0.96× | Gap >15% → Phase 3 candidate |
+| C — Batched (512→128, c=16) | **1.49×** ↑ SGLang slower | 0.98× parity | 0.93× | CV ⚠ (20%) — stabilize first |
+| D — Decode-heavy (512→512, c=16) | **1.34×** ↑ SGLang slower | 1.02× parity | 0.97× | Marginal gap; p99 CV ⚠ (42%) |
+
+All CV values for TPOT and throughput are ≤2% — decode metrics are stable. TTFT is where all variance lives.
+
+#### Key findings
+
+1. **TTFT gap is universal; TPOT/throughput gap is negligible.** SGLang decode (TPOT) is on par with vLLM (within 2%) across all 4 cases. Every significant gap is in first-token latency.
+
+2. **Case A TTFT overhead is scheduling/dispatch, not compute.** SGLang TTFT increases only 7.7 ms from Case A (128 tok) to Case B (2048 tok), while vLLM increases 10 ms. The actual prefill compute for 16× more tokens would be far larger — SGLang's TTFT is dominated by pre-prefill overhead (~50 ms fixed cost at concurrency=1).
+
+3. **vLLM Case B TTFT is noisy (cv=99.3%).** Likely chunked-prefill scheduling jitter or CUDA graph warmup. The median (24.1 ms) is a lower bound; the gap with SGLang is real but the vLLM baseline needs re-examination before drawing strong conclusions for Case B.
+
+4. **Cases C and D TTFT CV is elevated (20–42%)** — scheduler queuing jitter at concurrency=16. The gap is real (1.34–1.49×) but confidence is M until variance is reduced.
+
+#### Phase 2 action
+- Apply Phase-2 decision rule: all 4 cases have TTFT gap >15%; Cases A and B are primary candidates.
+- Case A is highest priority: the scheduling overhead hypothesis is clean, low-noise, and directly actionable.
+- Cases C and D: run a short reshaping sweep to reduce TTFT variance before committing to profiling.
+
+---
+
 ## 16. Prioritized Next-Step Checklist
 
 1. ✅ Create the filesystem layout from §8.1 (placeholder READMEs in each directory).
 2. ✅ Phase 0 — servers up, equivalence matrix run. All Tier-A/B pass; outputs EXACT match.
-3. Generate `datasets/case{A..D}.jsonl` via `auto_benchmark convert`, log SHA-256 (≤1 h).
-4. Phase 1 — 8 runs × 3 reps with passive L1 crash logging; `experiments/phase1/summary.md` (½–1 day).
-5. Apply Phase-2 decision rule; run tier-1 shaping on 5–15 % cases; produce `selected_cases.md` (½ day).
+3. ✅ Generate `datasets/case{A..D}.jsonl` — text-only random prompts (special tokens excluded), SHA-256 logged.
+4. ✅ Phase 1 — 24 runs (4 cases × 2 frameworks × 3 reps); `experiments/phase1/summary.md` complete.
+5. Apply Phase-2 decision rule; Cases A and B are primary Phase-3 candidates (TTFT 3.89× and 2.59×); Cases C/D need variance reduction first.
 6. Phase 3 — SGLang mapping+formal + vLLM prefill_like+decode_like per selected case (1 day).
 7. Phase 4 — triage + breakdown + vLLM cross-check per case; author `hypotheses.md` and `ranked_recommendations.md` (1–1½ days).
 8. Phase 5 (if warranted) — tier-2 validation sweeps for the top 2 hypotheses.

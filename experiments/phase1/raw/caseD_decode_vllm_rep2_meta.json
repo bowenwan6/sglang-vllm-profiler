@@ -1,0 +1,25 @@
+{
+  "status": "OK",
+  "elapsed_s": 212.76,
+  "framework": "vllm",
+  "case": "caseD_decode",
+  "rep": 2,
+  "prompt_len": 512,
+  "output_len": 512,
+  "concurrency": 16,
+  "num_prompts": 1000,
+  "warmup_requests": 30,
+  "seed": 1,
+  "port": 30001,
+  "dataset_path": "/data/profiling_lab/datasets/caseD_decode.jsonl",
+  "dataset_sha256": "b7fbab20d7efda85a2b047d14b47e3c6e84adf23cc0f3bda4d8e9783fdd1b1a7",
+  "output_file": "/data/profiling_lab/experiments/phase1/raw/caseD_decode_vllm_rep2.json",
+  "timestamp_utc": "2026-04-17T04:10:44.992012+00:00",
+  "snapshot_sha": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+  "versions": {
+    "vllm": "0.19.0",
+    "torch": "2.10.0+cu128"
+  },
+  "cuda_visible_devices": "6",
+  "hf_hub_offline": "1"
+}
