@@ -23,9 +23,10 @@ Structured, phase-gated profiling of SGLang against vLLM on **Qwen3-VL-8B-Instru
 ## Key Findings
 
 - **TTFT is the only gap.** TPOT and throughput are at parity (±2%) across all tested workloads.
-- **SGLang carries a ~56 ms fixed scheduler/dispatch overhead at c=1.** Prompt length barely moves it — 128→2048 tokens adds just +7.7 ms. vLLM's equivalent floor is ~14 ms.
+- **SGLang carries a ~56 ms fixed scheduler/dispatch overhead at c=1.** Prompt length barely moves it — 128→2048 tokens adds just +7.7 ms. vLLM's verified floor is ~14 ms.
 - **The floor is structural, not configurational.** Four scheduler flags (`--disable-overlap-schedule`, `--schedule-policy fcfs`, `--stream-interval`, `--chunked-prefill-size`) each moved TTFT by ≤2 ms.
-- **Secondary finding.** When chunked prefill is actually triggered (chunk_size < prompt_len), TTFT scales linearly with chunk count — each additional chunk adds ~65–85 ms — suggesting the dispatch floor is incurred *per chunk dispatched*, not per request.
+- **Secondary finding.** When chunked prefill is actually triggered (chunk_size < prompt_len), TTFT scales linearly with chunk count — each chunk adds ~65–85 ms — suggesting the dispatch floor is incurred *per chunk*, not per request.
+- **vLLM baselines revised by extended warmup.** Phase-1 measured vLLM Case C at 164 ms (warmup=30, insufficient for c=16). Stable recheck gives **181 ms**, correcting the SGLang/vLLM ratio from 1.49× → **1.33×**. vLLM Case B is bimodal — all Case B vLLM comparisons carry confidence ceiling M.
 
 ---
 
@@ -102,11 +103,12 @@ flowchart LR
 | Case | Prompt → Output | Concurrency | SGLang TTFT p50 | vLLM TTFT p50 | Ratio | TPOT |
 |:-----|:---------------|:-----------:|----------------:|---------------:|------:|-----:|
 | A — Short | 128 → 128 | 1 | 54.6 ms | 14.1 ms | **3.89×** | 1.00× |
-| B — Long prefill | 2048 → 128 | 1 | 62.3 ms | 24.1 ms | **2.59×** | 0.99× |
+| B — Long prefill | 2048 → 128 | 1 | 62.3 ms | ~24 ms ⚠ | **~2.59×** | 0.99× |
 | C — Batched | 512 → 128 | 16 | 243.9 ms | 164.1 ms | **1.49×** | 0.98× |
 | D — Decode-heavy | 512 → 512 | 16 | 247.0 ms | 184.8 ms | **1.34×** | 1.02× |
 
-> Case A→B spans 16× more tokens yet TTFT grows only 7.7 ms — prefill compute is cheap. The gap lives upstream of the forward pass.
+> Phase-1 numbers. Case A→B spans 16× more tokens yet TTFT grows only 7.7 ms — prefill compute is cheap.
+> ⚠ vLLM Case B was bimodal in Phase-1 (cv=99.3%). Phase-2 recheck confirmed bimodal behavior — comparisons carry **confidence ceiling M**.
 
 ---
 
@@ -147,15 +149,27 @@ Can extended warmup reduce TTFT variance to a profilable level?
 | C — 512→128, c=16 | CV 9.5% | **CV 4.2%** | CV 2.1% | ✅ Promote |
 | D — 512→512, c=16 | CV 19.8% | CV 0.1% † | CV 14.8% | ❌ Drop |
 
-<sup>† 3-rep window — V2 (5 reps) re-exposed a bimodal pattern: periodic ~160 ms outliers vs a ~243 ms steady state, consistent with a periodic server-side event under sustained decode load.</sup>
+<sup>† 3-rep lucky window — V2 (5 reps) re-exposed a bimodal pattern: periodic ~160 ms outliers vs ~243 ms steady state.</sup>
+
+### vLLM baseline recheck (Step 2.4)
+
+Phase-1 vLLM baselines re-measured with warmup=300, 5 reps to validate promoted cases.
+
+| Case | Phase-1 vLLM | Recheck vLLM | Across-rep CV | Verdict |
+|:-----|:------------:|:------------:|:-------------:|:-------:|
+| B (2048→128, c=1) | 24.1 ms | ~24 ms (bimodal ⚠) | **76.0%** | ⚠ **Ceiling M** |
+| C (512→128, c=16) | 164.1 ms | **180.9 ms** | 5.5% | ✅ Clean |
+
+> Phase-1 vLLM Case C was underestimated — warmup=30 insufficient for c=16. True stable baseline: **180.9 ms**. Ratio corrected: 1.49× → **1.33×**.
 
 ### Phase 3 shortlist
 
-| Case | Priority | Phenomenon | Config |
-|:-----|:--------:|:-----------|:-------|
-| **A** | Primary | ~56 ms structural dispatch floor at c=1 | default · warmup 30 |
-| **B** | Primary | Same floor; per-chunk overhead when chunking active | default · warmup 30 |
-| **C** | Secondary | 1.47× TTFT gap at c=16, variance now stable | default · **warmup 100** |
+| Case | Priority | Phenomenon | SGLang TTFT | vLLM TTFT | Ratio | vLLM ceiling |
+|:-----|:--------:|:-----------|------------:|----------:|------:|:------------:|
+| **A** | Primary | ~56 ms structural dispatch floor at c=1 | 56.0 ms | 14.1 ms | **4.0×** | None |
+| **B** | Primary | Same floor; per-chunk overhead when chunking active | 64.4 ms | ~24 ms ⚠ | **~2.7×** | **M** |
+| **C** | Secondary | 1.33× TTFT gap at c=16, variance stable | 241 ms | 180.9 ms | **1.33×** | None |
+| D | Dropped | Bimodal TTFT under sustained decode load | — | — | — | — |
 
 ---
 

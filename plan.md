@@ -113,7 +113,7 @@ Authoritative role definitions. The Quick-Reference in §13 is a summary; this s
 | Phase | Subcommand | Purpose |
 |---|---|---|
 | Phase 1 prep | `convert` + `validate` | Produce the shared autobench JSONL consumed by both `bench_serving --backend sglang-oai` and `bench_serving --backend vllm`. Byte-identity is non-negotiable. |
-| Phase 2 | `run` tier 1, ≤4 candidates, scoped to 1 case × ≤2 axes | Rule out "SGLang loses because a flag was wrong". Gate into Phase 3. |
+| Phase 2 | Custom orchestration scripts (not `run`) — direct bench_serving for vLLM compatibility | Rule out "SGLang loses because a flag was wrong". Gate into Phase 3. |
 | Phase 5 | `run` tier 2, ≤10 candidates, resumable | Validate specific Phase-4 hypotheses on the exact flag the hypothesis names. |
 
 **Not used for.** Cross-framework comparison (cannot drive vLLM). Broad tier-3 discovery (we do not sweep a space we have not justified). Any interpretation of kernels.
@@ -166,59 +166,52 @@ Auto-benchmark controls *inputs*; profiler-analysis interprets *outputs*; debug-
 
 ```
 /data/profiling_lab/
-├── plan.md                          this document
-├── README.md                        layout + reviewer reading order
+├── plan.md                          this document — single source of truth
+├── README.md                        GitHub-facing project overview
 │
-├── configs/                         YAML configs for auto_benchmark sweeps
-│   ├── phase2_shaping/
-│   └── phase5_validation/
+├── datasets/                        canonical autobench JSONL (never regenerate mid-project)
+│   ├── caseA_short.jsonl            128→128, n=600
+│   ├── caseB_longprefill.jsonl      2048→128, n=300
+│   ├── caseC_batched.jsonl          512→128, n=2500
+│   └── caseD_decode.jsonl           512→512, n=1200
 │
-├── datasets/                        canonical autobench JSONL (shared across frameworks)
-│   ├── caseA_short.jsonl
-│   ├── caseB_long_prefill.jsonl
-│   ├── caseC_batched.jsonl
-│   ├── caseD_decode_heavy.jsonl
-│   └── README.md                    schema + generation command + SHA-256
-│
-├── logs/                            infrastructure side-effects (consult on failure)
-│   ├── phase0/
-│   │   ├── sglang_server.log        SGLang startup stderr (Phase 0)
-│   │   ├── vllm_server.log          vLLM startup stderr (Phase 0)
-│   │   ├── kernel_api_7067.log      L1 kernel-API boundary log PID 7067 (empty)
-│   │   ├── kernel_api_7208.log      L1 kernel-API boundary log PID 7208 (16 MB, live run)
-│   │   └── kernel_api_7209.log      L1 kernel-API boundary log PID 7209 (empty)
+├── logs/                            infrastructure side-effects (consult on failure only)
+│   ├── phase0/                      server startup logs + kernel-API boundary trails
 │   ├── phase1/
 │   ├── phase2/
-│   ├── phase3/
-│   └── phase5/
+│   ├── phase3/                      (pending)
+│   └── phase5/                      (pending)
 │
 ├── experiments/                     research artifacts (cited in analysis)
-│   ├── env_snapshot.md              global: versions, backends, memory — all phases
+│   ├── env_snapshot.md              versions, backends, GPU memory — all phases
 │   ├── phase0/
-│   │   ├── equivalence.md           Tier A/B/C results — Phase-0 deliverable
+│   │   ├── equivalence.md           Tier A/B/C equivalence results
 │   │   ├── sglang_outputs.json      Tier-B greedy outputs from SGLang
 │   │   ├── vllm_outputs.json        Tier-B greedy outputs from vLLM
-│   │   └── scripts/                 reproducible scripts for Phase 0
-│   │       ├── tier_a_tokenizer.py  tokenizer + vocab checks
-│   │       ├── tier_b_sglang.py     query SGLang, save sglang_outputs.json
-│   │       └── tier_b_vllm_compare.py  query vLLM, compare, exit 1 on fail
+│   │   └── scripts/                 tier_a_tokenizer.py, tier_b_sglang.py, tier_b_vllm_compare.py
 │   ├── phase1/
-│   │   ├── raw/                     raw bench_serving JSON + per-run meta.json
-│   │   └── summary.md               4×2 baseline table
-│   ├── phase2_shaping/              auto_benchmark output dir
+│   │   ├── raw/                     bench_serving JSON + meta.json per (case × framework × rep)
+│   │   ├── summary.md               4×2 baseline table with CV flags
+│   │   └── scripts/                 gen_datasets.py, run_phase1.py, summarize_phase1.py
 │   ├── phase2/
-│   │   └── selected_cases.md        Phase-3 entry gate
+│   │   ├── selected_cases.md        Phase-3 entry gate (locked protocol per case)
+│   │   └── scripts/                 run_phase2_case{A,B,CD}.py, run_phase2_vllm_recheck.py
+│   ├── phase2_shaping/
+│   │   ├── caseA/                   Case A sweep raw JSON + summary.md
+│   │   ├── caseB/                   Case B sweep raw JSON + summary.md
+│   │   ├── caseCD/                  Cases C/D variance sweep raw JSON + summary.md
+│   │   ├── vllm_recheck_caseB.json  vLLM Case B recheck (5 reps, warmup=300)
+│   │   └── vllm_recheck_caseC.json  vLLM Case C recheck (5 reps, warmup=300)
 │   └── phase5/
-│       └── {hypothesis}/
+│       └── {hypothesis}/            (pending)
 │
-├── traces/                          raw torch profiler artifacts
+├── traces/                          raw torch profiler artifacts (Phase 3, pending)
 │   └── {case}/
 │       ├── sglang_mapping/          graph-off, --profile-by-stage (EXTEND / DECODE)
 │       ├── sglang_formal/           graph-on,  --profile-by-stage (EXTEND / DECODE)
-│       ├── vllm/
-│       │   ├── prefill_like/        concurrency=1 long-prompt window
-│       │   └── decode_like/         concurrency=16 steady-state window
-│       └── collection_notes.md
+│       └── vllm/
+│           ├── prefill_like/        concurrency=1 window
+│           └── decode_like/         steady-state concurrency window
 │
 ├── analysis/                        interpretation layer (processed from traces)
 │   ├── {case}/
@@ -243,9 +236,9 @@ Auto-benchmark controls *inputs*; profiler-analysis interprets *outputs*; debug-
 
 | Layer | Contents | Mutability | Purged on rerun? |
 |---|---|---|---|
-| **Raw** | `datasets/`, `logs/`, `traces/`, `experiments/*/raw/`, `experiments/phase2_shaping/live_results.jsonl` | Append-only, never edited by hand | Never — raw evidence is the ground truth |
+| **Raw** | `datasets/`, `logs/`, `traces/`, `experiments/*/raw/`, `experiments/phase2_shaping/*/` JSON files | Append-only, never edited by hand | Never — raw evidence is the ground truth |
 | **Processed** | `experiments/*/summary.md`, `analysis/**`, `experiments/phase2/selected_cases.md` | Regenerated from raw | Yes, on rerun of the source phase |
-| **Deliverable** | `reports/**`, `plan.md`, `experiments/env_snapshot.md`, `experiments/phase0/equivalence.md` | Hand-edited, reviewed | No — edited in place |
+| **Deliverable** | `reports/**`, `plan.md`, `README.md`, `experiments/env_snapshot.md`, `experiments/phase0/equivalence.md` | Hand-edited, reviewed | No — edited in place |
 
 ### 8.3 Reviewer reading order
 
@@ -326,7 +319,7 @@ A human reviewer validating the project should inspect artifacts in this sequenc
 
 **Downstream effect on profiling.** Because token-level output equivalence is not required, we do not gate Phase 3 on it. What *does* matter for profiling validity: Tier-A identity (so both frameworks execute the same underlying model) and workload byte-identity (§6.1). Profiling under these conditions is methodologically sound even if produced tokens differ.
 
-**Outputs.** `experiments/env_snapshot.md`, `experiments/phase0_equivalence.md`.
+**Outputs.** `experiments/env_snapshot.md`, `experiments/phase0/equivalence.md`.
 
 **Risks.** Qwen3-VL may not be fully supported at pinned versions; fall back to `Qwen3-8B` and record the substitution. Vision tower may load even for text-only; record idle memory.
 
@@ -349,15 +342,12 @@ A human reviewer validating the project should inspect artifacts in this sequenc
 
 **Actions.**
 
-1. Generate byte-identical dataset per case (run once; repeat for each case changing `--prompt-len`, `--output-len`, `--num-prompts` per the matrix):
+1. Generate byte-identical datasets using the custom generator (do **not** use `sglang.auto_benchmark convert --kind random` — it samples multimodal special tokens that trigger Qwen3-VL OOM):
+   ```bash
+   HF_HUB_OFFLINE=1 python3 experiments/phase1/scripts/gen_datasets.py
+   # Samples token IDs 0–151642 only; outputs datasets/case{A,B,C,D}.jsonl
+   # SHA-256 logged to experiments/phase1/raw/dataset_sha256.txt
    ```
-   python -m sglang.auto_benchmark convert \
-     --input-format random --prompt-len 512 --output-len 128 \
-     --num-prompts 400 --output datasets/caseC_batched.jsonl
-   python -m sglang.auto_benchmark validate --input datasets/caseC_batched.jsonl
-   sha256sum datasets/case*.jsonl >> experiments/phase1/raw/dataset_sha256.txt
-   ```
-   Log SHA-256 of each JSONL in `experiments/phase1/raw/dataset_sha256.txt`.
 
 2. Launch servers sequentially (one at a time; do not co-run).
 
@@ -408,14 +398,14 @@ A human reviewer validating the project should inspect artifacts in this sequenc
 
 ---
 
-### Phase 2 — Identify Informative Cases (0.5–1 day)
+### Phase 2 — Identify Informative Cases ✅ complete
 
-**Goal.** Given Phase-1 evidence (TTFT gap is universal, TPOT at parity), decide which cases enter Phase-3 profiling and with what shaping. Concretely:
+**Goal.** Given Phase-1 evidence (TTFT gap is universal, TPOT at parity), decide which cases enter Phase-3 profiling and with what shaping. All four questions below are now answered.
 
-1. Determine whether SGLang's ~50 ms Case-A TTFT is *compressible by flags* or is a **structural scheduler/dispatch floor** (the latter is the Phase-3 target).
-2. Determine whether Case-B's long-prefill gap shrinks under chunked-prefill shaping (same scheduler floor + prefill compute — we want to disentangle them).
-3. Reduce TTFT variance on Cases C/D (CV 20–42%) to a profilable state (CV ≤10%), or explicitly drop them.
-4. Decide whether vLLM's Case-B TTFT noise (CV=99.3%) invalidates that baseline, or is simply a first-request cold effect that a longer steady-state window absorbs.
+1. **Answered:** SGLang's ~56 ms Case-A TTFT floor is **structural** — no scheduler flag compresses it by ≥10 ms.
+2. **Answered:** Case-B's gap is the same structural floor; chunked-prefill is not implicated at default settings (chunk=8192 ≥ prompt_len).
+3. **Answered:** Case C stabilized (CV→4.2% at warmup=100); Case D dropped (bimodal CV=14.8% at V2).
+4. **Answered:** vLLM Case B is genuinely bimodal (across-rep CV=76%, ceiling M). vLLM Case C is clean but baseline revised from 164 ms → 180.9 ms (ratio corrected 1.49× → 1.33×).
 
 #### Evidence inherited from Phase 1 (do not re-measure)
 
@@ -439,7 +429,7 @@ A human reviewer validating the project should inspect artifacts in this sequenc
 
 #### Sweep plan (per case, ≤4 candidates each, 1 rep initially, 3 reps on finalists)
 
-All sweeps use `sglang-auto-benchmark run --tier 1` against the existing `datasets/{case}.jsonl` (no regeneration). vLLM is re-run in parallel only on finalists using a matching bench_serving invocation — auto_benchmark cannot drive vLLM. Config files live in `configs/phase2_shaping/{case}.yaml`.
+All sweeps use custom Python orchestration scripts (`experiments/phase2/scripts/run_phase2_case*.py`) against the existing `datasets/{case}.jsonl` — same structure as `run_phase1.py`. Direct `bench_serving` invocations; no auto_benchmark YAML runner (used for SGLang only; vLLM driven separately).
 
 **Case A — scheduling-overhead isolation (highest priority).** The ~50 ms floor at c=1 is where the Phase-3 hypothesis starts. Candidate axes:
 
@@ -456,7 +446,7 @@ Pick ≤4 combinations, not the full grid. Start with each flag flipped individu
 
 | Axis | Values | Rationale |
 |---|---|---|
-| `--chunked-prefill-size` | {2048, 4096, 8192 (default), -1} | 2048-token prompt vs 8192 default chunk — chunking is currently a no-op; forcing smaller chunks probes whether chunked-prefill scheduling adds overhead on top of the 56 ms structural floor |
+| `--chunked-prefill-size` | {8192 (default), 512, 1024, -1} | chunk≥2048 is a no-op for a 2048-tok prompt; 512 and 1024 actually trigger the chunked path (4 and 2 chunks respectively); -1 disables chunking entirely |
 
 `--schedule-conservativeness` is **dropped** from the sweep: since Case A confirmed the floor is framework-intrinsic (not policy-driven), conservativeness (which only affects scheduling policy) is unlikely to move Case B differently. Adding it would expand the grid without evidence justification.
 
@@ -489,18 +479,19 @@ Re-run both cases on vLLM with `warmup_requests=300`, 5 reps, same JSONL dataset
 
 | File | Role |
 |---|---|
-| `configs/phase2_shaping/caseA.yaml`, `caseB.yaml` | auto_benchmark specs (server axes) |
-| `configs/phase2_shaping/caseCD_variance.yaml` | client-side variance-reduction spec |
-| `experiments/phase2_shaping/{caseA,caseB,caseCD}/live_results.jsonl` | Append-only raw |
-| `experiments/phase2_shaping/{case}/results.jsonl`, `results.csv`, `summary.md` | Processed per-case sweep output |
+| `experiments/phase2/scripts/run_phase2_case{A,B,CD}.py` | Orchestration scripts (SGLang sweeps) |
+| `experiments/phase2/scripts/run_phase2_vllm_recheck.py` | vLLM baseline recheck script |
+| `experiments/phase2_shaping/caseA/` | Case A sweep raw JSON + summary |
+| `experiments/phase2_shaping/caseB/` | Case B sweep raw JSON + summary |
+| `experiments/phase2_shaping/caseCD/` | Cases C/D variance sweep raw JSON + summary |
 | `experiments/phase2_shaping/vllm_recheck_caseB.json` | vLLM Case B re-run (5 reps, warmup=300) |
 | `experiments/phase2_shaping/vllm_recheck_caseC.json` | vLLM Case C re-run (5 reps, warmup=300) |
-| `experiments/phase2/selected_cases.md` | **Phase-3 entry gate** — one row per promoted case with: phenomenon, shaping applied, residual gap, residual CV, fairness-dependence tier |
+| `experiments/phase2/selected_cases.md` | **Phase-3 entry gate** — per-case: phenomenon, config, residual gap, CV, vLLM ceiling |
 
 #### Skill usage
 
-- `sglang-auto-benchmark` → `run` tier 1, ≤4 candidates per case, resumable.
-- `debug-cuda-crash` → L1 passive (candidate servers are transient, odd flag combos may crash — free crash trail).
+- Custom orchestration scripts (not `sglang-auto-benchmark run`) — direct `bench_serving` calls for full control over server flags and vLLM compatibility.
+- `debug-cuda-crash` → L1 passive (`SGLANG_KERNEL_API_LOGLEVEL=1`) on all SGLang server launches.
 - `sglang-torch-profiler-analysis` → **not used.** No interpretation in Phase 2.
 
 #### Success criteria (all must hold to exit Phase 2)
@@ -508,11 +499,7 @@ Re-run both cases on vLLM with `warmup_requests=300`, 5 reps, same JSONL dataset
 1. Case A and Case B either (a) have a shaped SGLang config that holds the TTFT gap ≥15%, in which case they promote to Phase 3 as *structural*, or (b) the gap collapses under a flag flip, in which case the finding is recorded and the case is **not** profiled.
 2. Cases C/D either reach TTFT CV ≤10% (promote) or are formally dropped with a one-line justification in `selected_cases.md`.
 3. vLLM baselines for all promoted cases (A, B, C) have a documented stability status: CV <10% (clean), 10–30% (noisy note), or >30% (confidence ceiling M). Case A was verified stable in Phase 1 (cv=3.3%). Cases B and C require Step 2.4.
-4. `experiments/phase2/selected_cases.md` lists 1–2 cases for Phase 3. Zero cases means returning to Phase 1 with a reshaped matrix (longer prompts, higher concurrency) — Phase 3 does not run on speculation.
-
-#### Expected outcome (prediction, for Phase-3 pre-planning — not a gate)
-
-Based on the Phase-1 evidence, the most likely Phase-2 result is: Case A promotes as structural (the 50 ms floor is unlikely to yield to flags), Case B promotes as structural with a secondary chunked-prefill note, Cases C/D either stabilize under longer warmup (promote as secondary) or drop. This is a hypothesis, not a plan commitment — the sweep outcomes govern.
+4. `experiments/phase2/selected_cases.md` documents all promoted cases with their Phase-3 protocol locked. ✅ Done: 3 cases promoted (A primary, B primary, C secondary).
 
 #### Execution order
 
@@ -861,7 +848,7 @@ All CV values for TPOT and throughput are ≤2% — decode metrics are stable. T
 - Case A is highest priority: the scheduling overhead hypothesis is clean, low-noise, and directly actionable.
 - Cases C and D: run a short reshaping sweep to reduce TTFT variance before committing to profiling.
 
-### Phase 2 — Identify Informative Cases (in progress, 2026-04-24)
+### Phase 2 — Identify Informative Cases (completed 2026-04-24)
 
 #### Step 2.1 — Case A scheduler-overhead sweep (completed 2026-04-24)
 
@@ -959,11 +946,12 @@ Across-rep CV = **76.0%**. Bimodal — rep1 is a periodic outlier (~65 ms), stea
 
 **Phase-3 shortlist:** A (primary), B (primary), C (secondary). Case D dropped.
 
-| Case | SGLang TTFT | vLLM TTFT (verified) | Ratio | SGLang CV | vLLM ceiling | Phase-3 config |
-|---|---|---|---|---|---|---|
-| A | 56.0 ms | 14.1 ms (Phase-1, cv=3.3%) | 4.0× | 0.1% | None | default, warmup=30 |
-| B | 64.4 ms | ~24 ms (bimodal, cv=76%) | ~2.7× | 0.9% | **M** | default, warmup=30 |
-| C | 241 ms | 180.9 ms (recheck, cv=5.5%) | **1.33×** | 4.2% | None | default, **warmup=100** |
+| Case | Priority | SGLang TTFT | vLLM TTFT (verified) | Ratio | SGLang CV | vLLM ceiling | Phase-3 config |
+|---|---|---|---|---|---|---|---|
+| A — 128→128, c=1 | Primary | 56.0 ms | 14.1 ms (Phase-1, cv=3.3%) | **4.0×** | 0.1% | None | default, warmup=30 |
+| B — 2048→128, c=1 | Primary | 64.4 ms | ~24 ms (bimodal ⚠, cv=76%) | **~2.7×** | 0.9% | **M** | default, warmup=30 |
+| C — 512→128, c=16 | Secondary | 241 ms | 180.9 ms (recheck, cv=5.5%) | **1.33×** | 4.2% | None | default, warmup=100 |
+| D — 512→512, c=16 | Dropped | — | — | — | bimodal (14.8%) | — | — |
 
 ---
 
