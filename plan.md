@@ -727,22 +727,52 @@ Never invert a row. Auto-benchmark does not read kernels; profiler-analysis does
 - `HF_HUB_OFFLINE=1`, direct snapshot path (no network)
 - Servers run sequentially (SGLang first, then vLLM after full shutdown)
 
-#### Produced files
+#### Environment snapshot
 
-| File | Layer | Contents |
+**Host:** radixark02, container sglang-bowenw. GPU: H200 index 6, 144 GB, CUDA 12.9. `HF_HUB_OFFLINE=1`.
+
+**Model:** `Qwen/Qwen3-VL-8B-Instruct` snapshot `0c351dd01ed87e9c1b53cbc748cba10e6187ff3b`. dtype bfloat16. vocab_size=151643, eos=151645, pad=151643, model_max_length=262144, chat_template=ChatML.
+
+**SGLang server (port 30000):**
+- Version: 0.0.0.dev1+ga4cf2ea12 | torch 2.9.1+cu129 | FlashInfer 0.6.7.post3
+- attention_backend (text): flashinfer | attention_backend (mm): fa3
+- chunked_prefill_size=8192, piecewise_cuda_graph=disabled
+- mem_fraction_static=0.8388, max_total_num_tokens=729090
+- CUDA graphs: 36 captured (batch sizes 1–256)
+- Weight load: 16.52 GB / 4.07 s | KV cache: ~102 GB | Idle memory: 124,914 MiB used / 18,244 MiB free
+
+**vLLM server (port 30001):**
+- Version: 0.19.0 | torch 2.10.0+cu128 (conda env vllm)
+- attention_backend (text + mm): FLASH_ATTN (FlashAttention v3, auto-selected)
+- gpu_memory_utilization=0.90 | CUDA graphs: PIECEWISE 51 + FULL 51
+- Weight load: 16.78 GB / 5.33 s | KV cache: 105.89 GiB | Idle memory: 129,933 MiB used / 13,224 MiB free
+
+**Fairness tier assignments:**
+- Controlled: GPU, model snapshot, dtype, TP=1, sampler, HF_HUB_OFFLINE
+- Measured: torch version (SGLang 2.9.1 vs vLLM 2.10.0), attention backend (FlashInfer vs FA3), KV cache size (~102 GB vs ~105.9 GB)
+- Framework-intrinsic: scheduler policy, CUDA graph shape selection, chunked-prefill scheduling
+
+#### Tokenizer probe results
+
+| Probe string | Token count | First 8 IDs |
 |---|---|---|
-| `experiments/env_snapshot.md` | Deliverable | Full version table (SGLang, vLLM, torch, FlashInfer, CUDA), attention backends, chunked-prefill defaults, idle GPU memory per framework, fairness tier assignments |
-| `experiments/phase0/equivalence.md` | Deliverable | Tier A/B/C equivalence matrix with pass/fail per check, tokenizer probe table, greedy output comparison table, conclusion |
-| `experiments/phase0/sglang_outputs.json` | Raw | 3 prompts + SGLang greedy responses (temperature=0, top_p=1, max_tokens=128) |
-| `experiments/phase0/vllm_outputs.json` | Raw | 3 prompts + vLLM greedy responses (same settings) |
-| `experiments/phase0/scripts/tier_a_tokenizer.py` | Script | Reproducible tokenizer + vocab check; run against any snapshot path |
-| `experiments/phase0/scripts/tier_b_sglang.py` | Script | Queries SGLang port 30000, saves `sglang_outputs.json` |
-| `experiments/phase0/scripts/tier_b_vllm_compare.py` | Script | Queries vLLM port 30001, saves `vllm_outputs.json`, compares against SGLang reference; exit 1 on first-token divergence |
-| `logs/phase0/sglang_server.log` | Log | SGLang server startup stderr (42 KB); contains full `ServerArgs`, CUDA graph capture progress, ready message |
-| `logs/phase0/vllm_server.log` | Log | vLLM server startup stderr (19 KB); contains engine config, attention backend selection, KV cache size, CUDA graph capture |
-| `logs/phase0/kernel_api_7208.log` | Log | L1 kernel-API boundary trail from live SGLang run (16 MB); passively records last API boundary before any potential crash |
-| `logs/phase0/kernel_api_7067.log` | Log | Empty — server process that was killed before serving |
-| `logs/phase0/kernel_api_7209.log` | Log | Empty — server process that was killed before serving |
+| "Hello world" | 2 | [9707, 1879] |
+| "你好世界" | 2 | [108386, 99489] |
+| "def foo(): return 42" | 7 | [750, 15229, 4555, 470, 220, 19, 17] |
+| "🚀" | 1 | [145836] |
+| "The quick brown fox…" (×8) | 81 | [785, 3974, 13876, 38835, …] |
+
+Byte-identical across SGLang and vLLM (both load from same snapshot path). Tier-A PASS.
+
+#### Greedy output comparison (128 tokens, temperature=0)
+
+| Prompt | SGLang output | vLLM output | Match |
+|---|---|---|---|
+| "What is 2+2? Answer in one word." | "Four" | "Four" | **EXACT** |
+| "Explain gradient descent in exactly one sentence." | "Gradient descent is an iterative optimization algorithm…" | identical | **EXACT** |
+| "Write a Python function that reverses a string. Just the code." | ` ```python\ndef reverse_string(s):\n    return s[::-1]\n``` ` | identical | **EXACT** |
+
+All 3 outputs byte-identical under greedy sampling. No downstream "semantic-level only" annotation needed.
 
 #### Equivalence results
 
@@ -778,18 +808,6 @@ Never invert a row. Auto-benchmark does not read kernels; profiler-analysis does
 
 #### Key engineering issue resolved
 The `sglang.auto_benchmark convert --kind random` sampler draws from the full tokenizer vocabulary including multimodal special tokens (`<|image_pad|>` ID 151655, `<|vision_start|>` 151652, etc.). These trigger `general_mm_embed_routine` in Qwen3-VL, exhausting GPU activation memory and causing OOM crashes. Fixed with a custom generator (`experiments/phase1/scripts/gen_datasets.py`) that restricts sampling to IDs 0–151642.
-
-#### Produced files
-
-| File | Contents |
-|---|---|
-| `datasets/case{A,B,C,D}.jsonl` | Byte-identical fixed-length datasets (text-only) |
-| `experiments/phase1/raw/dataset_sha256.txt` | SHA-256 of each JSONL |
-| `experiments/phase1/raw/{case}_{framework}_rep{1,2,3}.json` | Raw bench_serving output |
-| `experiments/phase1/raw/{case}_{framework}_rep{1,2,3}_meta.json` | Versions, backend, seed, dataset SHA |
-| `experiments/phase1/summary.md` | 4×2 table with ratios and CV flags |
-| `logs/phase1/sglang_server.log` | SGLang Phase-1 startup log |
-| `logs/phase1/vllm_server.log` | vLLM Phase-1 startup log |
 
 #### Results summary (SGLang / vLLM ratios)
 
@@ -840,6 +858,63 @@ All CV values for TPOT and throughput are ≤2% — decode metrics are stable. T
 
 **Produced files:** `experiments/phase2_shaping/caseA/summary.md`, `experiments/phase2_shaping/caseA/A{0..3}_baseline_rep*.json`, `logs/phase2/sglang_caseA_*.log`.
 
+#### Step 2.2 — Case B chunked-prefill sweep (completed 2026-04-24)
+
+**Candidates:** B0 chunk=8192 (default, 1 chunk) / B1 chunk=512 (4 chunks) / B2 chunk=1024 (2 chunks) / B3 chunk=-1 (disabled).
+
+| Candidate | Chunks | TTFT p50 |
+|---|---|---|
+| B0 chunk=8192 | 1 (no actual chunking) | 68.5 ms |
+| B3 chunk=-1 | disabled | 66.7 ms |
+| B2 chunk=1024 | 2 | 169.2 ms |
+| B1 chunk=512 | 4 | 261.5 ms |
+
+**Finalist 3-rep (B0 default):** median = **64.4 ms**, CV = **0.9%**.
+
+**Verdict: STRUCTURAL (same floor as Case A).** Chunked prefill in default config (chunk=8192 ≥ prompt_len=2048) is a no-op — B0 and B3 are functionally equivalent. The gap is the same scheduler/dispatch floor.
+
+**Secondary finding:** When chunked prefill IS triggered (chunk_size < prompt_len), TTFT scales linearly with chunk count — each chunk pays an independent ~65–85 ms dispatch overhead. This implies the structural floor is incurred **per chunk dispatched**, not per request. Record in hypotheses.md.
+
+**Phase-3 entry:** Case B promotes with phenomenon: *"Same structural floor as Case A; secondary finding: per-chunk dispatch overhead when chunking active."*
+
+---
+
+#### Step 2.3 — Cases C/D variance reduction (completed 2026-04-24)
+
+Single SGLang server (default flags). Client-only warmup sweep across V0/V1/V2.
+
+**Case C (512→128, c=16):**
+
+| Variant | warmup | Cross-rep CV | Decision |
+|---|---|---|---|
+| V0 | 30 | 9.5% | Borderline |
+| V1 | 100 | **4.2%** | ✅ Profilable |
+| V2 | 300 | **2.1%** | ✅ Profilable |
+
+**→ PROMOTE** with warmup=100 (V1). Residual TTFT: ~241 ms vs vLLM 164 ms (1.47×), CV stable.
+
+**Case D (512→512, c=16):**
+
+| Variant | warmup | Cross-rep CV | Decision |
+|---|---|---|---|
+| V0 | 30 | 19.8% | ❌ (rep3 outlier: 160 ms) |
+| V1 | 100 | **0.1%** | ✅ (3 reps, lucky window) |
+| V2 | 300 | **14.8%** | ❌ (rep3 outlier again: 160 ms) |
+
+**→ DROP.** V1's 0.1% CV was a 3-rep lucky window; V2's 5-rep run re-exposed the bimodal pattern (periodic drop to ~160 ms vs steady ~243 ms). Consistent with a periodic server-side event (KV eviction / CUDA graph re-capture / scheduler housekeeping) under sustained c=16 + 512-tok decode load. Record in `analysis/hypotheses.md` as a low-confidence Phase-4 finding candidate.
+
+---
+
+#### Phase 2 — Final shortlist
+
+**Phase-3 shortlist (3 cases):** A (primary), B (primary), C (secondary). Case D dropped.
+
+| Case | Residual TTFT | CV | Phase-3 config |
+|---|---|---|---|
+| A | 56.0 ms vs 14.1 ms (4.0×) | 0.1% | default, warmup=30 |
+| B | 64.4 ms vs 24.1 ms (2.7×) | 0.9% | default, warmup=30 |
+| C | 241 ms vs 164 ms (1.47×) | 4.2% | default, **warmup=100** |
+
 ---
 
 ## 16. Prioritized Next-Step Checklist
@@ -848,12 +923,12 @@ All CV values for TPOT and throughput are ≤2% — decode metrics are stable. T
 2. ✅ Phase 0 — servers up, equivalence matrix run. All Tier-A/B pass; outputs EXACT match.
 3. ✅ Generate `datasets/case{A..D}.jsonl` — text-only random prompts (special tokens excluded), SHA-256 logged.
 4. ✅ Phase 1 — 24 runs (4 cases × 2 frameworks × 3 reps); `experiments/phase1/summary.md` complete.
-5. Phase 2 (in progress):
-   - ✅ Step 2.1 — Case A sweep: 4 candidates, floor confirmed STRUCTURAL at 56 ms CV=0.1%. Base config = default.
-   - Step 2.2 — Case B chunked-prefill sweep (base = default, no extra flags from 2.1).
-   - Step 2.3 — Cases C/D variance reduction (client-side: warmup 30→300, 5 reps).
-   - Step 2.4 — vLLM Case B noise re-check (warmup=300, 5 reps) — can run in parallel with 2.2/2.3.
-   - Step 2.5 — Synthesize `experiments/phase2/selected_cases.md`.
+5. ✅ Phase 2 (complete):
+   - ✅ Step 2.1 — Case A: STRUCTURAL floor at 56 ms, CV=0.1%. No flag closes it.
+   - ✅ Step 2.2 — Case B: STRUCTURAL (same floor); secondary finding: per-chunk dispatch overhead when chunking active.
+   - ✅ Step 2.3 — Case C: PROMOTE (CV 4.2% at warmup=100). Case D: DROP (bimodal, V2 CV=14.8%).
+   - ⬜ Step 2.4 — vLLM Case B noise re-check (warmup=300, 5 reps) — still pending, run before Phase 3.
+   - ✅ Step 2.5 — Phase-3 shortlist finalized in §15: Cases A, B, C → Phase 3.
 6. Phase 3 — SGLang mapping+formal + vLLM prefill_like+decode_like per selected case (1 day).
 7. Phase 4 — triage + breakdown + vLLM cross-check per case; author `hypotheses.md` and `ranked_recommendations.md` (1–1½ days).
 8. Phase 5 (if warranted) — tier-2 validation sweeps for the top 2 hypotheses.

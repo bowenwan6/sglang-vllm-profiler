@@ -1,0 +1,15 @@
+{
+  "candidate": "B2_chunk1024",
+  "rep": 1,
+  "elapsed_s": 179.8,
+  "dataset_sha256": "7d25d285ab71982d2ed91749a65d28339e6d6c4688d831c6620bc247f6937349",
+  "timestamp": "2026-04-24T12:37:24.386205+00:00",
+  "metrics": {
+    "ttft_p50_ms": 169.15348696056753,
+    "ttft_p99_ms": 279.76548441452906,
+    "ttft_std_ms": 18.653204244369913,
+    "tpot_p50_ms": 5.355769271529683,
+    "output_throughput": 150.32226804240398,
+    "request_throughput": 1.174392719081281
+  }
+}

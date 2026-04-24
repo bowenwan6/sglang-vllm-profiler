@@ -1,0 +1,20 @@
+{
+  "case": "caseC_batched",
+  "variant": "V0_warmup30",
+  "rep": 2,
+  "warmup": 30,
+  "bench_n": 2000,
+  "concurrency": 16,
+  "elapsed_s": 138.8,
+  "dataset_sha256": "265bde3e4879307702814e6e12faa1ef1543735575108c4abeb7d1fb3b750921",
+  "timestamp": "2026-04-24T12:55:00.712910+00:00",
+  "metrics": {
+    "ttft_p50_ms": 202.2825488820672,
+    "ttft_p99_ms": 281.0488587850705,
+    "ttft_std_ms": 50.47227353389584,
+    "ttft_mean_ms": 204.43816496024374,
+    "tpot_p50_ms": 6.739120150358953,
+    "output_throughput": 1981.658199863125,
+    "request_throughput": 15.481704686430664
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "candidate": "B3_disabled",
+  "rep": 1,
+  "elapsed_s": 159.9,
+  "dataset_sha256": "7d25d285ab71982d2ed91749a65d28339e6d6c4688d831c6620bc247f6937349",
+  "timestamp": "2026-04-24T12:40:53.580873+00:00",
+  "metrics": {
+    "ttft_p50_ms": 66.68811640702188,
+    "ttft_p99_ms": 78.15287818899374,
+    "ttft_std_ms": 3.5237290482404844,
+    "tpot_p50_ms": 5.363761157706732,
+    "output_throughput": 171.12153386817343,
+    "request_throughput": 1.336886983345105
+  }
+}
