@@ -249,5 +249,5 @@ profiling_lab/
 ---
 
 <div align="center">
-<sub>Bowen Wang · radixark02 · sglang-bowenw</sub>
+<sub>👤 Bowen Wang &nbsp;·&nbsp; 🐳 sglang-bowenw</sub>
 </div>
