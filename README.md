@@ -12,15 +12,6 @@
   </a>
 </p>
 
-<p>
-  <img src="https://img.shields.io/badge/Phase_0-✅ Complete-2ea44f" />
-  <img src="https://img.shields.io/badge/Phase_1-✅ Complete-2ea44f" />
-  <img src="https://img.shields.io/badge/Phase_2-✅ Complete-2ea44f" />
-  <img src="https://img.shields.io/badge/Phase_3-⬜ Pending-lightgrey" />
-  <img src="https://img.shields.io/badge/Phase_4-⬜ Pending-lightgrey" />
-  <img src="https://img.shields.io/badge/Phase_5-⬜ Pending-lightgrey" />
-</p>
-
 Structured, phase-gated profiling of SGLang against vLLM on **Qwen3-VL-8B-Instruct** to extract actionable optimization targets — not a benchmark report.
 
 *Single H200 · TP=1 · bfloat16 · text-only path*
@@ -38,7 +29,73 @@ Structured, phase-gated profiling of SGLang against vLLM on **Qwen3-VL-8B-Instru
 
 ---
 
-## Baseline (Phase 1)
+## Experiment Pipeline
+
+```mermaid
+flowchart LR
+    P0("⚙️ Phase 0\nEquivalence"):::done -->
+    P1("📊 Phase 1\nBaseline"):::done -->
+    P2("🔬 Phase 2\nShaping"):::done -->
+    P3("🔍 Phase 3\nProfiling"):::pending -->
+    P4("💡 Phase 4\nTriage"):::pending -->
+    P5("✅ Phase 5\nValidation"):::pending
+
+    classDef done fill:#2ea44f,color:#fff,stroke:#2ea44f
+    classDef pending fill:#f0f0f0,color:#888,stroke:#ccc
+```
+
+<br>
+
+<table>
+<tr>
+  <th width="120">Phase</th>
+  <th width="80" align="center">Status</th>
+  <th>Goal</th>
+  <th>Key Output</th>
+</tr>
+<tr>
+  <td><b>0 — Equivalence</b></td>
+  <td align="center">✅</td>
+  <td>Verify both frameworks load the same weights and produce equivalent outputs before any benchmarking</td>
+  <td>Byte-identical greedy outputs confirmed · attention backend delta logged</td>
+</tr>
+<tr>
+  <td><b>1 — Baseline</b></td>
+  <td align="center">✅</td>
+  <td>Establish a clean 4-case head-to-head table under controlled, fair conditions</td>
+  <td>TTFT 3.89× / 2.59× / 1.49× / 1.34× · TPOT at parity across all cases</td>
+</tr>
+<tr>
+  <td><b>2 — Shaping</b></td>
+  <td align="center">✅</td>
+  <td>Determine whether gaps are structural or configurational; select cases for profiling</td>
+  <td>Cases A, B, C promoted · Case D dropped (bimodal variance) · floor confirmed structural</td>
+</tr>
+<tr>
+  <td><b>3 — Profiling</b></td>
+  <td align="center">⬜</td>
+  <td>Collect SGLang mapping+formal traces and vLLM comparison traces for each selected case</td>
+  <td>Torch profiler traces per case (EXTEND + DECODE stages separated)</td>
+</tr>
+<tr>
+  <td><b>4 — Triage</b></td>
+  <td align="center">⬜</td>
+  <td>Interpret traces into ranked, evidence-backed hypotheses with vLLM cross-validation</td>
+  <td>Kernel triage tables · category breakdown · structured hypotheses</td>
+</tr>
+<tr>
+  <td><b>5 — Validation</b></td>
+  <td align="center">⬜</td>
+  <td>Confirm top hypotheses with flag-level sweeps before any PR is written</td>
+  <td>Validated recommendations concrete enough for a direct PR</td>
+</tr>
+</table>
+
+> Each phase is a hard gate — a phase only runs on cases and data that survived the previous one. Full decision rules in [`plan.md`](plan.md).
+
+---
+
+## Baseline Results (Phase 1)
 
 > 24 runs · 4 cases × 2 frameworks × 3 reps · H200 clocked at 1980 MHz
 
@@ -49,13 +106,15 @@ Structured, phase-gated profiling of SGLang against vLLM on **Qwen3-VL-8B-Instru
 | C — Batched | 512 → 128 | 16 | 243.9 ms | 164.1 ms | **1.49×** | 0.98× |
 | D — Decode-heavy | 512 → 512 | 16 | 247.0 ms | 184.8 ms | **1.34×** | 1.02× |
 
-> Case A→B spans 16× more tokens yet TTFT grows only 7.7 ms — prefill compute is cheap. The gap lives in pre-forward-pass overhead.
+> Case A→B spans 16× more tokens yet TTFT grows only 7.7 ms — prefill compute is cheap. The gap lives upstream of the forward pass.
 
 ---
 
-## Shaping & Case Selection (Phase 2)
+## Shaping Results (Phase 2)
 
 ### Case A — scheduler-overhead sweep
+
+Can any scheduler flag compress the ~56 ms floor?
 
 | Flag | TTFT p50 | Δ |
 |:-----|--------:|--:|
@@ -64,36 +123,39 @@ Structured, phase-gated profiling of SGLang against vLLM on **Qwen3-VL-8B-Instru
 | `--schedule-policy fcfs` | 57.5 ms | +0.4 ms |
 | `--stream-interval 8` | 57.0 ms | −0.0 ms |
 
-**→ Structural.** 3-rep reconfirm: **56.0 ms, CV = 0.1%.**
+**→ Structural.** 3-rep reconfirm: 56.0 ms, CV = 0.1%.
 
 ### Case B — chunked-prefill sweep
 
-| chunk-size | Actual chunks | TTFT p50 | Δ vs default |
-|:----------:|:-------------:|--------:|-------------:|
+Does chunked-prefill explain the gap?
+
+| chunk-size | Chunks | TTFT p50 | Δ vs default |
+|:----------:|:------:|--------:|-------------:|
 | 8192 *(default)* | 1 | 68.5 ms | — |
 | −1 *(disabled)* | — | 66.7 ms | −1.8 ms |
 | 1024 | 2 | 169.2 ms | +100.7 ms |
 | 512 | 4 | 261.5 ms | +193.0 ms |
 
-**→ Structural (same floor).** Default chunk=8192 never splits a 2048-tok prompt. TTFT ∝ chunk count when chunking is active — per-chunk dispatch overhead.
+**→ Same structural floor.** Default chunk=8192 never splits a 2048-tok prompt. When chunking is active, TTFT ∝ chunk count — the floor is paid *per chunk*.
 
 ### Cases C & D — variance gate
 
-| Case | warmup=30 CV | warmup=100 CV | warmup=300 CV | Result |
-|:-----|:-----------:|:-------------:|:-------------:|:------:|
-| C (512→128, c=16) | 9.5% | **4.2%** | 2.1% | ✅ **Promote** |
-| D (512→512, c=16) | 19.8% | 0.1% * | 14.8% | ❌ **Drop** |
+Can extended warmup reduce TTFT variance to a profilable level?
 
-<sup>\* 3-rep window; V2 (5 reps) re-exposed a bimodal pattern — periodic ~160 ms outliers vs steady ~243 ms.</sup>
+| Case | warmup=30 | warmup=100 | warmup=300 | Decision |
+|:-----|:---------:|:----------:|:----------:|:--------:|
+| C — 512→128, c=16 | CV 9.5% | **CV 4.2%** | CV 2.1% | ✅ Promote |
+| D — 512→512, c=16 | CV 19.8% | CV 0.1% † | CV 14.8% | ❌ Drop |
 
-### Phase 3 entry list
+<sup>† 3-rep window — V2 (5 reps) re-exposed a bimodal pattern: periodic ~160 ms outliers vs a ~243 ms steady state, consistent with a periodic server-side event under sustained decode load.</sup>
 
-| Case | Priority | Phenomenon | Protocol |
-|:-----|:--------:|:-----------|:---------|
-| A | Primary | ~56 ms structural dispatch floor at c=1 | default, warmup=30 |
-| B | Primary | Same floor + per-chunk dispatch overhead | default, warmup=30 |
-| C | Secondary | 1.47× TTFT gap at c=16 | default, **warmup=100** |
-| D | — | Dropped — bimodal variance, Phase-4 candidate | — |
+### Phase 3 shortlist
+
+| Case | Priority | Phenomenon | Config |
+|:-----|:--------:|:-----------|:-------|
+| **A** | Primary | ~56 ms structural dispatch floor at c=1 | default · warmup 30 |
+| **B** | Primary | Same floor; per-chunk overhead when chunking active | default · warmup 30 |
+| **C** | Secondary | 1.47× TTFT gap at c=16, variance now stable | default · **warmup 100** |
 
 ---
 
@@ -106,42 +168,45 @@ Structured, phase-gated profiling of SGLang against vLLM on **Qwen3-VL-8B-Instru
 | Attention (text) | FlashInfer 0.6.7.post3 | FlashAttention v3 |
 | KV cache | ~102 GB | ~105.9 GB |
 | GPU | H200 index 6, 144 GB | ← same |
-| Model | Qwen3-VL-8B-Instruct @ `0c351dd` | ← same |
+| Model | Qwen3-VL-8B-Instruct @ [`0c351dd`](https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct) | ← same |
 
-**Functional equivalence verified:** byte-identical greedy outputs on 3 test prompts (128 tokens, temperature=0). Attention backend differs — any Phase-4 attention-kernel finding carries confidence ceiling **M** until backends are aligned.
+**Functional equivalence verified:** byte-identical greedy outputs on 3 test prompts (128 tokens, temperature=0).
+
+> ⚠️ Attention backends differ (FlashInfer vs FlashAttention v3). Any Phase-4 attention-kernel finding carries confidence ceiling **M** until a version-matched re-run with aligned backends is done.
 
 ---
 
 ## Reproducing
 
-### Setup
+### Requirements
 
 ```
-GPU:    Single H200 (80 GB+ required for Qwen3-VL KV cache)
+GPU:    Single H200 (80 GB+ for Qwen3-VL KV cache)
 SGLang: dev install at /sgl-workspace/sglang
 vLLM:   0.19.0 in conda env `vllm`
 Model:  Qwen/Qwen3-VL-8B-Instruct (HF cache, offline)
 ```
 
-### ⚠️ Dataset generation — read this first
+### ⚠️ Dataset generation — read before running
 
-`sglang.auto_benchmark convert --kind random` samples from the full vocabulary, including multimodal special tokens (`<|image_pad|>` ID 151655, `<|vision_start|>` 151652, etc.). On Qwen3-VL these trigger the vision embedding path and cause OOM. **Always use the custom generator:**
+`sglang.auto_benchmark convert --kind random` samples the full vocabulary, including Qwen3-VL multimodal special tokens (`<|image_pad|>` ID 151655, `<|vision_start|>` 151652, etc.). These trigger the vision embedding path and cause OOM. **Use the custom generator instead:**
 
 ```bash
 HF_HUB_OFFLINE=1 python3 experiments/phase1/scripts/gen_datasets.py
-# Samples token IDs 0–151642 only → datasets/case{A,B,C,D}.jsonl
+# Restricts sampling to token IDs 0–151642
+# Outputs → datasets/case{A,B,C,D}.jsonl
 ```
 
-### Running the phases
+### Running the experiments
 
 ```bash
-# Phase 1 — baseline (24 runs, ~6 h)
+# Phase 1 — baseline (24 runs, ~6 h total)
 CUDA_VISIBLE_DEVICES=6 python3 experiments/phase1/scripts/run_phase1.py
 
-# Phase 2 — shaping sweeps
-CUDA_VISIBLE_DEVICES=6 python3 experiments/phase2/scripts/run_phase2_caseA.py   # ~2 h
-CUDA_VISIBLE_DEVICES=6 python3 experiments/phase2/scripts/run_phase2_caseB.py   # ~1.5 h
-CUDA_VISIBLE_DEVICES=6 python3 experiments/phase2/scripts/run_phase2_caseCD.py  # ~2 h
+# Phase 2 — shaping sweeps (run sequentially)
+CUDA_VISIBLE_DEVICES=6 python3 experiments/phase2/scripts/run_phase2_caseA.py    # ~2 h
+CUDA_VISIBLE_DEVICES=6 python3 experiments/phase2/scripts/run_phase2_caseB.py    # ~1.5 h
+CUDA_VISIBLE_DEVICES=6 python3 experiments/phase2/scripts/run_phase2_caseCD.py   # ~2 h
 ```
 
 ---
@@ -150,18 +215,21 @@ CUDA_VISIBLE_DEVICES=6 python3 experiments/phase2/scripts/run_phase2_caseCD.py  
 
 ```
 profiling_lab/
-├── plan.md                          ← Execution plan, decision rules, all results
-├── datasets/                        ← Canonical autobench JSONL (never regenerate mid-project)
+├── plan.md                          ← Master document: execution plan, decisions, all results
+│
+├── datasets/                        ← Canonical autobench JSONL — never regenerate mid-project
+│
 ├── experiments/
-│   ├── env_snapshot.md              ← Versions, attention backends, GPU memory
-│   ├── phase0/equivalence.md        ← Tier A/B/C equivalence results
-│   ├── phase1/                      ← Raw bench_serving JSON per run
-│   ├── phase2/selected_cases.md     ← Phase-3 entry gate
-│   └── phase2_shaping/              ← Per-case sweep results + summaries
-├── logs/                            ← Server stderr + kernel-API boundary trails (L1)
-├── traces/                          ← Torch profiler artifacts (Phase 3, pending)
-├── analysis/                        ← Triage tables, hypotheses, recommendations (Phase 4, pending)
-└── reports/                         ← Final deliverables (Phase 5, pending)
+│   ├── env_snapshot.md              ← Framework versions, attention backends, GPU memory
+│   ├── phase0/equivalence.md        ← Tier A/B/C equivalence matrix and greedy output comparison
+│   ├── phase1/                      ← Raw bench_serving JSON per (case × framework × rep)
+│   ├── phase2/selected_cases.md     ← Phase-3 entry gate with per-case verdicts
+│   └── phase2_shaping/              ← Per-case sweep raw results and summary tables
+│
+├── logs/                            ← Server stderr · kernel-API boundary trails (L1 passive)
+├── traces/                          ← Torch profiler artifacts — Phase 3, pending
+├── analysis/                        ← Triage tables · hypotheses · recommendations — Phase 4, pending
+└── reports/                         ← Final deliverables — Phase 5, pending
 ```
 
 ---
