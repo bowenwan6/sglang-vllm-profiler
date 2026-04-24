@@ -1,0 +1,16 @@
+{
+  "candidate": "A0_baseline",
+  "rep": 2,
+  "elapsed_s": 299.9,
+  "dataset_sha256": "fab4917772e087447d7c33d53ada63340b126088c1f195f118b9488d5f5b619e",
+  "dataset_path": "/data/profiling_lab/datasets/caseA_short.jsonl",
+  "timestamp": "2026-04-24T11:40:35.359937+00:00",
+  "metrics": {
+    "ttft_p50_ms": 56.01250450126827,
+    "ttft_p99_ms": 68.00026153912765,
+    "ttft_std_ms": 3.397748283857747,
+    "tpot_p50_ms": 5.285720141076549,
+    "output_throughput": 176.1282151492498,
+    "request_throughput": 1.376001680853514
+  }
+}

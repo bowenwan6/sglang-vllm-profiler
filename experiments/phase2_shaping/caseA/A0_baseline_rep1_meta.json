@@ -1,0 +1,9 @@
+{
+  "candidate": "A0_baseline",
+  "rep": 1,
+  "elapsed_s": 301.3,
+  "dataset_sha256": "fab4917772e087447d7c33d53ada63340b126088c1f195f118b9488d5f5b619e",
+  "dataset_path": "/data/profiling_lab/datasets/caseA_short.jsonl",
+  "timestamp": "2026-04-24T11:35:35.479784+00:00",
+  "metrics": {}
+}

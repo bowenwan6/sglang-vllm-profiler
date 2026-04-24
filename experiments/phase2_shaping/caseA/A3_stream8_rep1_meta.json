@@ -1,0 +1,16 @@
+{
+  "candidate": "A3_stream8",
+  "rep": 1,
+  "elapsed_s": 300.2,
+  "dataset_sha256": "fab4917772e087447d7c33d53ada63340b126088c1f195f118b9488d5f5b619e",
+  "dataset_path": "/data/profiling_lab/datasets/caseA_short.jsonl",
+  "timestamp": "2026-04-24T11:29:46.220314+00:00",
+  "metrics": {
+    "ttft_p50_ms": 57.02773097436875,
+    "ttft_p99_ms": 729.7122783958912,
+    "ttft_std_ms": 127.14673833599699,
+    "tpot_p50_ms": 5.284974534856522,
+    "output_throughput": 175.8314812387978,
+    "request_throughput": 1.3736834471781079
+  }
+}

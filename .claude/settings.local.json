@@ -53,7 +53,8 @@
       "Bash(python3 *)",
       "Bash(pkill -f \"run_phase1.py\")",
       "Bash(rm -f datasets/case*.jsonl experiments/phase1/raw/*.json experiments/phase1/raw/*.txt)",
-      "Bash(HF_HUB_OFFLINE=1 python3 experiments/phase1/scripts/gen_datasets.py)"
+      "Bash(HF_HUB_OFFLINE=1 python3 experiments/phase1/scripts/gen_datasets.py)",
+      "Bash(grep -v \"^$\")"
     ]
   }
 }

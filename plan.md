@@ -410,27 +410,131 @@ A human reviewer validating the project should inspect artifacts in this sequenc
 
 ### Phase 2 — Identify Informative Cases (0.5–1 day)
 
-**Goal.** From the 4 baseline cases, select 1–2 cases whose gap is *structural*, not configurational.
+**Goal.** Given Phase-1 evidence (TTFT gap is universal, TPOT at parity), decide which cases enter Phase-3 profiling and with what shaping. Concretely:
 
-**Decision rule (applied per case).**
+1. Determine whether SGLang's ~50 ms Case-A TTFT is *compressible by flags* or is a **structural scheduler/dispatch floor** (the latter is the Phase-3 target).
+2. Determine whether Case-B's long-prefill gap shrinks under chunked-prefill shaping (same scheduler floor + prefill compute — we want to disentangle them).
+3. Reduce TTFT variance on Cases C/D (CV 20–42%) to a profilable state (CV ≤10%), or explicitly drop them.
+4. Decide whether vLLM's Case-B TTFT noise (CV=99.3%) invalidates that baseline, or is simply a first-request cold effect that a longer steady-state window absorbs.
 
-| Gap size (median across repeats) | Action |
+#### Evidence inherited from Phase 1 (do not re-measure)
+
+| Signal | Value | Phase-2 implication |
+|---|---|---|
+| SGLang TTFT delta 128→2048 tok | +7.7 ms | Prefill compute is cheap; a ~50 ms fixed overhead exists at c=1 |
+| vLLM TTFT delta 128→2048 tok | +10.0 ms | Comparable scaling; vLLM floor is ~14 ms |
+| TPOT ratio (all cases) | 0.98–1.02× | Decode path is not a Phase-2 or Phase-3 concern — do not shape it |
+| TTFT CV SGLang Case A/B | 1.2% / 3.7% | Low-noise, profilable as-is |
+| TTFT CV SGLang Case C/D | 20–42% | Not profilable; variance reduction precondition |
+| vLLM TTFT CV Case B | 99.3% | Median is a lower bound; needs longer window or more reps on vLLM side |
+
+#### Decision rule (applied per case)
+
+| Gap size (median) | TTFT CV (both frameworks) | Action |
+|---|---|---|
+| < 5% | any | Drop, or reshape workload (more prompt / more concurrency). |
+| 5–15% | ≤10% | Run tier-1 shaping sweep. Promote to Phase 3 only if sweep cannot close the gap. |
+| > 15%, both CVs ≤10% | ≤10% | Run shaping sweep *before* promoting. If gap survives any flag combo, promote as **structural**. |
+| > 15%, either CV > 10% | > 10% | Run **variance-reduction** sweep first. Re-evaluate gap after. Do not profile on noisy data (§14 anti-pattern). |
+
+#### Sweep plan (per case, ≤4 candidates each, 1 rep initially, 3 reps on finalists)
+
+All sweeps use `sglang-auto-benchmark run --tier 1` against the existing `datasets/{case}.jsonl` (no regeneration). vLLM is re-run in parallel only on finalists using a matching bench_serving invocation — auto_benchmark cannot drive vLLM. Config files live in `configs/phase2_shaping/{case}.yaml`.
+
+**Case A — scheduling-overhead isolation (highest priority).** The ~50 ms floor at c=1 is where the Phase-3 hypothesis starts. Candidate axes:
+
+| Axis | Values | Rationale |
+|---|---|---|
+| `--disable-overlap-schedule` | {off, on} | Overlap scheduler adds a step of pipelining; at c=1 it may be pure overhead |
+| `--schedule-policy` | {lpm (default), fcfs} | Longest-prefix-match adds per-request bookkeeping; fcfs is the minimal path |
+| `--chunked-prefill-size` | {8192 (default), -1 (disabled)} | At 128-token prompts, chunking should be a no-op; confirming this rules it out |
+| `--stream-interval` | {1 (default), 8} | Eliminates per-token streaming cost from TTFT measurement path |
+
+Pick ≤4 combinations, not the full grid. Start with each flag flipped individually from default; add one 2-way combo if a single flag moves TTFT by ≥10%.
+
+**Case B — long-prefill disentanglement.** Step 2.1 produced no scheduler winner (A0 baseline = default was the finalist). Therefore Case B uses **default flags as base** — no scheduler flags inherited. The sweep focuses exclusively on the chunked-prefill axis:
+
+| Axis | Values | Rationale |
+|---|---|---|
+| `--chunked-prefill-size` | {2048, 4096, 8192 (default), -1} | 2048-token prompt vs 8192 default chunk — chunking is currently a no-op; forcing smaller chunks probes whether chunked-prefill scheduling adds overhead on top of the 56 ms structural floor |
+
+`--schedule-conservativeness` is **dropped** from the sweep: since Case A confirmed the floor is framework-intrinsic (not policy-driven), conservativeness (which only affects scheduling policy) is unlikely to move Case B differently. Adding it would expand the grid without evidence justification.
+
+**Cases C & D — variance reduction (gate, not shaping).** Before any flag sweep, establish whether the TTFT CV is driven by insufficient warmup or by steady-state scheduler jitter. Sweep axes on the **client**, not the server:
+
+| Axis | Values | Rationale |
+|---|---|---|
+| `--warmup-requests` | {30 (current), 100, 300} | 30 warmups may be insufficient for c=16 to reach steady batch |
+| Bench duration | {current, 2×, 4×} | Longer sampling window reduces p50 variance |
+| Repetitions | 3 → 5 on finalists | Median stabilizes; also reveals if the "noise" is actually a bimodal distribution (graph recapture events) |
+
+If CV drops below 10% with extended warmup alone, promote C/D to Phase 3 with the new warmup setting baked into the protocol. If CV stays >10%, record the case as **not profilable at c=16** and drop from Phase-3 scope.
+
+**vLLM Case-B noise check (not a sweep, a re-run).** Re-run Case B on vLLM with `warmup_requests=300` and 5 reps. If CV drops below 20%, the Phase-1 number was a cold-start artifact and the 2.59× ratio stands. If CV stays high, the vLLM side is genuinely bimodal and the Case-B gap carries a confidence ceiling of M for the same reason described in §6.2.
+
+#### Artifacts
+
+| File | Role |
 |---|---|
-| < 5 % | Non-informative. Drop, or reshape workload (push prompt length / concurrency). |
-| 5 – 15 % | Run shaping sweep below. Promote to Phase 3 only if sweep cannot close the gap. |
-| > 15 %, stable | Promote directly to Phase 3. |
+| `configs/phase2_shaping/caseA.yaml`, `caseB.yaml` | auto_benchmark specs (server axes) |
+| `configs/phase2_shaping/caseCD_variance.yaml` | client-side variance-reduction spec |
+| `experiments/phase2_shaping/{caseA,caseB,caseCD}/live_results.jsonl` | Append-only raw |
+| `experiments/phase2_shaping/{case}/results.jsonl`, `results.csv`, `summary.md` | Processed per-case sweep output |
+| `experiments/phase2_shaping/vllm_caseB_recheck.json` | vLLM re-run result |
+| `experiments/phase2/selected_cases.md` | **Phase-3 entry gate** — one row per promoted case with: phenomenon, shaping applied, residual gap, residual CV, fairness-dependence tier |
 
-**Shaping sweep.** `sglang-auto-benchmark run --tier 1`, bounded to 1 case × ≤2 axes. Axes chosen from the case's likely bottleneck (e.g. for long-prefill cases: `chunked_prefill_size`, `schedule_conservativeness`). Config template in `configs/phase2_shaping/` uses the existing `datasets/{case}.jsonl` — no regeneration.
+#### Skill usage
 
-**Skill usage.**
+- `sglang-auto-benchmark` → `run` tier 1, ≤4 candidates per case, resumable.
+- `debug-cuda-crash` → L1 passive (candidate servers are transient, odd flag combos may crash — free crash trail).
+- `sglang-torch-profiler-analysis` → **not used.** No interpretation in Phase 2.
 
-- `sglang-auto-benchmark` → `run` tier 1, ≤4 candidates.
-- `debug-cuda-crash` → L1 passive (candidate servers are transient, may crash on odd flag combos).
-- `sglang-torch-profiler-analysis` → **not used.**
+#### Success criteria (all must hold to exit Phase 2)
 
-**Outputs.** `experiments/phase2_shaping/{live_results.jsonl, results.jsonl, results.csv, summary.md}`, `experiments/phase2/selected_cases.md`.
+1. Case A and Case B either (a) have a shaped SGLang config that holds the TTFT gap ≥15%, in which case they promote to Phase 3 as *structural*, or (b) the gap collapses under a flag flip, in which case the finding is recorded and the case is **not** profiled.
+2. Cases C/D either reach TTFT CV ≤10% (promote) or are formally dropped with a one-line justification in `selected_cases.md`.
+3. vLLM Case-B baseline is either re-confirmed with CV <20% or explicitly labeled noisy in all downstream Case-B conclusions.
+4. `experiments/phase2/selected_cases.md` lists 1–2 cases for Phase 3. Zero cases means returning to Phase 1 with a reshaped matrix (longer prompts, higher concurrency) — Phase 3 does not run on speculation.
 
-**Success criterion.** ≤2-case shortlist, each labeled with the specific phenomenon to explain (e.g. "TTFT 1.8× vLLM on long prefill at concurrency 16"). If every gap collapsed under shaping, Phase 3 does not execute — return to Phase 1 with a reshaped matrix.
+#### Expected outcome (prediction, for Phase-3 pre-planning — not a gate)
+
+Based on the Phase-1 evidence, the most likely Phase-2 result is: Case A promotes as structural (the 50 ms floor is unlikely to yield to flags), Case B promotes as structural with a secondary chunked-prefill note, Cases C/D either stabilize under longer warmup (promote as secondary) or drop. This is a hypothesis, not a plan commitment — the sweep outcomes govern.
+
+#### Execution order
+
+Steps are **serial** unless explicitly marked parallel. Case A results gate Case B's scheduler axis; C/D variance conclusion gates their Phase-3 eligibility. Step 2.4 (vLLM recheck) is fully independent and can run concurrently with any server-free window.
+
+```
+Step 2.0  Pre-flight (~15 min)
+  ├─ mkdir configs/phase2_shaping/
+  ├─ mkdir experiments/phase2_shaping/{caseA,caseB,caseCD}/
+  ├─ mkdir experiments/phase2/  logs/phase2/
+  ├─ verify datasets SHA-256 (no regen)
+  └─ verify GPU 6 idle, no residual server processes
+
+Step 2.1  Case A scheduler sweep (~2 h)   ← SERIAL, must finish first
+  ├─ candidates A0 (baseline) / A1 (disable-overlap) / A2 (fcfs) / A3 (stream-interval 8)
+  ├─ each: 1 rep, 30 warmup, LOGLEVEL=1 → logs/phase2/
+  ├─ if single flag moves TTFT ≥10 ms → add A4 = best 2-way combo
+  └─ decision: structural (→ 3-rep reconfirm) or configurational (→ record + drop)
+
+Step 2.2  Case B chunked-prefill sweep (~1.5 h)   ← SERIAL, after 2.1
+  ├─ base = default flags (2.1 produced no scheduler winner; A0 baseline = default)
+  ├─ candidates B0/B1/B2/B3 on chunked-prefill-size axis only
+  └─ decision: same-floor (→ Phase 3 as "same floor") or chunking-sensitive (→ note + promote)
+
+Step 2.3  Case C/D variance gate (~2 h)   ← can interleave with 2.1/2.2 between server restarts
+  ├─ client-only: V0 (warmup=30) / V1 (warmup=100) / V2 (warmup=300, 4× bench_n, 5 reps)
+  └─ decision per case: CV ≤10% → promote; CV >10% → check bimodal → drop
+
+Step 2.4  vLLM Case B noise recheck (~20 min)   ← PARALLEL with any step above
+  └─ warmup=300, 5 reps, vLLM only; → experiments/phase2_shaping/vllm_caseB_recheck.json
+
+Step 2.5  Synthesize selected_cases.md (~30 min)   ← SERIAL, after all above
+  └─ one row per case; promote/drop decision with evidence pointers
+```
+
+**Script location:** `experiments/phase2/scripts/run_phase2_caseA.py`, `run_phase2_caseB.py`, `run_phase2_caseCD.py` — same structure as `experiments/phase1/scripts/run_phase1.py`. No auto_benchmark YAML runner; direct bench_serving orchestration for full control.
 
 ---
 
@@ -713,6 +817,29 @@ All CV values for TPOT and throughput are ≤2% — decode metrics are stable. T
 - Case A is highest priority: the scheduling overhead hypothesis is clean, low-noise, and directly actionable.
 - Cases C and D: run a short reshaping sweep to reduce TTFT variance before committing to profiling.
 
+### Phase 2 — Identify Informative Cases (in progress, 2026-04-24)
+
+#### Step 2.1 — Case A scheduler-overhead sweep (completed 2026-04-24)
+
+**Run conditions:** GPU 6, clock-locked 1980 MHz, dataset SHA verified, `SGLANG_KERNEL_API_LOGLEVEL=1`.
+
+**Results:**
+
+| Candidate | Flag | TTFT p50 (ms) | Δ vs baseline |
+|---|---|---|---|
+| A0 baseline | (default) | 57.1 | — |
+| A1 | `--disable-overlap-schedule` | 55.4 | −1.7 ms |
+| A2 | `--schedule-policy fcfs` | 57.5 | +0.4 ms |
+| A3 | `--stream-interval 8` | 57.0 | −0.0 ms |
+
+**Finalist 3-rep reconfirm (A0 baseline):** median = **56.0 ms**, CV = **0.1%**.
+
+**Verdict: STRUCTURAL.** No scheduler flag moved TTFT by ≥10 ms (maximum Δ = 1.7 ms). The ~56 ms TTFT floor is intrinsic to SGLang's c=1 request-dispatch path and cannot be closed by any combination of overlap scheduling, scheduling policy, or stream interval settings. 2-way combo step was bypassed — threshold not triggered.
+
+**Phase-3 entry:** Case A promotes with phenomenon label: *"SGLang ~56 ms structural scheduler/dispatch floor at c=1, unresponsive to overlap/policy/stream flags."* Base config = default (no shaping). Fairness dependence: Framework-intrinsic.
+
+**Produced files:** `experiments/phase2_shaping/caseA/summary.md`, `experiments/phase2_shaping/caseA/A{0..3}_baseline_rep*.json`, `logs/phase2/sglang_caseA_*.log`.
+
 ---
 
 ## 16. Prioritized Next-Step Checklist
@@ -721,7 +848,12 @@ All CV values for TPOT and throughput are ≤2% — decode metrics are stable. T
 2. ✅ Phase 0 — servers up, equivalence matrix run. All Tier-A/B pass; outputs EXACT match.
 3. ✅ Generate `datasets/case{A..D}.jsonl` — text-only random prompts (special tokens excluded), SHA-256 logged.
 4. ✅ Phase 1 — 24 runs (4 cases × 2 frameworks × 3 reps); `experiments/phase1/summary.md` complete.
-5. Apply Phase-2 decision rule; Cases A and B are primary Phase-3 candidates (TTFT 3.89× and 2.59×); Cases C/D need variance reduction first.
+5. Phase 2 (in progress):
+   - ✅ Step 2.1 — Case A sweep: 4 candidates, floor confirmed STRUCTURAL at 56 ms CV=0.1%. Base config = default.
+   - Step 2.2 — Case B chunked-prefill sweep (base = default, no extra flags from 2.1).
+   - Step 2.3 — Cases C/D variance reduction (client-side: warmup 30→300, 5 reps).
+   - Step 2.4 — vLLM Case B noise re-check (warmup=300, 5 reps) — can run in parallel with 2.2/2.3.
+   - Step 2.5 — Synthesize `experiments/phase2/selected_cases.md`.
 6. Phase 3 — SGLang mapping+formal + vLLM prefill_like+decode_like per selected case (1 day).
 7. Phase 4 — triage + breakdown + vLLM cross-check per case; author `hypotheses.md` and `ranked_recommendations.md` (1–1½ days).
 8. Phase 5 (if warranted) — tier-2 validation sweeps for the top 2 hypotheses.
