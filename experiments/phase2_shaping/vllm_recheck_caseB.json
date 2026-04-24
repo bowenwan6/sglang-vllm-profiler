@@ -1,0 +1,19 @@
+{
+  "case": "caseB",
+  "warmup": 300,
+  "reps": 5,
+  "rep_ttft_p50_ms": [
+    65.41197246406227,
+    24.232910596765578,
+    24.31825501844287,
+    23.877345025539398,
+    24.270642083138227
+  ],
+  "median_ttft_ms": 24.270642083138227,
+  "across_rep_cv_pct": 75.99,
+  "phase1_ttft_ms": 24.1,
+  "phase1_cv_pct": 99.3,
+  "status": "CEILING_M",
+  "note": "CV=76.0% > 30% \u2014 tag all vLLM caseB comparisons with confidence ceiling M",
+  "timestamp": "2026-04-24T17:42:13.612053+00:00"
+}

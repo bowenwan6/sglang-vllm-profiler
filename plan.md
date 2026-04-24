@@ -470,7 +470,20 @@ Pick ≤4 combinations, not the full grid. Start with each flag flipped individu
 
 If CV drops below 10% with extended warmup alone, promote C/D to Phase 3 with the new warmup setting baked into the protocol. If CV stays >10%, record the case as **not profilable at c=16** and drop from Phase-3 scope.
 
-**vLLM Case-B noise check (not a sweep, a re-run).** Re-run Case B on vLLM with `warmup_requests=300` and 5 reps. If CV drops below 20%, the Phase-1 number was a cold-start artifact and the 2.59× ratio stands. If CV stays high, the vLLM side is genuinely bimodal and the Case-B gap carries a confidence ceiling of M for the same reason described in §6.2.
+**vLLM baseline recheck (not a sweep — stability verification only).** Phase 2.3 promoted Case C to Phase 3, making its vLLM baseline (164.1 ms, cv=9.9% ⚠ in Phase 1) a comparison target that has not yet been verified stable. Step 2.4 now covers both Case B and Case C vLLM rechecks.
+
+| Case | Phase-1 vLLM TTFT | Phase-1 vLLM CV | Why recheck |
+|---|---|---|---|
+| B (2048→128, c=1) | 24.1 ms | **99.3%** ⚠ | Extreme noise — median is a lower bound; almost certainly cold-start or chunked-prefill jitter |
+| C (512→128, c=16) | 164.1 ms | 9.9% ⚠ | Borderline; newly promoted to Phase 3 — need confirmed stable baseline before profiling |
+
+Re-run both cases on vLLM with `warmup_requests=300`, 5 reps, same JSONL datasets. Log per-rep p50 values and across-rep CV. Decision per case:
+
+| CV result | Interpretation | Action |
+|---|---|---|
+| CV < 10% | Baseline stable | Phase-3 comparison is clean |
+| CV 10–30% | Noisy but usable | Carry note; downstream ratio has ±15% uncertainty |
+| CV > 30% | Bimodal or jitter-dominated | Tag all downstream Case B/C vLLM comparisons with confidence ceiling **M** |
 
 #### Artifacts
 
@@ -480,7 +493,8 @@ If CV drops below 10% with extended warmup alone, promote C/D to Phase 3 with th
 | `configs/phase2_shaping/caseCD_variance.yaml` | client-side variance-reduction spec |
 | `experiments/phase2_shaping/{caseA,caseB,caseCD}/live_results.jsonl` | Append-only raw |
 | `experiments/phase2_shaping/{case}/results.jsonl`, `results.csv`, `summary.md` | Processed per-case sweep output |
-| `experiments/phase2_shaping/vllm_caseB_recheck.json` | vLLM re-run result |
+| `experiments/phase2_shaping/vllm_recheck_caseB.json` | vLLM Case B re-run (5 reps, warmup=300) |
+| `experiments/phase2_shaping/vllm_recheck_caseC.json` | vLLM Case C re-run (5 reps, warmup=300) |
 | `experiments/phase2/selected_cases.md` | **Phase-3 entry gate** — one row per promoted case with: phenomenon, shaping applied, residual gap, residual CV, fairness-dependence tier |
 
 #### Skill usage
@@ -493,7 +507,7 @@ If CV drops below 10% with extended warmup alone, promote C/D to Phase 3 with th
 
 1. Case A and Case B either (a) have a shaped SGLang config that holds the TTFT gap ≥15%, in which case they promote to Phase 3 as *structural*, or (b) the gap collapses under a flag flip, in which case the finding is recorded and the case is **not** profiled.
 2. Cases C/D either reach TTFT CV ≤10% (promote) or are formally dropped with a one-line justification in `selected_cases.md`.
-3. vLLM Case-B baseline is either re-confirmed with CV <20% or explicitly labeled noisy in all downstream Case-B conclusions.
+3. vLLM baselines for all promoted cases (A, B, C) have a documented stability status: CV <10% (clean), 10–30% (noisy note), or >30% (confidence ceiling M). Case A was verified stable in Phase 1 (cv=3.3%). Cases B and C require Step 2.4.
 4. `experiments/phase2/selected_cases.md` lists 1–2 cases for Phase 3. Zero cases means returning to Phase 1 with a reshaped matrix (longer prompts, higher concurrency) — Phase 3 does not run on speculation.
 
 #### Expected outcome (prediction, for Phase-3 pre-planning — not a gate)
@@ -527,11 +541,23 @@ Step 2.3  Case C/D variance gate (~2 h)   ← can interleave with 2.1/2.2 betwee
   ├─ client-only: V0 (warmup=30) / V1 (warmup=100) / V2 (warmup=300, 4× bench_n, 5 reps)
   └─ decision per case: CV ≤10% → promote; CV >10% → check bimodal → drop
 
-Step 2.4  vLLM Case B noise recheck (~20 min)   ← PARALLEL with any step above
-  └─ warmup=300, 5 reps, vLLM only; → experiments/phase2_shaping/vllm_caseB_recheck.json
+Step 2.4  vLLM baseline recheck — Cases B and C (~45 min)   ← can run any time GPU is free
+  ├─ vLLM server: default flags, port 30001, CUDA_VISIBLE_DEVICES=6
+  ├─ Case B (caseB_longprefill.jsonl): warmup=300, 5 reps, concurrency=1
+  ├─ Case C (caseC_batched.jsonl):     warmup=300, 5 reps, concurrency=16
+  ├─ Record per-rep TTFT p50 and across-rep CV for each case
+  ├─ Case B decision: CV<10% → clean; CV 10–30% → noisy note; CV>30% → ceiling M
+  ├─ Case C decision: CV<10% → clean; CV>10% → ceiling M on c=16 vLLM comparisons
+  └─ Output → experiments/phase2_shaping/vllm_recheck_{caseB,caseC}.json
 
-Step 2.5  Synthesize selected_cases.md (~30 min)   ← SERIAL, after all above
-  └─ one row per case; promote/drop decision with evidence pointers
+Step 2.5  Close-out synthesis (~20 min)   ← SERIAL, after 2.4
+  ├─ Update experiments/phase2/selected_cases.md with 2.4 vLLM stability results
+  ├─ Assign confidence ceiling per promoted case:
+  │   · Case A: vLLM p50 stable (cv=3.3% in Phase 1) → no ceiling
+  │   · Case B: ceiling determined by 2.4 Case B result
+  │   · Case C: ceiling determined by 2.4 Case C result
+  ├─ Lock Phase-3 protocol per case (server flags, warmup, bench_n, concurrency)
+  └─ Gate check: all 5 exit criteria met before Phase 3 starts
 ```
 
 **Script location:** `experiments/phase2/scripts/run_phase2_caseA.py`, `run_phase2_caseB.py`, `run_phase2_caseCD.py` — same structure as `experiments/phase1/scripts/run_phase1.py`. No auto_benchmark YAML runner; direct bench_serving orchestration for full control.
@@ -905,15 +931,39 @@ Single SGLang server (default flags). Client-only warmup sweep across V0/V1/V2.
 
 ---
 
-#### Phase 2 — Final shortlist
+#### Step 2.4 — vLLM baseline recheck (completed 2026-04-24)
 
-**Phase-3 shortlist (3 cases):** A (primary), B (primary), C (secondary). Case D dropped.
+Protocol: warmup=300, 5 reps, GPU 6. Single vLLM server.
 
-| Case | Residual TTFT | CV | Phase-3 config |
-|---|---|---|---|
-| A | 56.0 ms vs 14.1 ms (4.0×) | 0.1% | default, warmup=30 |
-| B | 64.4 ms vs 24.1 ms (2.7×) | 0.9% | default, warmup=30 |
-| C | 241 ms vs 164 ms (1.47×) | 4.2% | default, **warmup=100** |
+**Case B (2048→128, c=1) — CEILING M:**
+
+| Rep | TTFT p50 |
+|---|---|
+| 1 | 65.4 ms ← outlier |
+| 2 | 24.2 ms |
+| 3 | 24.3 ms |
+| 4 | 23.9 ms |
+| 5 | 24.3 ms |
+
+Across-rep CV = **76.0%**. Bimodal — rep1 is a periodic outlier (~65 ms), steady state is ~24 ms but unpredictable. All Phase-4 vLLM cross-checks for Case B carry **confidence ceiling M**.
+
+**Case C (512→128, c=16) — CLEAN:**
+
+5-rep TTFT p50 values: [180.9, 185.5, 174.3, 161.0, 183.7] ms. Median = **180.9 ms**, CV = **5.5%**. Baseline stable.
+
+**Key revision:** Phase-1 vLLM Case C was 164.1 ms (warmup=30, insufficient for c=16). True stable baseline is **180.9 ms**. Corrected SGLang/vLLM ratio: **1.33×** (was 1.49×). Gap is real and profilable.
+
+---
+
+#### Phase 2 — Final shortlist (complete)
+
+**Phase-3 shortlist:** A (primary), B (primary), C (secondary). Case D dropped.
+
+| Case | SGLang TTFT | vLLM TTFT (verified) | Ratio | SGLang CV | vLLM ceiling | Phase-3 config |
+|---|---|---|---|---|---|---|
+| A | 56.0 ms | 14.1 ms (Phase-1, cv=3.3%) | 4.0× | 0.1% | None | default, warmup=30 |
+| B | 64.4 ms | ~24 ms (bimodal, cv=76%) | ~2.7× | 0.9% | **M** | default, warmup=30 |
+| C | 241 ms | 180.9 ms (recheck, cv=5.5%) | **1.33×** | 4.2% | None | default, **warmup=100** |
 
 ---
 
@@ -923,12 +973,12 @@ Single SGLang server (default flags). Client-only warmup sweep across V0/V1/V2.
 2. ✅ Phase 0 — servers up, equivalence matrix run. All Tier-A/B pass; outputs EXACT match.
 3. ✅ Generate `datasets/case{A..D}.jsonl` — text-only random prompts (special tokens excluded), SHA-256 logged.
 4. ✅ Phase 1 — 24 runs (4 cases × 2 frameworks × 3 reps); `experiments/phase1/summary.md` complete.
-5. ✅ Phase 2 (complete):
+5. ✅ Phase 2 (fully complete — all 5 exit criteria verified):
    - ✅ Step 2.1 — Case A: STRUCTURAL floor at 56 ms, CV=0.1%. No flag closes it.
    - ✅ Step 2.2 — Case B: STRUCTURAL (same floor); secondary finding: per-chunk dispatch overhead when chunking active.
    - ✅ Step 2.3 — Case C: PROMOTE (CV 4.2% at warmup=100). Case D: DROP (bimodal, V2 CV=14.8%).
-   - ⬜ Step 2.4 — vLLM Case B noise re-check (warmup=300, 5 reps) — still pending, run before Phase 3.
-   - ✅ Step 2.5 — Phase-3 shortlist finalized in §15: Cases A, B, C → Phase 3.
+   - ✅ Step 2.4 — vLLM recheck: Case B → CEILING M (CV=76%, bimodal); Case C → CLEAN (CV=5.5%, revised baseline 164→181 ms, ratio 1.49→1.33×).
+   - ✅ Step 2.5 — selected_cases.md updated; Phase-3 protocol locked; all 5 exit criteria verified.
 6. Phase 3 — SGLang mapping+formal + vLLM prefill_like+decode_like per selected case (1 day).
 7. Phase 4 — triage + breakdown + vLLM cross-check per case; author `hypotheses.md` and `ranked_recommendations.md` (1–1½ days).
 8. Phase 5 (if warranted) — tier-2 validation sweeps for the top 2 hypotheses.

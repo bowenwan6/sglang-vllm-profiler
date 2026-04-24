@@ -1,0 +1,19 @@
+{
+  "case": "caseC",
+  "warmup": 300,
+  "reps": 5,
+  "rep_ttft_p50_ms": [
+    180.86503399536014,
+    185.4724830482155,
+    174.34444092214108,
+    160.98580497782677,
+    183.6801809258759
+  ],
+  "median_ttft_ms": 180.86503399536014,
+  "across_rep_cv_pct": 5.49,
+  "phase1_ttft_ms": 164.1,
+  "phase1_cv_pct": 9.9,
+  "status": "CLEAN",
+  "note": "CV=5.5% < 10% \u2014 baseline stable, no confidence ceiling",
+  "timestamp": "2026-04-24T17:52:36.897252+00:00"
+}
