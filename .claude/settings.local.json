@@ -54,7 +54,29 @@
       "Bash(pkill -f \"run_phase1.py\")",
       "Bash(rm -f datasets/case*.jsonl experiments/phase1/raw/*.json experiments/phase1/raw/*.txt)",
       "Bash(HF_HUB_OFFLINE=1 python3 experiments/phase1/scripts/gen_datasets.py)",
-      "Bash(grep -v \"^$\")"
+      "Bash(grep -v \"^$\")",
+      "Read(//sgl-workspace/sglang/**)",
+      "Read(//opt/**)",
+      "Read(//opt/miniconda3/**)",
+      "Read(//opt/miniconda3/envs/**)",
+      "Read(//opt/miniconda3/envs/vllm/bin/**)",
+      "Bash(pip show *)",
+      "Bash(git -C /sgl-workspace/sglang log -1 --format=\"%H %s\")",
+      "Bash(HF_HUB_ENABLE_HF_TRANSFER=0 huggingface-cli download Qwen/Qwen3-VL-8B-Instruct --revision 0c351dd01ed87e9c1b53cbc748cba10e6187ff3b --cache-dir /root/.cache/huggingface)",
+      "Bash(set -e)",
+      "Bash(wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh)",
+      "Read(//tmp/**)",
+      "Bash(/opt/miniconda3/bin/conda create *)",
+      "Bash(/opt/miniconda3/envs/profiling/bin/python --version)",
+      "Bash(HF_HUB_ENABLE_HF_TRANSFER=0 hf download Qwen/Qwen3-VL-8B-Instruct --revision 0c351dd01ed87e9c1b53cbc748cba10e6187ff3b --cache-dir /root/.cache/huggingface)",
+      "Bash(/opt/miniconda3/envs/profiling/bin/pip install *)",
+      "Bash(/opt/miniconda3/envs/profiling/bin/python -m ensurepip)",
+      "Read(//root/.cache/huggingface/models--Qwen--Qwen3-VL-8B-Instruct/**)",
+      "Read(//root/.cache/huggingface/models--Qwen--Qwen3-VL-8B-Instruct/snapshots/0c351dd01ed87e9c1b53cbc748cba10e6187ff3b/**)",
+      "Bash(/opt/miniconda3/envs/profiling/bin/python -m pip install vllm)",
+      "Bash(/opt/miniconda3/envs/profiling/bin/python -m pip install pandas datasets)",
+      "Bash(/opt/miniconda3/envs/profiling/bin/python -c 'import torch; print\\('\\\\''torch'\\\\'', torch.__version__, '\\\\''| cuda avail'\\\\'', torch.cuda.is_available\\(\\), '\\\\''| cuda'\\\\'', torch.version.cuda, '\\\\''| device_count'\\\\'', torch.cuda.device_count\\(\\)\\)')",
+      "Bash(/opt/miniconda3/envs/profiling/bin/python -c 'import vllm; print\\('\\\\''vllm'\\\\'', vllm.__version__\\)')"
     ]
   }
 }
