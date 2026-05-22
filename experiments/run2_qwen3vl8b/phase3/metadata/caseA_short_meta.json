@@ -1,0 +1,44 @@
+{
+  "case": "caseA_short",
+  "model_snapshot": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+  "dataset": "caseA_short.jsonl",
+  "dataset_sha256": "fab4917772e087447d7c33d53ada63340b126088c1f195f118b9488d5f5b619e",
+  "gpu": "1",
+  "concurrency": 1,
+  "output_len": 128,
+  "sglang_flags": [
+    "--disable-overlap-schedule"
+  ],
+  "warmup": 30,
+  "reps": 3,
+  "num_steps": 10,
+  "confidence_ceiling_M": false,
+  "note": "",
+  "timestamp_utc": "2026-05-22T15:42:19.985195+00:00",
+  "traces": {
+    "sglang_mapping": {
+      "ok": true,
+      "reason": null,
+      "size_bytes": 34238506,
+      "trace_dir": "/data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseA_short/sglang_mapping"
+    },
+    "sglang_formal": {
+      "ok": true,
+      "reason": null,
+      "size_bytes": 3472221,
+      "trace_dir": "/data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseA_short/sglang_formal"
+    },
+    "vllm_prefill_like": {
+      "ok": true,
+      "reason": null,
+      "size_bytes": 2846935,
+      "trace_dir": "/data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseA_short/vllm/prefill_like"
+    },
+    "vllm_decode_like": {
+      "ok": true,
+      "reason": null,
+      "size_bytes": 66928537,
+      "trace_dir": "/data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseA_short/vllm/decode_like"
+    }
+  }
+}

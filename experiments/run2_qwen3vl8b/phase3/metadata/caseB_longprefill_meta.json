@@ -1,0 +1,42 @@
+{
+  "case": "caseB_longprefill",
+  "model_snapshot": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+  "dataset": "caseB_longprefill.jsonl",
+  "dataset_sha256": "7d25d285ab71982d2ed91749a65d28339e6d6c4688d831c6620bc247f6937349",
+  "gpu": "1",
+  "concurrency": 1,
+  "output_len": 128,
+  "sglang_flags": [],
+  "warmup": 300,
+  "reps": 5,
+  "num_steps": 10,
+  "confidence_ceiling_M": true,
+  "note": "Case B: both frameworks bimodal -> all cross-framework conclusions carry ceiling M",
+  "timestamp_utc": "2026-05-22T15:55:41.399047+00:00",
+  "traces": {
+    "sglang_mapping": {
+      "ok": true,
+      "reason": null,
+      "size_bytes": 34242896,
+      "trace_dir": "/data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseB_longprefill/sglang_mapping"
+    },
+    "sglang_formal": {
+      "ok": true,
+      "reason": null,
+      "size_bytes": 3467497,
+      "trace_dir": "/data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseB_longprefill/sglang_formal"
+    },
+    "vllm_prefill_like": {
+      "ok": true,
+      "reason": null,
+      "size_bytes": 5206637,
+      "trace_dir": "/data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseB_longprefill/vllm/prefill_like"
+    },
+    "vllm_decode_like": {
+      "ok": true,
+      "reason": null,
+      "size_bytes": 65948988,
+      "trace_dir": "/data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseB_longprefill/vllm/decode_like"
+    }
+  }
+}

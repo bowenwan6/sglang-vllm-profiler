@@ -1,0 +1,42 @@
+{
+  "case": "caseD_decode",
+  "model_snapshot": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+  "dataset": "caseD_decode.jsonl",
+  "dataset_sha256": "b7fbab20d7efda85a2b047d14b47e3c6e84adf23cc0f3bda4d8e9783fdd1b1a7",
+  "gpu": "1",
+  "concurrency": 16,
+  "output_len": 512,
+  "sglang_flags": [],
+  "warmup": 30,
+  "reps": 3,
+  "num_steps": 10,
+  "confidence_ceiling_M": false,
+  "note": "",
+  "timestamp_utc": "2026-05-22T16:02:39.018518+00:00",
+  "traces": {
+    "sglang_mapping": {
+      "ok": true,
+      "reason": null,
+      "size_bytes": 34548046,
+      "trace_dir": "/data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseD_decode/sglang_mapping"
+    },
+    "sglang_formal": {
+      "ok": true,
+      "reason": null,
+      "size_bytes": 7006512,
+      "trace_dir": "/data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseD_decode/sglang_formal"
+    },
+    "vllm_prefill_like": {
+      "ok": true,
+      "reason": null,
+      "size_bytes": 4882218,
+      "trace_dir": "/data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseD_decode/vllm/prefill_like"
+    },
+    "vllm_decode_like": {
+      "ok": true,
+      "reason": null,
+      "size_bytes": 119496212,
+      "trace_dir": "/data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseD_decode/vllm/decode_like"
+    }
+  }
+}

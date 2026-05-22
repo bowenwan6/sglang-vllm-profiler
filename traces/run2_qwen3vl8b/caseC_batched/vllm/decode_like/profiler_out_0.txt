@@ -1,0 +1,107 @@
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                                   Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg     Self CUDA   Self CUDA %    CUDA total  CUDA time avg    # of Calls  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                 execute_context_0(0)_generation_16(16)         0.00%       0.000us         0.00%       0.000us       0.000us        4.412s        75.37%        4.412s       5.899ms           748  
+                nvjet_sm90_tst_192x16_64x8_2x1_v_bz_TNT         0.00%       0.000us         0.00%       0.000us       0.000us        1.395s        23.83%        1.395s      50.128us         27828  
+                                               aten::mm         3.75%     184.992ms         4.39%     216.765ms      58.239us        1.366s        23.33%        1.367s     367.269us          3722  
+        nvjet_sm90_tst_128x16_64x11_2x1_v_bz_splitK_TNT         0.00%       0.000us         0.00%       0.000us       0.000us     750.843ms        12.82%     750.843ms      26.982us         27828  
+void cutlass::device_kernel<flash::enable_sm90_or_la...         0.00%       0.000us         0.00%       0.000us       0.000us     558.894ms         9.55%     558.894ms      18.887us         29592  
+                nvjet_sm90_tst_64x16_64x16_4x1_v_bz_TNT         0.00%       0.000us         0.00%       0.000us       0.000us     446.603ms         7.63%     446.603ms      16.049us         27828  
+         nvjet_sm90_tst_64x16_64x16_2x1_v_bz_splitK_TNT         0.00%       0.000us         0.00%       0.000us       0.000us     311.115ms         5.31%     311.115ms      11.180us         27828  
+                nvjet_sm90_tst_384x16_64x4_2x1_v_bz_TNT         0.00%       0.000us         0.00%       0.000us       0.000us     238.426ms         4.07%     238.426ms     301.423us           791  
+                   execute_context_0(0)_generation_2(2)         0.00%       0.000us         0.00%       0.000us       0.000us     234.711ms         4.01%     234.711ms       5.458ms            43  
+         nvjet_sm90_tst_128x272_64x4_2x1_v_bz_coopA_TNT         0.00%       0.000us         0.00%       0.000us       0.000us     209.397ms         3.58%     209.397ms     306.137us           684  
+               execute_context_13(7061)_generation_3(3)         0.00%       0.000us         0.00%       0.000us       0.000us     153.383ms         2.62%     153.383ms     153.383ms             1  
+               execute_context_13(7022)_generation_3(3)         0.00%       0.000us         0.00%       0.000us       0.000us     150.590ms         2.57%     150.590ms     150.590ms             1  
+                 execute_context_0(0)_generation_14(14)         0.00%       0.000us         0.00%       0.000us       0.000us     133.587ms         2.28%     133.587ms       5.808ms            23  
+               execute_context_11(5962)_generation_2(2)         0.00%       0.000us         0.00%       0.000us       0.000us     132.854ms         2.27%     132.854ms     132.854ms             1  
+               execute_context_11(5916)_generation_2(2)         0.00%       0.000us         0.00%       0.000us       0.000us     128.978ms         2.20%     128.978ms     128.978ms             1  
+         nvjet_sm90_tst_256x160_64x4_1x2_h_bz_coopA_TNT         0.00%       0.000us         0.00%       0.000us       0.000us     119.441ms         2.04%     119.441ms       1.106ms           108  
+               execute_context_10(5388)_generation_2(2)         0.00%       0.000us         0.00%       0.000us       0.000us     118.713ms         2.03%     118.713ms     118.713ms             1  
+               execute_context_10(5392)_generation_2(2)         0.00%       0.000us         0.00%       0.000us       0.000us     115.466ms         1.97%     115.466ms     115.466ms             1  
+void cublasLt::splitKreduce_kernel<32, 16, int, floa...         0.00%       0.000us         0.00%       0.000us       0.000us     106.942ms         1.83%     106.942ms       1.807us         59184  
+         nvjet_sm90_tst_192x208_64x4_1x2_h_bz_coopB_TNT         0.00%       0.000us         0.00%       0.000us       0.000us     101.402ms         1.73%     101.402ms     938.910us           108  
+                execute_context_8(4304)_generation_2(2)         0.00%       0.000us         0.00%       0.000us       0.000us      96.545ms         1.65%      96.545ms      96.545ms             1  
+       triton_poi_fused_copy_index_select_slice_split_4         0.00%       0.000us         0.00%       0.000us       0.000us      92.973ms         1.59%      92.973ms       3.155us         29470  
+void vllm::reshape_and_cache_flash_kernel<__nv_bfloa...         0.00%       0.000us         0.00%       0.000us       0.000us      87.936ms         1.50%      87.936ms       2.901us         30312  
+         nvjet_sm90_tst_256x152_64x4_1x2_h_bz_coopA_TNT         0.00%       0.000us         0.00%       0.000us       0.000us      86.952ms         1.49%      86.952ms     483.064us           180  
+                  triton_red_fused_fused_add_rms_norm_2         0.00%       0.000us         0.00%       0.000us       0.000us      84.124ms         1.44%      84.124ms       2.775us         30312  
+                      triton_poi_fused_mul_silu_slice_1         0.00%       0.000us         0.00%       0.000us       0.000us      83.295ms         1.42%      83.295ms       2.748us         30312  
+                 nvjet_sm90_tst_192x8_64x8_2x1_v_bz_TNT         0.00%       0.000us         0.00%       0.000us       0.000us      76.745ms         1.31%      76.745ms      49.577us          1548  
+              execute_context_6(3230)_generation_10(10)         0.00%       0.000us         0.00%       0.000us       0.000us      74.647ms         1.27%      74.647ms      74.647ms             1  
+                  triton_red_fused_fused_add_rms_norm_0         0.00%       0.000us         0.00%       0.000us       0.000us      74.154ms         1.27%      74.154ms       2.446us         30312  
+                                     triton_poi_fused_5         0.00%       0.000us         0.00%       0.000us       0.000us      71.433ms         1.22%      71.433ms       2.424us         29470  
+         nvjet_sm90_tst_192x208_64x4_2x1_v_bz_coopB_TNT         0.00%       0.000us         0.00%       0.000us       0.000us      67.522ms         1.15%      67.522ms       1.876ms            36  
+         nvjet_sm90_tst_256x160_64x4_2x1_v_bz_coopA_TNT         0.00%       0.000us         0.00%       0.000us       0.000us      66.942ms         1.14%      66.942ms     929.756us            72  
+         nvjet_sm90_tst_256x144_64x4_2x1_v_bz_coopA_TNT         0.00%       0.000us         0.00%       0.000us       0.000us      66.493ms         1.14%      66.493ms     615.677us           108  
+void cutlass::device_kernel<flash::FlashAttnFwdCombi...         0.00%       0.000us         0.00%       0.000us       0.000us      65.684ms         1.12%      65.684ms       2.220us         29592  
+         nvjet_sm90_tst_192x176_64x4_1x2_h_bz_coopB_TNT         0.00%       0.000us         0.00%       0.000us       0.000us      58.019ms         0.99%      58.019ms       1.612ms            36  
+         nvjet_sm90_tst_192x192_64x4_2x1_v_bz_coopB_TNN         0.00%       0.000us         0.00%       0.000us       0.000us      57.173ms         0.98%      57.173ms     397.036us           144  
+         nvjet_sm90_tst_256x152_64x4_2x1_v_bz_coopA_TNT         0.00%       0.000us         0.00%       0.000us       0.000us      55.656ms         0.95%      55.656ms     386.500us           144  
+         nvjet_sm90_tst_192x160_64x4_2x1_v_bz_coopB_TNT         0.00%       0.000us         0.00%       0.000us       0.000us      51.398ms         0.88%      51.398ms     285.545us           180  
+              execute_context_4(2145)_generation_12(12)         0.00%       0.000us         0.00%       0.000us       0.000us      50.326ms         0.86%      50.326ms      50.326ms             1  
+                                       _vllm_fa3_C::fwd         0.28%      14.057ms         0.72%      35.377ms      49.135us      50.080ms         0.86%      50.732ms      70.461us           720  
+void cutlass::device_kernel<flash::enable_sm90_or_la...         0.00%       0.000us         0.00%       0.000us       0.000us      50.080ms         0.86%      50.080ms      69.556us           720  
+              execute_context_4(2162)_generation_12(12)         0.00%       0.000us         0.00%       0.000us       0.000us      49.714ms         0.85%      49.714ms      49.714ms             1  
+         nvjet_sm90_tst_128x8_64x12_4x1_v_bz_splitK_TNT         0.00%       0.000us         0.00%       0.000us       0.000us      49.252ms         0.84%      49.252ms      27.921us          1764  
+                                     triton_red_fused_3         0.00%       0.000us         0.00%       0.000us       0.000us      45.313ms         0.77%      45.313ms       1.538us         29470  
+                                            aten::copy_         1.70%      84.037ms         4.77%     235.503ms      12.611us      43.534ms         0.74%      45.352ms       2.429us         18675  
+         nvjet_sm90_tst_128x288_64x4_2x1_v_bz_coopA_TNT         0.00%       0.000us         0.00%       0.000us       0.000us      40.886ms         0.70%      40.886ms       1.136ms            36  
+              execute_context_3(1623)_generation_13(13)         0.00%       0.000us         0.00%       0.000us       0.000us      40.320ms         0.69%      40.320ms      40.320ms             1  
+              execute_context_3(1621)_generation_13(13)         0.00%       0.000us         0.00%       0.000us       0.000us      39.726ms         0.68%      39.726ms      39.726ms             1  
+                      triton_poi_fused_mul_silu_slice_1         0.16%       7.687ms         0.24%      12.018ms      16.692us      36.636ms         0.63%      36.636ms      50.884us           720  
+                 execute_context_1(524)_generation_2(2)         0.00%       0.000us         0.00%       0.000us       0.000us      31.267ms         0.53%      31.267ms      31.267ms             1  
+              execute_context_2(1081)_generation_14(14)         0.00%       0.000us         0.00%       0.000us       0.000us      28.514ms         0.49%      28.514ms      28.514ms             1  
+                 execute_context_1(538)_generation_2(2)         0.00%       0.000us         0.00%       0.000us       0.000us      28.063ms         0.48%      28.063ms      28.063ms             1  
+         nvjet_sm90_tst_192x192_64x4_1x2_h_bz_coopB_TNN         0.00%       0.000us         0.00%       0.000us       0.000us      27.413ms         0.47%      27.413ms      95.185us           288  
+                 nvjet_sm90_tst_64x8_64x16_4x1_v_bz_TNT         0.00%       0.000us         0.00%       0.000us       0.000us      27.366ms         0.47%      27.366ms      15.514us          1764  
+              execute_context_2(1082)_generation_14(14)         0.00%       0.000us         0.00%       0.000us       0.000us      27.140ms         0.46%      27.140ms      27.140ms             1  
+         nvjet_sm90_tst_128x248_64x4_2x1_v_bz_coopA_TNT         0.00%       0.000us         0.00%       0.000us       0.000us      25.754ms         0.44%      25.754ms     357.691us            72  
+              execute_context_2(1083)_generation_14(14)         0.00%       0.000us         0.00%       0.000us       0.000us      25.510ms         0.44%      25.510ms      25.510ms             1  
+              execute_context_2(1100)_generation_14(14)         0.00%       0.000us         0.00%       0.000us       0.000us      25.349ms         0.43%      25.349ms      25.349ms             1  
+              execute_context_2(1068)_generation_14(14)         0.00%       0.000us         0.00%       0.000us       0.000us      25.234ms         0.43%      25.234ms      25.234ms             1  
+              execute_context_2(1101)_generation_14(14)         0.00%       0.000us         0.00%       0.000us       0.000us      25.019ms         0.43%      25.019ms      25.019ms             1  
+                         Memcpy HtoD (Pinned -> Device)         0.00%       0.000us         0.00%       0.000us       0.000us      23.809ms         0.41%      23.809ms       3.997us          5956  
+         nvjet_sm90_tst_128x208_64x5_2x1_v_bz_coopA_TNT         0.00%       0.000us         0.00%       0.000us       0.000us      22.674ms         0.39%      22.674ms     157.458us           144  
+         nvjet_sm90_tst_256x136_64x4_1x2_h_bz_coopA_TNT         0.00%       0.000us         0.00%       0.000us       0.000us      22.077ms         0.38%      22.077ms     306.631us            72  
+                  _C_cache_ops::reshape_and_cache_flash         0.11%       5.514ms         0.22%      10.615ms      14.743us      20.380ms         0.35%      20.380ms      28.305us           720  
+                  triton_red_fused_fused_add_rms_norm_2         0.18%       9.029ms         0.23%      11.534ms      16.019us      20.162ms         0.34%      20.162ms      28.003us           720  
+          nvjet_sm90_tst_64x8_64x16_2x1_v_bz_splitK_TNT         0.00%       0.000us         0.00%       0.000us       0.000us      19.257ms         0.33%      19.257ms      10.917us          1764  
+                   execute_context_0(0)_generation_6(6)         0.00%       0.000us         0.00%       0.000us       0.000us      17.480ms         0.30%      17.480ms       5.827ms             3  
+                 nvjet_sm90_tst_384x8_64x4_2x1_v_bz_TNT         0.00%       0.000us         0.00%       0.000us       0.000us      15.064ms         0.26%      15.064ms     295.374us            51  
+                  triton_red_fused_fused_add_rms_norm_0         0.22%      10.995ms         0.28%      14.052ms      19.517us      13.744ms         0.23%      13.744ms      19.089us           720  
+         nvjet_sm90_tst_192x144_64x5_1x2_h_bz_coopB_TNT         0.00%       0.000us         0.00%       0.000us       0.000us      13.633ms         0.23%      13.633ms      63.115us           216  
+                 nvjet_sm90_tst_256x8_64x6_4x1_v_bz_TNT         0.00%       0.000us         0.00%       0.000us       0.000us      11.794ms         0.20%      11.794ms      54.600us           216  
+                 execute_context_0(0)_generation_15(15)         0.00%       0.000us         0.00%       0.000us       0.000us      11.739ms         0.20%      11.739ms       5.869ms             2  
+                   execute_context_0(0)_generation_5(5)         0.00%       0.000us         0.00%       0.000us       0.000us      11.581ms         0.20%      11.581ms       5.791ms             2  
+                                     triton_poi_fused_5         0.19%       9.393ms         0.27%      13.298ms      18.998us      11.146ms         0.19%      11.146ms      15.922us           700  
+                                           aten::argmax         0.28%      13.830ms         0.47%      23.123ms      27.462us      10.002ms         0.17%      10.002ms      11.879us           842  
+                                  cudaStreamIsCapturing         0.10%       5.081ms         0.10%       5.081ms       0.461us       9.460ms         0.16%       9.460ms       0.858us         11030  
+void at::native::reduce_kernel<512, 1, at::native::R...         0.00%       0.000us         0.00%       0.000us       0.000us       9.151ms         0.16%       9.151ms      10.868us           842  
+                                   cudaEventSynchronize        42.72%        2.109s        42.72%        2.109s     834.851us       7.282ms         0.12%       7.282ms       2.883us          2526  
+void at::native::unrolled_elementwise_kernel<at::nat...         0.00%       0.000us         0.00%       0.000us       0.000us       7.039ms         0.12%       7.039ms       8.360us           842  
+               nvjet_sm90_tst_128x136_64x6_1x2_h_bz_TNT         0.00%       0.000us         0.00%       0.000us       0.000us       6.738ms         0.12%       6.738ms      46.791us           144  
+                                     aten::index_select         0.18%       8.861ms         0.35%      17.394ms      10.329us       6.125ms         0.10%       6.378ms       3.788us          1684  
+void at::native::(anonymous namespace)::indexSelectS...         0.00%       0.000us         0.00%       0.000us       0.000us       6.125ms         0.10%       6.125ms       7.451us           822  
+                   execute_context_0(0)_generation_8(8)         0.00%       0.000us         0.00%       0.000us       0.000us       5.869ms         0.10%       5.869ms       5.869ms             1  
+                                     triton_red_fused_3         0.15%       7.421ms         0.20%       9.786ms      13.980us       5.721ms         0.10%       5.721ms       8.173us           700  
+                               cudaEventRecordWithFlags         0.05%       2.223ms         0.05%       2.223ms       1.288us       5.557ms         0.09%       5.557ms       3.220us          1726  
+         nvjet_sm90_tst_256x104_64x4_2x1_v_bz_coopA_TNT         0.00%       0.000us         0.00%       0.000us       0.000us       5.452ms         0.09%       5.452ms      75.719us            72  
+         nvjet_sm90_tst_192x176_64x4_2x1_v_bz_coopB_TNT         0.00%       0.000us         0.00%       0.000us       0.000us       5.025ms         0.09%       5.025ms     139.570us            36  
+                                        cudaEventRecord         0.04%       2.089ms         0.04%       2.089ms       1.240us       4.287ms         0.07%       4.287ms       2.546us          1684  
+                         Memcpy DtoD (Device -> Device)         0.00%       0.000us         0.00%       0.000us       0.000us       3.939ms         0.07%       3.939ms       0.940us          4189  
+       triton_poi_fused_copy_index_select_slice_split_4         0.14%       6.841ms         0.19%       9.176ms      13.109us       3.564ms         0.06%       3.564ms       5.091us           700  
+void at::native::unrolled_elementwise_kernel<at::nat...         0.00%       0.000us         0.00%       0.000us       0.000us       3.257ms         0.06%       3.257ms       1.289us          2526  
+                                        Memset (Device)         0.00%       0.000us         0.00%       0.000us       0.000us       3.218ms         0.05%       3.218ms       0.963us          3340  
+                                     triton_poi_fused_0         0.00%       0.000us         0.00%       0.000us       0.000us       3.154ms         0.05%       3.154ms       3.746us           842  
+                         Memcpy DtoH (Device -> Pinned)         0.00%       0.000us         0.00%       0.000us       0.000us       2.764ms         0.05%       2.764ms       3.282us           842  
+                                            aten::fill_         0.40%      19.739ms         0.85%      41.961ms       7.270us       2.697ms         0.05%       2.698ms       0.467us          5772  
+                                        cudaGraphLaunch         7.25%     358.131ms         7.99%     394.594ms     480.041us       2.680ms         0.05%       2.684ms       3.265us           822  
+                                            aten::index         0.51%      25.137ms         1.27%      62.512ms      36.664us       2.659ms         0.05%       3.872ms       2.271us          1705  
+                                       cuLaunchKernelEx         0.47%      23.444ms         0.47%      23.444ms       5.137us       2.466ms         0.04%       2.466ms       0.540us          4564  
+                           _compute_slot_mapping_kernel         0.00%       0.000us         0.00%       0.000us       0.000us       2.201ms         0.04%       2.201ms       2.614us           842  
+                                     triton_poi_fused_3         0.00%       0.000us         0.00%       0.000us       0.000us       2.154ms         0.04%       2.154ms       2.559us           842  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+Self CPU time total: 4.937s
+Self CUDA time total: 5.855s
+
