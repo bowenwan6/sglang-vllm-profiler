@@ -1,0 +1,19 @@
+{
+  "status": "OK",
+  "returncode": 0,
+  "elapsed_s": 291.56,
+  "failures": 0,
+  "ttft_p50_ms": 53.90760000227601,
+  "case": "caseA_short",
+  "variant": "chunk_64",
+  "phase": "screen",
+  "rep": 1,
+  "framework": "sglang-oai",
+  "port": 30000,
+  "bench_n": 400,
+  "warmup": 30,
+  "concurrency": 1,
+  "extra_body": "{\"temperature\": 0, \"top_p\": 1}",
+  "timestamp_utc": "2026-05-22T02:10:54.701936+00:00",
+  "cuda_visible_devices": "7"
+}

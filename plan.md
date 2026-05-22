@@ -12,7 +12,7 @@
 |---|---|
 | Run id | `run2_qwen3vl8b` |
 | Model | `Qwen/Qwen3-VL-8B-Instruct` @ `0c351dd01ed87e9c1b53cbc748cba10e6187ff3b` (weights identical to run1, sha256-verified) |
-| GPU | index **0** (`CUDA_VISIBLE_DEVICES=0`) |
+| GPU | Phase 0/1: index **0**; **Phase 2+: index 7** (`CUDA_VISIBLE_DEVICES=7`) |
 | SGLang | `0.0.0.dev1+g0c8049d9b` (system python3, editable `/sgl-workspace/sglang`) |
 | vLLM | `0.21.0` (conda env `/opt/miniconda3/envs/profiling`) |
 | torch / CUDA | `2.11.0+cu130` / `13.0` (both frameworks aligned) |
@@ -23,7 +23,7 @@
 |---|---|
 | 0 — Equivalence | ✅ **complete + PASS** (canonical: `experiments/phase0/`) |
 | 1 — Baseline | ✅ **complete** (24 runs, 0 failures; `experiments/run2_qwen3vl8b/phase1/summary.md`) |
-| 2 — Shaping | ⬜ not started |
+| 2 — Shaping / Variance gate | ✅ **complete** (0 failures; `experiments/run2_qwen3vl8b/phase2/{summary.md,selected_cases.md}`) |
 | 3 — Profiling | ⬜ not started |
 | 4 — Triage | ⬜ not started |
 | 5 — Validation | ⬜ not started |
@@ -47,11 +47,23 @@ aligned across frameworks (removes run1's torch-version confound), but the **att
 differs (SGLang FlashInfer vs vLLM FlashAttention v3) → any attention-kernel conclusion carries
 confidence ceiling M**. Full table + p95/p99 + CV + error rate: `experiments/run2_qwen3vl8b/phase1/summary.md`.
 
-**Phase 2 entry recommendation (run2):**
-- **Case A — primary.** Enter Phase 2 shaping; confirm whether the ~62 ms scheduler/dispatch floor is still *structural* (no flag closes it by ≥10 ms).
-- **Case B — primary.** Enter Phase 2 shaping; same floor, but all vLLM comparisons carry **confidence ceiling M** (vLLM Case B bimodal).
-- **Case C — secondary.** Enter Phase 2 **variance gate** first (SGLang p50 cv ≈ 9.4%) — extend warmup before any shaping/promotion.
-- **Case D — variance/bimodal gate.** Likely **drop** (p99 cv 47%, bimodal tail), but confirm formally in Phase 2 as run1 did.
+**Phase 2 results (run2 — completed 2026-05-22, GPU 7, 0 failures).** Full detail:
+`experiments/run2_qwen3vl8b/phase2/{summary.md,selected_cases.md}`.
+
+| Case | SGLang config (Phase 3) | SGLang TTFT p50 (CV) | vLLM TTFT p50 (CV) | Residual gap | Phase 3 protocol |
+|---|---|---|---|---|---|
+| A — 128→128 c1 | **`--disable-overlap-schedule`** | 19.6 ms (3.2%) | 12.6 ms (Phase 1) | **1.56×** | warmup 30, 3 reps |
+| B — 2048→128 c1 | default | 30.3 ms (**68.4%** ⚠ bimodal) | 21.5 ms (**85.9%** ⚠ bimodal, ceiling M) | 1.41× | warmup 300, 5 reps |
+| C — 512→128 c16 | default | 149.5 ms (**14.9%** ⚠) | 189.0 ms (1.9%, stable) | **0.79×** (SGLang faster) | warmup 300, 5 reps — **marginal** |
+| D — 512→512 c16 | default | 206.2 ms (3.3%) | 189.7 ms (Phase 1) | 1.09× | warmup 30, 3 reps |
+
+Key Phase 2 findings:
+- **Case A — overlap scheduler was a real cost.** `--disable-overlap-schedule` cut TTFT ~10% (21.8→19.6 ms) at clean CV. The Phase-1 4.89× gap is now **1.56×** — a much smaller residual scheduler/dispatch overhead is the Phase-3 target. Other flags (`stream8`, `chunk_off`) were within 5% of default; `chunk_64` was 2.4× worse (eliminated).
+- **Case B — both frameworks bimodal.** `chunk_off` beat default by only 3.2% (< 5% threshold) → default wins. SGLang finalist reps 64.3 / 30.3 / 26.9 ms (CV 68.4%); vLLM recheck at warmup=300 still bimodal (first rep high, rest ~21.5 ms, CV 85.9%). **All Case B cross-framework conclusions carry confidence ceiling M.**
+- **Case C — gap reversed; SGLang variance unresolved.** vLLM is stable at warmup=300 (CV 1.9%, 189 ms) but SGLang never passed the 5% CV gate (W30 12.5% / W100 15.2% / W300 14.9%). At the noisy p50 SGLang (149.5 ms) is actually *faster* than vLLM (0.79×). Promote only with a marginal/high-CV flag, or run a W500 probe first.
+- **Case D — clean at warmup=30.** CV 3.3% with no extra warmup; residual gap 1.09× (Phase-1 p99 bimodal tail did not reappear). Lowest Phase-3 priority.
+
+**Phase 3 shortlist:** A (promote, **high priority**) · B (promote, **ceiling M + extra reps**) · C (promote **only if accepting high CV**, else run W500 first) · D (promote, **lower priority**).
 
 **Relationship to run1 (historical):** `experiments/phase1/`, `experiments/phase2/`,
 `experiments/phase2_shaping/` hold **run1** numbers, measured under a different environment
@@ -504,27 +516,24 @@ A human reviewer validating the project should inspect artifacts in this sequenc
 
 ---
 
-### Phase 2 — Identify Informative Cases  *(run1: ✅ complete · run2: ⬜ not started)*
+### Phase 2 — Identify Informative Cases  *(run2: ✅ complete · run1: historical, see §15)*
 
-**Goal.** Given Phase-1 evidence (TTFT gap is universal, TPOT at parity), decide which cases enter Phase-3 profiling and with what shaping. All four questions below are now answered.
+> ✅ **run2 status: complete** (2026-05-22, GPU 7, 0 failures). Executed with run2 scripts at
+> `experiments/run2_qwen3vl8b/phase2/scripts/` (5-variant Case A sweep, 4-variant Case B sweep,
+> C/D warmup variance gate, vLLM B/C recheck). Results summarized in §0 and detailed in §15
+> (run2). The decision rule and methodology below are the **method**; the run1 execution narrative
+> that previously lived here has moved to §15 as historical. **run2 outcome:** all 4 cases promote
+> to Phase 3 — see the §0 shortlist.
 
-1. **Answered:** SGLang's ~56 ms Case-A TTFT floor is **structural** — no scheduler flag compresses it by ≥10 ms.
-2. **Answered:** Case-B's gap is the same structural floor; chunked-prefill is not implicated at default settings (chunk=8192 ≥ prompt_len).
-3. **Answered:** Case C stabilized (CV→4.2% at warmup=100); Case D dropped (bimodal CV=14.8% at V2).
-4. **Answered:** vLLM Case B is genuinely bimodal (across-rep CV=76%, ceiling M). vLLM Case C is clean but baseline revised from 164 ms → 180.9 ms (ratio corrected 1.49× → 1.33×).
+**Goal.** Given Phase-1 evidence (TTFT gap is universal, TPOT at parity), decide which cases enter
+Phase-3 profiling and with what shaping. In run2 this was answered as follows:
 
-#### Evidence inherited from Phase 1 (do not re-measure)
+1. **Case A:** the TTFT floor is **partly configurational** — `--disable-overlap-schedule` removed ~10% (gap 4.89×→1.56×). The residual is the Phase-3 target. *(This differs from run1, where the floor looked fully structural; run2's newer SGLang build responds to the overlap flag.)*
+2. **Case B:** `chunk_off` did not beat default beyond the 5% threshold → default base. Both SGLang and vLLM are bimodal here → all cross-framework Case B conclusions carry ceiling M.
+3. **Case C:** vLLM stabilized at warmup=300 (CV 1.9%), but **SGLang did not** pass the 5% CV gate at any warmup (W30/W100/W300 = 12.5/15.2/14.9%). Gap reversed to 0.79× (SGLang faster) at the noisy p50.
+4. **Case D:** clean at warmup=30 (CV 3.3%); residual gap 1.09×. No bimodal tail this round.
 
-| Signal | Value | Phase-2 implication |
-|---|---|---|
-| SGLang TTFT delta 128→2048 tok | +7.7 ms | Prefill compute is cheap; a ~50 ms fixed overhead exists at c=1 |
-| vLLM TTFT delta 128→2048 tok | +10.0 ms | Comparable scaling; vLLM floor is ~14 ms |
-| TPOT ratio (all cases) | 0.98–1.02× | Decode path is not a Phase-2 or Phase-3 concern — do not shape it |
-| TTFT CV SGLang Case A/B | 1.2% / 3.7% | Low-noise, profilable as-is |
-| TTFT CV SGLang Case C/D | 20–42% | Not profilable; variance reduction precondition |
-| vLLM TTFT CV Case B | 99.3% | Median is a lower bound; needs longer window or more reps on vLLM side |
-
-#### Decision rule (applied per case)
+#### Decision rule (reusable methodology — applied per case)
 
 | Gap size (median) | TTFT CV (both frameworks) | Action |
 |---|---|---|
@@ -533,127 +542,52 @@ A human reviewer validating the project should inspect artifacts in this sequenc
 | > 15%, both CVs ≤10% | ≤10% | Run shaping sweep *before* promoting. If gap survives any flag combo, promote as **structural**. |
 | > 15%, either CV > 10% | > 10% | Run **variance-reduction** sweep first. Re-evaluate gap after. Do not profile on noisy data (§14 anti-pattern). |
 
-#### Sweep plan (per case, ≤4 candidates each, 1 rep initially, 3 reps on finalists)
+#### run2 shaping design (as executed)
 
-All sweeps use custom Python orchestration scripts (`experiments/phase2/scripts/run_phase2_case*.py`) against the existing `datasets/{case}.jsonl` — same structure as `run_phase1.py`. Direct `bench_serving` invocations; no auto_benchmark YAML runner (used for SGLang only; vLLM driven separately).
+Custom Python orchestration scripts under `experiments/run2_qwen3vl8b/phase2/scripts/`
+(`run_phase2_caseA.py` + `resume_phase2_caseA.py`, `run_phase2_caseB.py`, `run_phase2_variance.py`,
+`run_phase2_BCD.sh` chainer, `summarize_phase2.py`). Direct `bench_serving` against
+`datasets/run2_qwen3vl8b/case*.jsonl`. Greedy `{"temperature":0,"top_p":1}`, `--output-details`,
+GPU 7, serial servers, GPU freed (<2000 MiB) between every server.
 
-**Case A — scheduling-overhead isolation (highest priority).** The ~50 ms floor at c=1 is where the Phase-3 hypothesis starts. Candidate axes:
+- **Case A — scheduler/dispatch floor (5 variants, screen 1 rep → finalist 3 reps):** `default`,
+  `no_overlap` (`--disable-overlap-schedule`), `stream8` (`--stream-interval 8`),
+  `chunk_off` (`--chunked-prefill-size -1`), `chunk_64` (`--chunked-prefill-size 64`).
+  → **`no_overlap` won** (19.6 ms vs default 21.8 ms, ~10%); `stream8`/`chunk_off` within 5% of
+  default (dropped); `chunk_64` 2.4× worse (eliminated).
+- **Case B — chunked-prefill sweep (4 variants):** `default`, `chunk_off` (-1),
+  `chunk_1024`, `chunk_512`. → smaller chunks were strictly worse (80.6 / 91.6 ms); `chunk_off`
+  beat default by only 3.2% (< 5%) → **default base.** Both frameworks bimodal (ceiling M).
+- **Cases C & D — client-side warmup variance gate:** warmup ∈ {30, 100, 300} × 3 reps (escalate to
+  5 reps if CV in 5–10%; report W500 need if W300 still fails — **do not** extend indefinitely).
+  → **D passed at W30** (CV 3.3%); **C never passed** (12.5 / 15.2 / 14.9%).
+- **vLLM recheck (B + C, warmup=300, 5 reps):** Case B still bimodal (CV 85.9% → ceiling M);
+  Case C stable (CV 1.9%, 189 ms — Phase-1 Case C CV 5.8% was warmup-starvation).
 
-| Axis | Values | Rationale |
-|---|---|---|
-| `--disable-overlap-schedule` | {off, on} | Overlap scheduler adds a step of pipelining; at c=1 it may be pure overhead |
-| `--schedule-policy` | {lpm (default), fcfs} | Longest-prefix-match adds per-request bookkeeping; fcfs is the minimal path |
-| `--chunked-prefill-size` | {8192 (default), -1 (disabled)} | At 128-token prompts, chunking should be a no-op; confirming this rules it out |
-| `--stream-interval` | {1 (default), 8} | Eliminates per-token streaming cost from TTFT measurement path |
+#### run2 artifacts (Phase 2)
 
-Pick ≤4 combinations, not the full grid. Start with each flag flipped individually from default; add one 2-way combo if a single flag moves TTFT by ≥10%.
-
-**Case B — long-prefill disentanglement.** Step 2.1 produced no scheduler winner (A0 baseline = default was the finalist). Therefore Case B uses **default flags as base** — no scheduler flags inherited. The sweep focuses exclusively on the chunked-prefill axis:
-
-| Axis | Values | Rationale |
-|---|---|---|
-| `--chunked-prefill-size` | {8192 (default), 512, 1024, -1} | chunk≥2048 is a no-op for a 2048-tok prompt; 512 and 1024 actually trigger the chunked path (4 and 2 chunks respectively); -1 disables chunking entirely |
-
-`--schedule-conservativeness` is **dropped** from the sweep: since Case A confirmed the floor is framework-intrinsic (not policy-driven), conservativeness (which only affects scheduling policy) is unlikely to move Case B differently. Adding it would expand the grid without evidence justification.
-
-**Cases C & D — variance reduction (gate, not shaping).** Before any flag sweep, establish whether the TTFT CV is driven by insufficient warmup or by steady-state scheduler jitter. Sweep axes on the **client**, not the server:
-
-| Axis | Values | Rationale |
-|---|---|---|
-| `--warmup-requests` | {30 (current), 100, 300} | 30 warmups may be insufficient for c=16 to reach steady batch |
-| Bench duration | {current, 2×, 4×} | Longer sampling window reduces p50 variance |
-| Repetitions | 3 → 5 on finalists | Median stabilizes; also reveals if the "noise" is actually a bimodal distribution (graph recapture events) |
-
-If CV drops below 10% with extended warmup alone, promote C/D to Phase 3 with the new warmup setting baked into the protocol. If CV stays >10%, record the case as **not profilable at c=16** and drop from Phase-3 scope.
-
-**vLLM baseline recheck (not a sweep — stability verification only).** Phase 2.3 promoted Case C to Phase 3, making its vLLM baseline (164.1 ms, cv=9.9% ⚠ in Phase 1) a comparison target that has not yet been verified stable. Step 2.4 now covers both Case B and Case C vLLM rechecks.
-
-| Case | Phase-1 vLLM TTFT | Phase-1 vLLM CV | Why recheck |
-|---|---|---|---|
-| B (2048→128, c=1) | 24.1 ms | **99.3%** ⚠ | Extreme noise — median is a lower bound; almost certainly cold-start or chunked-prefill jitter |
-| C (512→128, c=16) | 164.1 ms | 9.9% ⚠ | Borderline; newly promoted to Phase 3 — need confirmed stable baseline before profiling |
-
-Re-run both cases on vLLM with `warmup_requests=300`, 5 reps, same JSONL datasets. Log per-rep p50 values and across-rep CV. Decision per case:
-
-| CV result | Interpretation | Action |
-|---|---|---|
-| CV < 10% | Baseline stable | Phase-3 comparison is clean |
-| CV 10–30% | Noisy but usable | Carry note; downstream ratio has ±15% uncertainty |
-| CV > 30% | Bimodal or jitter-dominated | Tag all downstream Case B/C vLLM comparisons with confidence ceiling **M** |
-
-#### Artifacts
-
-| File | Role |
+| Path | Role |
 |---|---|
-| `experiments/phase2/scripts/run_phase2_case{A,B,CD}.py` | Orchestration scripts (SGLang sweeps) |
-| `experiments/phase2/scripts/run_phase2_vllm_recheck.py` | vLLM baseline recheck script |
-| `experiments/phase2_shaping/caseA/` | Case A sweep raw JSON + summary |
-| `experiments/phase2_shaping/caseB/` | Case B sweep raw JSON + summary |
-| `experiments/phase2_shaping/caseCD/` | Cases C/D variance sweep raw JSON + summary |
-| `experiments/phase2_shaping/vllm_recheck_caseB.json` | vLLM Case B re-run (5 reps, warmup=300) |
-| `experiments/phase2_shaping/vllm_recheck_caseC.json` | vLLM Case C re-run (5 reps, warmup=300) |
-| `experiments/phase2/selected_cases.md` | **Phase-3 entry gate** — per-case: phenomenon, config, residual gap, CV, vLLM ceiling |
+| `experiments/run2_qwen3vl8b/phase2/scripts/` | All orchestration + summarizer scripts |
+| `experiments/run2_qwen3vl8b/phase2/raw/` | Per-(case × variant/warmup × rep) bench JSON + meta + `*_result.json` rollups |
+| `experiments/run2_qwen3vl8b/phase2/summary.md` | Full shaping + variance-gate + vLLM-recheck tables |
+| `experiments/run2_qwen3vl8b/phase2/selected_cases.md` | **Phase-3 entry gate** — per-case config, warmup, reps, residual gap, CV, ceiling |
+| `logs/run2_qwen3vl8b/phase2/` | Server logs (one per server lifetime) + orchestrator logs + L1 kernel trails |
 
 #### Skill usage
 
-- Custom orchestration scripts (not `sglang-auto-benchmark run`) — direct `bench_serving` calls for full control over server flags and vLLM compatibility.
+- Custom orchestration scripts (not `llm-serving-auto-benchmark run`) — direct `bench_serving` calls for full control over server flags and vLLM compatibility.
 - `debug-cuda-crash` → L1 passive (`SGLANG_KERNEL_API_LOGLEVEL=1`) on all SGLang server launches.
-- `sglang-torch-profiler-analysis` → **not used.** No interpretation in Phase 2.
+- `llm-torch-profiler-analysis` → **not used.** No interpretation in Phase 2.
 
-#### Success criteria (all must hold to exit Phase 2)
+#### Exit criteria — run2 status
 
-1. Case A and Case B either (a) have a shaped SGLang config that holds the TTFT gap ≥15%, in which case they promote to Phase 3 as *structural*, or (b) the gap collapses under a flag flip, in which case the finding is recorded and the case is **not** profiled.
-2. Cases C/D either reach TTFT CV ≤10% (promote) or are formally dropped with a one-line justification in `selected_cases.md`.
-3. vLLM baselines for all promoted cases (A, B, C) have a documented stability status: CV <10% (clean), 10–30% (noisy note), or >30% (confidence ceiling M). Case A was verified stable in Phase 1 (cv=3.3%). Cases B and C require Step 2.4.
-4. `experiments/phase2/selected_cases.md` documents all promoted cases with their Phase-3 protocol locked. ✅ Done: 3 cases promoted (A primary, B primary, C secondary).
+1. **Met.** Case A has a shaped SGLang config (`--disable-overlap-schedule`) that holds a stable, low-CV residual gap (1.56×); Case B sweep found no winner beyond default and is promoted on default.
+2. **Partially met.** Case D reached CV ≤5% (promote, W30). Case C did **not** pass the CV gate at any warmup — promoted as **marginal / high-CV**, with an open recommendation to run a W500 probe before profiling.
+3. **Met.** vLLM baselines documented: Case C clean (CV 1.9%), Case B ceiling M (CV 85.9%); Case A/D compared to stable Phase-1 vLLM p50.
+4. **Met.** `experiments/run2_qwen3vl8b/phase2/selected_cases.md` locks the Phase-3 protocol for all 4 promoted cases.
 
-#### Execution order
-
-Steps are **serial** unless explicitly marked parallel. Case A results gate Case B's scheduler axis; C/D variance conclusion gates their Phase-3 eligibility. Step 2.4 (vLLM recheck) is fully independent and can run concurrently with any server-free window.
-
-```
-Step 2.0  Pre-flight (~15 min)
-  ├─ mkdir configs/phase2_shaping/
-  ├─ mkdir experiments/phase2_shaping/{caseA,caseB,caseCD}/
-  ├─ mkdir experiments/phase2/  logs/phase2/
-  ├─ verify datasets SHA-256 (no regen)
-  └─ verify GPU 6 idle, no residual server processes
-
-Step 2.1  Case A scheduler sweep (~2 h)   ← SERIAL, must finish first
-  ├─ candidates A0 (baseline) / A1 (disable-overlap) / A2 (fcfs) / A3 (stream-interval 8)
-  ├─ each: 1 rep, 30 warmup, LOGLEVEL=1 → logs/phase2/
-  ├─ if single flag moves TTFT ≥10 ms → add A4 = best 2-way combo
-  └─ decision: structural (→ 3-rep reconfirm) or configurational (→ record + drop)
-
-Step 2.2  Case B chunked-prefill sweep (~1.5 h)   ← SERIAL, after 2.1
-  ├─ base = default flags (2.1 produced no scheduler winner; A0 baseline = default)
-  ├─ candidates B0/B1/B2/B3 on chunked-prefill-size axis only
-  └─ decision: same-floor (→ Phase 3 as "same floor") or chunking-sensitive (→ note + promote)
-
-Step 2.3  Case C/D variance gate (~2 h)   ← can interleave with 2.1/2.2 between server restarts
-  ├─ client-only: V0 (warmup=30) / V1 (warmup=100) / V2 (warmup=300, 4× bench_n, 5 reps)
-  └─ decision per case: CV ≤10% → promote; CV >10% → check bimodal → drop
-
-Step 2.4  vLLM baseline recheck — Cases B and C (~45 min)   ← can run any time GPU is free
-  ├─ vLLM server: default flags, port 30001, CUDA_VISIBLE_DEVICES=6
-  ├─ Case B (caseB_longprefill.jsonl): warmup=300, 5 reps, concurrency=1
-  ├─ Case C (caseC_batched.jsonl):     warmup=300, 5 reps, concurrency=16
-  ├─ Record per-rep TTFT p50 and across-rep CV for each case
-  ├─ Case B decision: CV<10% → clean; CV 10–30% → noisy note; CV>30% → ceiling M
-  ├─ Case C decision: CV<10% → clean; CV>10% → ceiling M on c=16 vLLM comparisons
-  └─ Output → experiments/phase2_shaping/vllm_recheck_{caseB,caseC}.json
-
-Step 2.5  Close-out synthesis (~20 min)   ← SERIAL, after 2.4
-  ├─ Update experiments/phase2/selected_cases.md with 2.4 vLLM stability results
-  ├─ Assign confidence ceiling per promoted case:
-  │   · Case A: vLLM p50 stable (cv=3.3% in Phase 1) → no ceiling
-  │   · Case B: ceiling determined by 2.4 Case B result
-  │   · Case C: ceiling determined by 2.4 Case C result
-  ├─ Lock Phase-3 protocol per case (server flags, warmup, bench_n, concurrency)
-  └─ Gate check: all 5 exit criteria met before Phase 3 starts
-```
-
-**Script location:** `experiments/phase2/scripts/run_phase2_caseA.py`, `run_phase2_caseB.py`, `run_phase2_caseCD.py` — same structure as `experiments/phase1/scripts/run_phase1.py`. No auto_benchmark YAML runner; direct bench_serving orchestration for full control.
+> The run1 execution-order narrative (Steps 2.0–2.5, GPU 6) is preserved in §15 (run1 historical).
 
 ---
 
@@ -872,6 +806,26 @@ Never invert a row. Auto-benchmark does not read kernels; profiler-analysis does
 - **Confidence ceilings:** vLLM Case B comparisons → M (bimodal); any attention-kernel finding → M (FlashInfer vs FA3 backend mismatch).
 - Phase 2 entry: A primary, B primary (vLLM ceiling M), C secondary (variance gate), D likely drop (bimodal). See §0.
 - Artifacts: `experiments/run2_qwen3vl8b/phase1/summary.md`, `phase1/raw/`, `phase1/scripts/`; logs `logs/run2_qwen3vl8b/phase1/`.
+
+### Phase 2 (run2, active) — Shaping / Variance Gate (completed 2026-05-22)
+
+- GPU **7**, serial servers (GPU freed <2000 MiB between every server), greedy
+  (`temperature=0, top_p=1`), `--output-details`. **0 failed requests across the entire phase.**
+- Artifacts: `experiments/run2_qwen3vl8b/phase2/summary.md`, `phase2/selected_cases.md`,
+  `phase2/raw/`, `phase2/scripts/`; logs `logs/run2_qwen3vl8b/phase2/`.
+
+| Case | Winner config | SGLang TTFT p50 (CV) | vLLM TTFT p50 (CV) | Residual gap | Phase-3 protocol |
+|---|---|---|---|---|---|
+| A 128→128 c1 | **`--disable-overlap-schedule`** | 19.6 ms (3.2%) | 12.6 ms (Phase 1) | **1.56×** | warmup 30, 3 reps |
+| B 2048→128 c1 | default | 30.3 ms (**68.4%** ⚠) | 21.5 ms (**85.9%** ⚠, ceiling M) | 1.41× | warmup 300, 5 reps |
+| C 512→128 c16 | default | 149.5 ms (**14.9%** ⚠) | 189.0 ms (1.9%) | **0.79×** | warmup 300, 5 reps — marginal |
+| D 512→512 c16 | default | 206.2 ms (3.3%) | 189.7 ms (Phase 1) | 1.09× | warmup 30, 3 reps |
+
+- **Case A shaping:** screen p50 — `no_overlap` 19.5 / `default` 22.2 / `stream8` 22.2 / `chunk_off` 22.5 / `chunk_64` 53.9 ms. Finalist (3 reps): `no_overlap` median 19.6 ms (CV 3.2%) vs `default` 21.8 ms (CV 1.7%). **The overlap scheduler costs ~10% at c=1; the Phase-1 4.89× gap collapses to 1.56×.** (run1 had called this floor fully structural — run2's newer build responds to the flag.)
+- **Case B shaping:** screen p50 — `chunk_off` 62.8 / `default` 64.9 / `chunk_1024` 80.6 / `chunk_512` 91.6 ms. `chunk_off` < 5% better → default. Finalist reps 64.3 / 30.3 / 26.9 ms (CV 68.4%) — **SGLang itself is bimodal here.** vLLM recheck (w=300, 5 reps): first rep high, rest ~21.5 ms, CV 85.9% — **bimodality not a warmup artifact → ceiling M on all Case B cross-framework claims.**
+- **Case C variance gate:** SGLang W30/W100/W300 CV = 12.5 / 15.2 / 14.9% — **never passed the 5% gate.** vLLM recheck stable (CV 1.9%, 189 ms). At the noisy SGLang p50 (149.5 ms) SGLang is *faster* than vLLM → **gap reversed to 0.79×.** Promote only if accepting high CV, else run a W500 probe first.
+- **Case D variance gate:** passed at W30 (CV 3.3%, 206.2 ms); residual 1.09×. The Phase-1 p99 bimodal tail did not reappear.
+- **Phase-3 shortlist:** A (high priority) · B (ceiling M + extra reps) · C (marginal — accept high CV or W500 first) · D (lower priority). Locked protocol: `experiments/run2_qwen3vl8b/phase2/selected_cases.md`.
 
 ---
 
@@ -1099,9 +1053,12 @@ Across-rep CV = **76.0%**. Bimodal — rep1 is a periodic outlier (~65 ms), stea
 
 ## 16. Prioritized Next-Step Checklist
 
-> **run2 progress:** ✅ env recovery (conda `profiling`, vLLM 0.21.0, model re-downloaded) · ✅ Phase 0 PASS.
-> **Next for run2:** generate run2 datasets for the Qwen3-VL-8B text-only path, then run Phase 1 baseline
-> (4-case matrix) on GPU 0. Items 1–5 below are **run1 historical**.
+> **run2 progress:** ✅ env recovery (conda `profiling`, vLLM 0.21.0, model re-downloaded) ·
+> ✅ Phase 0 PASS · ✅ Phase 1 (24 runs, 0 failures) · ✅ Phase 2 (GPU 7, 0 failures —
+> `experiments/run2_qwen3vl8b/phase2/selected_cases.md`).
+> **Next for run2:** Phase 3 profiling on the 4 promoted cases (see §0 shortlist). **Open decision
+> before Phase 3:** Case C never passed the 5% CV gate (14.9% at W300) — either accept the high-CV
+> baseline or run a W500 probe first. Items 1–5 below are **run1 historical**.
 
 1. ✅ Create the filesystem layout from §8.1 (placeholder READMEs in each directory).
 2. ✅ (run1) Phase 0 — servers up, equivalence matrix run. All Tier-A/B pass; outputs EXACT match. *(run2 Phase 0 also ✅ PASS — see §15.)*

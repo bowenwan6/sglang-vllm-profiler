@@ -1,0 +1,19 @@
+{
+  "case": "caseB_longprefill",
+  "winner": "default",
+  "winner_flags": [],
+  "screen_results": {
+    "default": 64.9064669960353,
+    "chunk_off": 62.794709501758916,
+    "chunk_1024": 80.64321949859732,
+    "chunk_512": 91.64354449967504
+  },
+  "finalist_summary": {
+    "default": {
+      "median_p50_ms": 30.277038502390496,
+      "cv": 68.37976078329835
+    }
+  },
+  "phase1_vllm_ttft_p50_ms": 20.8,
+  "phase1_vllm_cv_pct": 114.6
+}

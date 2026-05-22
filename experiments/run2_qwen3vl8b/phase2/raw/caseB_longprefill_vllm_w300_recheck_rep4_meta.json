@@ -1,0 +1,15 @@
+{
+  "status": "OK",
+  "elapsed_s": 146.14,
+  "failures": 0,
+  "ttft_p50_ms": 21.702284499042435,
+  "case": "caseB_longprefill",
+  "framework": "vllm",
+  "warmup": 300,
+  "rep": 4,
+  "concurrency": 1,
+  "bench_n": 200,
+  "extra_body": "{\"temperature\": 0, \"top_p\": 1}",
+  "timestamp_utc": "2026-05-22T03:45:31.938616+00:00",
+  "cuda_visible_devices": "7"
+}

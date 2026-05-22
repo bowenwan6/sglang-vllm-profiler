@@ -1,0 +1,15 @@
+{
+  "status": "OK",
+  "elapsed_s": 212.39,
+  "failures": 0,
+  "ttft_p50_ms": 194.41665499834926,
+  "case": "caseD_decode",
+  "framework": "sglang-oai",
+  "warmup": 30,
+  "rep": 2,
+  "concurrency": 16,
+  "bench_n": 1000,
+  "extra_body": "{\"temperature\": 0, \"top_p\": 1}",
+  "timestamp_utc": "2026-05-22T03:31:09.938456+00:00",
+  "cuda_visible_devices": "7"
+}

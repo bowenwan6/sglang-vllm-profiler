@@ -1,0 +1,29 @@
+{
+  "case": "caseA_short",
+  "winner": "no_overlap",
+  "winner_flags": [
+    "--disable-overlap-schedule"
+  ],
+  "screen_results": {
+    "default": 22.18639100101427,
+    "no_overlap": 19.468158501695143,
+    "stream8": 22.229279496968957,
+    "chunk_off": 22.544485498656286,
+    "chunk_64": 53.90760000227601
+  },
+  "finalist_summary": {
+    "no_overlap": {
+      "median_p50_ms": 19.607987997005694,
+      "cv": 3.164640779418077,
+      "median_p95_ms": 24.948219598809374,
+      "median_p99_ms": 25.613590875655063
+    },
+    "default": {
+      "median_p50_ms": 21.774315002403455,
+      "cv": 1.683257361257302,
+      "median_p95_ms": 26.18682965185144,
+      "median_p99_ms": 26.26857988507254
+    }
+  },
+  "phase1_vllm_ttft_p50_ms": 12.6
+}
