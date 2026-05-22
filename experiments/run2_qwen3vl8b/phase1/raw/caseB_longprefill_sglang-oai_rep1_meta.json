@@ -1,0 +1,28 @@
+{
+  "status": "OK",
+  "elapsed_s": 156.73,
+  "failures": 0,
+  "framework": "sglang-oai",
+  "case": "caseB_longprefill",
+  "rep": 1,
+  "prompt_len": 2048,
+  "output_len": 128,
+  "concurrency": 1,
+  "num_prompts": 200,
+  "warmup_requests": 30,
+  "seed": 1,
+  "port": 30000,
+  "extra_request_body": "{\"temperature\": 0, \"top_p\": 1}",
+  "ignore_eos": "default(True)",
+  "dataset_path": "/data/sglang-vllm-profiler/datasets/run2_qwen3vl8b/caseB_longprefill.jsonl",
+  "dataset_sha256": "7d25d285ab71982d2ed91749a65d28339e6d6c4688d831c6620bc247f6937349",
+  "timestamp_utc": "2026-05-21T22:38:38.754068+00:00",
+  "snapshot_sha": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+  "versions": {
+    "sglang": "0.0.0.dev1+g0c8049d9b",
+    "torch": "2.11.0+cu130",
+    "flashinfer": "0.6.11.post1"
+  },
+  "cuda_visible_devices": "0",
+  "hf_hub_offline": "1"
+}

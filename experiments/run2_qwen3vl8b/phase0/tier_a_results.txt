@@ -1,0 +1,21 @@
+=== Tier A — tokenizer / vocab ===
+  'Hello world'                                 →   2 tokens  [9707, 1879]
+  '你好世界'                                        →   2 tokens  [108386, 99489]
+  'def foo(): return 42'                        →   7 tokens  [750, 15229, 4555, 470, 220, 19, 17]
+  '🚀'                                           →   1 tokens  [145836]
+  'The quick brown fox jumps over the '         →  81 tokens  [785, 3974, 13876, 38835, 34208, 916, 279, 15678]
+
+  vocab_size       : 151643
+  eos_token_id     : 151645
+  bos_token_id     : None
+  pad_token_id     : 151643
+  model_max_length : 262144
+
+  chat_template sample: '<|im_start|>user\nHello<|im_end|>\n<|im_start|>assistant\n'
+
+=== Tier A summary (run2, 2026-05-21) ===
+snapshot: 0c351dd01ed87e9c1b53cbc748cba10e6187ff3b (same as run1)
+vocab_size=151643 eos=151645 bos=None pad=151643 model_max_length=262144 chat_template=ChatML
+safetensors: 4 shards, all sha256 == HF content-addressed blob name (integrity VERIFIED)
+see model_files_sha256.txt for per-shard sha256
+Tier A verdict: PASS (identical to run1 expected values)

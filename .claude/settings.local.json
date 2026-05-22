@@ -76,7 +76,8 @@
       "Bash(/opt/miniconda3/envs/profiling/bin/python -m pip install vllm)",
       "Bash(/opt/miniconda3/envs/profiling/bin/python -m pip install pandas datasets)",
       "Bash(/opt/miniconda3/envs/profiling/bin/python -c 'import torch; print\\('\\\\''torch'\\\\'', torch.__version__, '\\\\''| cuda avail'\\\\'', torch.cuda.is_available\\(\\), '\\\\''| cuda'\\\\'', torch.version.cuda, '\\\\''| device_count'\\\\'', torch.cuda.device_count\\(\\)\\)')",
-      "Bash(/opt/miniconda3/envs/profiling/bin/python -c 'import vllm; print\\('\\\\''vllm'\\\\'', vllm.__version__\\)')"
+      "Bash(/opt/miniconda3/envs/profiling/bin/python -c 'import vllm; print\\('\\\\''vllm'\\\\'', vllm.__version__\\)')",
+      "Bash(echo \"orchestrator PID: $!\")"
     ]
   }
 }

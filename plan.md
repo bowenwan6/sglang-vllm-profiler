@@ -1,5 +1,42 @@
 # SGLang vs vLLM Profiling — Execution Plan
 
+---
+
+## 0. Active Run Status — `run2_qwen3vl8b`
+
+> **The active run is `run2_qwen3vl8b`.** It reuses the methodology, fairness model, and artifact
+> spec below, but is a *fresh measurement round* on a rebuilt machine. The original run ("run1") is
+> historical reference only.
+
+| Item | Active run2 value |
+|---|---|
+| Run id | `run2_qwen3vl8b` |
+| Model | `Qwen/Qwen3-VL-8B-Instruct` @ `0c351dd01ed87e9c1b53cbc748cba10e6187ff3b` (weights identical to run1, sha256-verified) |
+| GPU | index **0** (`CUDA_VISIBLE_DEVICES=0`) |
+| SGLang | `0.0.0.dev1+g0c8049d9b` (system python3, editable `/sgl-workspace/sglang`) |
+| vLLM | `0.21.0` (conda env `/opt/miniconda3/envs/profiling`) |
+| torch / CUDA | `2.11.0+cu130` / `13.0` (both frameworks aligned) |
+
+**Phase status (run2):**
+
+| Phase | run2 status |
+|---|---|
+| 0 — Equivalence | ✅ **complete + PASS** (canonical: `experiments/phase0/`) |
+| 1 — Baseline | ⬜ not started |
+| 2 — Shaping | ⬜ not started |
+| 3 — Profiling | ⬜ not started |
+| 4 — Triage | ⬜ not started |
+| 5 — Validation | ⬜ not started |
+
+**Relationship to run1 (historical):** `experiments/phase1/`, `experiments/phase2/`,
+`experiments/phase2_shaping/` hold **run1** numbers, measured under a different environment
+(GPU 6, CUDA 12.9, SGLang `ga4cf2ea12`, vLLM 0.19.0, torch 2.9.1/2.10.0). Per §6.4, those numbers
+**cannot be reused as run2 conclusions** — run2 re-measures Phase 1+ from scratch. The §15 "Results"
+section below is **run1 historical** except where marked run2. Active environment detail:
+`experiments/env_snapshot.md`. run2 working tree: `experiments/run2_qwen3vl8b/` (see its `README.md`).
+
+---
+
 ## 1. Objective
 
 Profile and compare SGLang against vLLM under fair, controlled conditions to extract actionable optimization insights **for SGLang**. The goal is not a generic benchmark summary — it is to explain *why* gaps exist and *what SGLang can do about them*. vLLM is used as a strong reference system whose behavior can falsify or corroborate SGLang-side hypotheses.
@@ -37,13 +74,14 @@ Decision rule at every phase boundary: if the gap on a case is <5% we *reshape t
 - **Text-only fallback** if Qwen3-VL is not supported on either framework at pinned versions: `Qwen/Qwen3-8B`.
 - **Later (Phase 6+, TBD)**: a larger Qwen3-VL variant.
 
-## 5. Environment
+## 5. Environment (active run2)
 
-- Host `radixark02`, container `sglang-bowenw`.
-- GPUs: 4× H200 144 GB, CUDA 12.9.
-- **SGLang**: dev editable at `/sgl-workspace/sglang`, Python 3.12, torch 2.9.1+cu129.
-- **vLLM**: 0.19.0 in conda env `vllm` at `/opt/miniconda3/envs/vllm`, torch 2.10.0+cu128.
-- HF cache: `/root/.cache/huggingface`.
+- GPUs: 8× H200 144 GB; **active GPU index 0** (`CUDA_VISIBLE_DEVICES=0`); NVIDIA driver 580.159.03, CUDA 13.0.
+- **SGLang**: `0.0.0.dev1+g0c8049d9b`, system python3 (3.12), editable at `/sgl-workspace/sglang`, torch 2.11.0+cu130, FlashInfer 0.6.11.post1.
+- **vLLM**: `0.21.0` (V1 engine) in conda env `profiling` at `/opt/miniconda3/envs/profiling`, torch 2.11.0+cu130, FlashInfer 0.6.8.post1, FlashAttention v3.
+- HF cache: `/root/.cache/huggingface`. Model snapshot `0c351dd…` fully cached, `HF_HUB_OFFLINE=1`.
+- Servers run strictly serially (one at a time on GPU 0). Full detail: `experiments/env_snapshot.md`.
+- *(run1 historical environment — GPU 6, CUDA 12.9, SGLang `ga4cf2ea12`, vLLM 0.19.0, torch 2.9.1/2.10.0 — recorded at the bottom of `experiments/env_snapshot.md`.)*
 
 ---
 
@@ -269,10 +307,15 @@ A human reviewer validating the project should inspect artifacts in this sequenc
 
 ### Phase 0 — Environment & Functional Equivalence (≤1 day)
 
+> ✅ **run2 status: complete + PASS.** Executed on GPU 0 with the run2 stack; canonical artifacts in
+> `experiments/phase0/` (equivalence.md, sglang/vllm outputs, model_files_sha256.txt, tier_a_results.txt).
+> The protocol below is retained as the method; the constants reflect the original run1 execution
+> except where noted (run2 used GPU **0** and the run2 framework versions in §5).
+
 **Goal.** Establish that both servers are comparable — weights, tokenizer, vocab identical; decoding behavior equivalent under a realistic equivalence standard.
 
-**Operational constants (this run).**
-- GPU: `CUDA_VISIBLE_DEVICES=6` (H200, 139 GB free at run start)
+**Operational constants (run1 protocol; run2 used GPU 0).**
+- GPU: `CUDA_VISIBLE_DEVICES=6` (run1) → **`CUDA_VISIBLE_DEVICES=0` for run2**
 - Model snapshot: `/root/.cache/huggingface/hub/models--Qwen--Qwen3-VL-8B-Instruct/snapshots/0c351dd01ed87e9c1b53cbc748cba10e6187ff3b`
 - `HF_HUB_OFFLINE=1` — model is fully cached; no network call or token needed
 - Servers run **sequentially** (SGLang first, then vLLM after shutdown) so each gets full GPU memory and there is no cross-process interference during the equivalence test. Phase 1 benchmarks follow the same pattern.
@@ -733,7 +776,21 @@ Never invert a row. Auto-benchmark does not read kernels; profiler-analysis does
 
 ## 15. Results
 
-### Phase 0 — Environment & Functional Equivalence (completed 2026-04-17)
+> ⚠️ **This section is run1 HISTORICAL** (measured 2026-04-17/04-24 on the run1 environment).
+> It is reference only and **not comparable to run2** (different SGLang/vLLM/torch/CUDA/FlashInfer
+> versions; see §0 and `experiments/env_snapshot.md`). The active run2 Phase-0 result is summarized
+> immediately below; run2 Phase 1+ results will be added as they are produced.
+
+### Phase 0 (run2, active) — Functional Equivalence (completed 2026-05-21)
+
+- GPU 0; SGLang `0c8049d9b` (flashinfer text) vs vLLM `0.21.0` (FlashAttention v3); torch 2.11.0+cu130 both.
+- Tier A **PASS** — same snapshot `0c351dd`, safetensors sha256-verified; tokenizer/config/ChatML identical.
+- Tier B **EXACT** byte-identical greedy outputs on all 3 prompts.
+- **Verdict: PASS** → cleared for run2 Phase 1. Canonical artifacts: `experiments/phase0/`.
+
+---
+
+### Phase 0 — Environment & Functional Equivalence (run1 historical, completed 2026-04-17)
 
 #### Run conditions
 - GPU: H200 index 6, `CUDA_VISIBLE_DEVICES=6`
@@ -957,8 +1014,12 @@ Across-rep CV = **76.0%**. Bimodal — rep1 is a periodic outlier (~65 ms), stea
 
 ## 16. Prioritized Next-Step Checklist
 
+> **run2 progress:** ✅ env recovery (conda `profiling`, vLLM 0.21.0, model re-downloaded) · ✅ Phase 0 PASS.
+> **Next for run2:** generate run2 datasets for the Qwen3-VL-8B text-only path, then run Phase 1 baseline
+> (4-case matrix) on GPU 0. Items 1–5 below are **run1 historical**.
+
 1. ✅ Create the filesystem layout from §8.1 (placeholder READMEs in each directory).
-2. ✅ Phase 0 — servers up, equivalence matrix run. All Tier-A/B pass; outputs EXACT match.
+2. ✅ (run1) Phase 0 — servers up, equivalence matrix run. All Tier-A/B pass; outputs EXACT match. *(run2 Phase 0 also ✅ PASS — see §15.)*
 3. ✅ Generate `datasets/case{A..D}.jsonl` — text-only random prompts (special tokens excluded), SHA-256 logged.
 4. ✅ Phase 1 — 24 runs (4 cases × 2 frameworks × 3 reps); `experiments/phase1/summary.md` complete.
 5. ✅ Phase 2 (fully complete — all 5 exit criteria verified):

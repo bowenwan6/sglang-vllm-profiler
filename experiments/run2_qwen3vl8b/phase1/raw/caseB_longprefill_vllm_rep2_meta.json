@@ -1,0 +1,28 @@
+{
+  "status": "OK",
+  "elapsed_s": 149.99,
+  "failures": 0,
+  "framework": "vllm",
+  "case": "caseB_longprefill",
+  "rep": 2,
+  "prompt_len": 2048,
+  "output_len": 128,
+  "concurrency": 1,
+  "num_prompts": 200,
+  "warmup_requests": 30,
+  "seed": 1,
+  "port": 30001,
+  "extra_request_body": "{\"temperature\": 0, \"top_p\": 1}",
+  "ignore_eos": "default(True)",
+  "dataset_path": "/data/sglang-vllm-profiler/datasets/run2_qwen3vl8b/caseB_longprefill.jsonl",
+  "dataset_sha256": "7d25d285ab71982d2ed91749a65d28339e6d6c4688d831c6620bc247f6937349",
+  "timestamp_utc": "2026-05-21T23:22:46.418080+00:00",
+  "snapshot_sha": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+  "versions": {
+    "vllm": "0.21.0",
+    "torch": "2.11.0+cu130",
+    "flashinfer": "0.6.8.post1"
+  },
+  "cuda_visible_devices": "0",
+  "hf_hub_offline": "1"
+}
