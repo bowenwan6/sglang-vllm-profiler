@@ -1,6 +1,6 @@
 # run2 Phase 3 Protocol — Locked from Phase 2
 
-Generated: 2026-05-22 03:58 UTC
+Generated: 2026-05-22 14:53 UTC
 
 > This file is the authoritative Phase 3 input. Do not modify without re-running Phase 2.
 
@@ -35,13 +35,15 @@ Generated: 2026-05-22 03:58 UTC
 
 - **Decision**: PROMOTE to Phase 3
 - **SGLang server flags**: `(none — default config)`
-- **warmup**: 300 · **reps**: 5 · **bench_n**: 2000 · **concurrency**: 16
-- **SGLang TTFT p50 (Phase 2, w=300)**: 149.5 (cv=14.9% ⚠)
+- **warmup**: 500 · **reps**: 5 · **bench_n**: 2000 · **concurrency**: 16
+- **SGLang TTFT p50 (Phase 2, w=500)**: 249.1 (cv=2.9%)
 - **vLLM TTFT p50 (Phase 2 recheck, w=300)**: 189.0
-- **Residual gap**: 0.79×
-- **Gate**: MARGINAL ⚠ — verify before Phase 3
+- **Residual gap**: 1.32× (SGLang slower)
+- **Gate**: PASS ✅ (W500 probe, CV<5%)
+- **W500 probe**: 5 reps, CV 2.9% — **cleanly profilable.** The W100/W300 "SGLang faster (0.79×)" reading was an under-warmup artifact; the stable W500 median (249.1 ms) restores the ~1.32× SGLang-slower gap seen in Phase-1 W30.
+- **Warmup-mismatch caveat**: SGLang stabilized at W500 vs vLLM W300. vLLM is warmup-insensitive here (187.9→189.0 ms across W30→W300), so the ~1.32× comparison is sound as a stable reference. A strict same-warmup vLLM W500 is **only needed if a 'SGLang faster' claim is made** (it is not).
 - **vLLM ceiling**: attention backend differs — ceiling M on kernel-level findings
-- **Phase 3 rationale**: Batched decode tests scheduler throughput path; 1.32× gap warrants profiling
+- **Phase 3 rationale**: Batched decode tests scheduler throughput path; ~1.32× gap warrants profiling
 
 ## Case D — Decode-heavy (512→512, c=16)
 

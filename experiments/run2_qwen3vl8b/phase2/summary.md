@@ -1,6 +1,6 @@
 # run2 Phase 2 — Shaping / Variance Gate Summary
 
-Generated: 2026-05-22 03:58 UTC
+Generated: 2026-05-22 14:53 UTC
 
 Active run `run2_qwen3vl8b` · GPU 7 · model Qwen3-VL-8B-Instruct @ 0c351dd · TP=1 · bf16.
 
@@ -59,9 +59,12 @@ Active run `run2_qwen3vl8b` · GPU 7 · model Qwen3-VL-8B-Instruct @ 0c351dd · 
 | 30 | 3 | 166.1 | 12.5% | FAIL ⚠ |
 | 100 | 3 | 140.0 | 15.2% | FAIL ⚠ |
 | 300 | 3 | 149.5 | 14.9% | FAIL ⚠ |
+| 500 | 5 | 249.1 | 2.9% | PASS ✅ |
 
-**Recommended warmup for Phase 3**: 300 · reps: 5
-**Gate passed**: NO ⚠ — W500 may be needed
+**Recommended warmup for Phase 3**: 500 · reps: 5
+**Gate passed**: YES ✅
+
+> **W500 follow-up probe (SGLang only, GPU 1, 5 reps):** TTFT p50 CV dropped to 2.9% at median 249.1 ms — **clean, profilable.** Note the stable median (~249 ms) is *higher* than the noisy W100/W300 medians: the earlier "SGLang faster / 0.79× reversal" was an under-warmup artifact. At stable warmup SGLang is ~1.32× vs vLLM W300 (189.0 ms), matching the Phase-1 W30 ratio. vLLM not re-run at W500 (W300 recheck is warmup-insensitive: 187.9→189.0 ms across W30→W300), so this is a stable reference, not a strict same-warmup comparison.
 
 ---
 

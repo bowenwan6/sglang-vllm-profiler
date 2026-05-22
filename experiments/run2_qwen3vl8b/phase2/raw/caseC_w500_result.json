@@ -1,0 +1,29 @@
+{
+  "case": "caseC_batched",
+  "framework": "sglang-oai",
+  "config": "default",
+  "warmup": 500,
+  "reps": 5,
+  "concurrency": 16,
+  "num_prompts": 2000,
+  "ttft_p50_ms_per_rep": [
+    249.14093100233003,
+    249.1693905030843,
+    251.18095399375306,
+    249.09581550309667,
+    233.35038450022694
+  ],
+  "ttft_p50_median_ms": 249.14093100233003,
+  "ttft_p50_cv_pct": 2.9467829135640904,
+  "ttft_p95_median_ms": 254.07736554261646,
+  "ttft_p99_median_ms": 407.6826078715385,
+  "tpot_p50_median_ms": 5.7918327519308965,
+  "out_tok_s_median": 2039.3338656984915,
+  "req_s_median": 15.932295825769465,
+  "total_failures": 0,
+  "gate_verdict": "clean (CV<5%)",
+  "vllm_w300_reference_ms": 189.0,
+  "vllm_w300_cv_pct": 1.9,
+  "note": "vLLM not re-run at W500; W300 recheck used as stable reference (not strict same-warmup).",
+  "timestamp_utc": "2026-05-22T14:51:33.076816+00:00"
+}

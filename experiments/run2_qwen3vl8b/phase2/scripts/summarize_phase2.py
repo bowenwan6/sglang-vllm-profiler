@@ -162,6 +162,19 @@ def main():
     caseC_var = variance_results.get("caseC_batched", {})
     caseD_var = variance_results.get("caseD_decode", {})
 
+    # Fold in the W500 follow-up probe (SGLang only, GPU 1) if present.
+    caseC_w500 = load_json_safe(RAW / "caseC_w500_result.json")
+    if caseC_w500.get("ttft_p50_median_ms") is not None:
+        caseC_var.setdefault("warmup_results", {})["500"] = {
+            "reps": caseC_w500.get("ttft_p50_ms_per_rep", []),
+            "median_p50_ms": caseC_w500.get("ttft_p50_median_ms"),
+            "cv_pct": caseC_w500.get("ttft_p50_cv_pct"),
+        }
+        w500_cv = caseC_w500.get("ttft_p50_cv_pct")
+        caseC_var["recommended_warmup"] = 500
+        caseC_var["recommended_reps"] = 5
+        caseC_var["gate_passed"] = (w500_cv is not None and w500_cv < 5.0)
+
     def var_for(case_var, warmup):
         wr = case_var.get("warmup_results", {})
         entry = wr.get(warmup) or wr.get(str(warmup))
@@ -283,7 +296,8 @@ def main():
     S.append("")
     S.append("| Warmup | Reps | TTFT p50 median (ms) | CV | Gate |")
     S.append("|--------|------|---------------------|----|------|")
-    for w in WARMUP_LEVELS:
+    caseC_levels = WARMUP_LEVELS + ([500] if "500" in (caseC_var.get("warmup_results") or {}) else [])
+    for w in caseC_levels:
         med, cv = var_for(caseC_var, w)
         gate = "PASS ✅" if (cv is not None and cv < 5.0) else ("FAIL ⚠" if cv is not None else "N/A")
         n_reps = len((caseC_var.get("warmup_results") or {}).get(w, {}).get("reps") or
@@ -292,6 +306,15 @@ def main():
     S.append("")
     S.append(f"**Recommended warmup for Phase 3**: {caseC_rec_warmup} · reps: {caseC_rec_reps}")
     S.append(f"**Gate passed**: {'YES ✅' if caseC_gate else 'NO ⚠ — W500 may be needed'}")
+    if "500" in (caseC_var.get("warmup_results") or {}):
+        S.append("")
+        S.append("> **W500 follow-up probe (SGLang only, GPU 1, 5 reps):** TTFT p50 CV dropped to "
+                 f"{caseC_w500.get('ttft_p50_cv_pct'):.1f}% at median {caseC_w500.get('ttft_p50_median_ms'):.1f} ms — "
+                 "**clean, profilable.** Note the stable median (~249 ms) is *higher* than the noisy "
+                 "W100/W300 medians: the earlier \"SGLang faster / 0.79× reversal\" was an under-warmup "
+                 "artifact. At stable warmup SGLang is ~1.32× vs vLLM W300 (189.0 ms), matching the Phase-1 "
+                 "W30 ratio. vLLM not re-run at W500 (W300 recheck is warmup-insensitive: 187.9→189.0 ms "
+                 "across W30→W300), so this is a stable reference, not a strict same-warmup comparison.")
     S.append("")
     S.append("---")
     S.append("")
@@ -391,10 +414,18 @@ def main():
     P.append(f"- **warmup**: {caseC_rec_warmup} · **reps**: {caseC_rec_reps} · **bench_n**: 2000 · **concurrency**: 16")
     P.append(f"- **SGLang TTFT p50 (Phase 2, w={caseC_rec_warmup})**: {fmt(cC_p50, cC_cv)}")
     P.append(f"- **vLLM TTFT p50 (Phase 2 recheck, w=300)**: {fmt(vllm_C_ref)}")
-    P.append(f"- **Residual gap**: {cC_gap}")
-    P.append(f"- **Gate**: {'PASS ✅' if caseC_gate else 'MARGINAL ⚠ — verify before Phase 3'}")
+    P.append(f"- **Residual gap**: {cC_gap} (SGLang slower)")
+    P.append(f"- **Gate**: {'PASS ✅ (W500 probe, CV<5%)' if caseC_gate else 'MARGINAL ⚠ — verify before Phase 3'}")
+    if "500" in (caseC_var.get("warmup_results") or {}):
+        P.append(f"- **W500 probe**: 5 reps, CV {caseC_w500.get('ttft_p50_cv_pct'):.1f}% — **cleanly profilable.** "
+                 f"The W100/W300 \"SGLang faster (0.79×)\" reading was an under-warmup artifact; the stable "
+                 f"W500 median ({caseC_w500.get('ttft_p50_median_ms'):.1f} ms) restores the ~1.32× SGLang-slower "
+                 f"gap seen in Phase-1 W30.")
+        P.append(f"- **Warmup-mismatch caveat**: SGLang stabilized at W500 vs vLLM W300. vLLM is warmup-insensitive "
+                 f"here (187.9→189.0 ms across W30→W300), so the ~1.32× comparison is sound as a stable reference. "
+                 f"A strict same-warmup vLLM W500 is **only needed if a 'SGLang faster' claim is made** (it is not).")
     P.append(f"- **vLLM ceiling**: attention backend differs — ceiling M on kernel-level findings")
-    P.append(f"- **Phase 3 rationale**: Batched decode tests scheduler throughput path; 1.32× gap warrants profiling")
+    P.append(f"- **Phase 3 rationale**: Batched decode tests scheduler throughput path; ~1.32× gap warrants profiling")
     P.append("")
 
     # Case D

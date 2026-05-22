@@ -54,16 +54,16 @@ confidence ceiling M**. Full table + p95/p99 + CV + error rate: `experiments/run
 |---|---|---|---|---|---|
 | A — 128→128 c1 | **`--disable-overlap-schedule`** | 19.6 ms (3.2%) | 12.6 ms (Phase 1) | **1.56×** | warmup 30, 3 reps |
 | B — 2048→128 c1 | default | 30.3 ms (**68.4%** ⚠ bimodal) | 21.5 ms (**85.9%** ⚠ bimodal, ceiling M) | 1.41× | warmup 300, 5 reps |
-| C — 512→128 c16 | default | 149.5 ms (**14.9%** ⚠) | 189.0 ms (1.9%, stable) | **0.79×** (SGLang faster) | warmup 300, 5 reps — **marginal** |
+| C — 512→128 c16 | default | **249.1 ms (2.9%, W500)** | 189.0 ms (1.9%, stable) | **1.32×** (SGLang slower) | warmup 500, 5 reps — **clean** |
 | D — 512→512 c16 | default | 206.2 ms (3.3%) | 189.7 ms (Phase 1) | 1.09× | warmup 30, 3 reps |
 
 Key Phase 2 findings:
 - **Case A — overlap scheduler was a real cost.** `--disable-overlap-schedule` cut TTFT ~10% (21.8→19.6 ms) at clean CV. The Phase-1 4.89× gap is now **1.56×** — a much smaller residual scheduler/dispatch overhead is the Phase-3 target. Other flags (`stream8`, `chunk_off`) were within 5% of default; `chunk_64` was 2.4× worse (eliminated).
 - **Case B — both frameworks bimodal.** `chunk_off` beat default by only 3.2% (< 5% threshold) → default wins. SGLang finalist reps 64.3 / 30.3 / 26.9 ms (CV 68.4%); vLLM recheck at warmup=300 still bimodal (first rep high, rest ~21.5 ms, CV 85.9%). **All Case B cross-framework conclusions carry confidence ceiling M.**
-- **Case C — gap reversed; SGLang variance unresolved.** vLLM is stable at warmup=300 (CV 1.9%, 189 ms) but SGLang never passed the 5% CV gate (W30 12.5% / W100 15.2% / W300 14.9%). At the noisy p50 SGLang (149.5 ms) is actually *faster* than vLLM (0.79×). Promote only with a marginal/high-CV flag, or run a W500 probe first. Case C shows warmup-sensitive behavior: under the Phase-1 W30 protocol vLLM was faster, while after longer warmup SGLang can outperform vLLM, though SGLang’s high CV prevents a high-confidence claim.
+- **Case C — clean at W500; SGLang ~1.32× slower (no reversal).** SGLang failed the 5% CV gate at W30/W100/W300 (12.5/15.2/14.9%), but a follow-up **W500 probe (5 reps, GPU 1) passed cleanly at CV 2.9%**, stabilizing at **249.1 ms**. The noisy W100/W300 medians (124–149 ms) that suggested "SGLang faster (0.79×)" were an **under-warmup artifact**: at stable warmup SGLang is ~1.32× *slower* than vLLM (189.0 ms), matching the Phase-1 W30 ratio (247.5 vs 187.9). vLLM is warmup-insensitive (187.9→189.0 ms across W30→W300), so the comparison is a sound stable reference (a strict same-warmup vLLM W500 would only be needed for a "SGLang faster" claim, which no longer holds). **Case C is cleanly profilable.**
 - **Case D — clean at warmup=30.** CV 3.3% with no extra warmup; residual gap 1.09× (Phase-1 p99 bimodal tail did not reappear). Lowest Phase-3 priority.
 
-**Phase 3 shortlist:** A (promote, **high priority**) · B (promote, **ceiling M + extra reps**) · C (promote **only if accepting high CV**, else run W500 first) · D (promote, **lower priority**).
+**Phase 3 shortlist:** A (promote, **high priority**) · B (promote, **ceiling M + extra reps**) · C (promote, **clean at W500**, warmup 500/5 reps) · D (promote, **lower priority**).
 
 **Relationship to run1 (historical):** `experiments/phase1/`, `experiments/phase2/`,
 `experiments/phase2_shaping/` hold **run1** numbers, measured under a different environment
@@ -818,14 +818,14 @@ Never invert a row. Auto-benchmark does not read kernels; profiler-analysis does
 |---|---|---|---|---|---|
 | A 128→128 c1 | **`--disable-overlap-schedule`** | 19.6 ms (3.2%) | 12.6 ms (Phase 1) | **1.56×** | warmup 30, 3 reps |
 | B 2048→128 c1 | default | 30.3 ms (**68.4%** ⚠) | 21.5 ms (**85.9%** ⚠, ceiling M) | 1.41× | warmup 300, 5 reps |
-| C 512→128 c16 | default | 149.5 ms (**14.9%** ⚠) | 189.0 ms (1.9%) | **0.79×** | warmup 300, 5 reps — marginal |
+| C 512→128 c16 | default | **249.1 ms (2.9%, W500)** | 189.0 ms (1.9%) | **1.32×** | warmup 500, 5 reps — clean |
 | D 512→512 c16 | default | 206.2 ms (3.3%) | 189.7 ms (Phase 1) | 1.09× | warmup 30, 3 reps |
 
 - **Case A shaping:** screen p50 — `no_overlap` 19.5 / `default` 22.2 / `stream8` 22.2 / `chunk_off` 22.5 / `chunk_64` 53.9 ms. Finalist (3 reps): `no_overlap` median 19.6 ms (CV 3.2%) vs `default` 21.8 ms (CV 1.7%). **The overlap scheduler costs ~10% at c=1; the Phase-1 4.89× gap collapses to 1.56×.** (run1 had called this floor fully structural — run2's newer build responds to the flag.)
 - **Case B shaping:** screen p50 — `chunk_off` 62.8 / `default` 64.9 / `chunk_1024` 80.6 / `chunk_512` 91.6 ms. `chunk_off` < 5% better → default. Finalist reps 64.3 / 30.3 / 26.9 ms (CV 68.4%) — **SGLang itself is bimodal here.** vLLM recheck (w=300, 5 reps): first rep high, rest ~21.5 ms, CV 85.9% — **bimodality not a warmup artifact → ceiling M on all Case B cross-framework claims.**
-- **Case C variance gate:** SGLang W30/W100/W300 CV = 12.5 / 15.2 / 14.9% — **never passed the 5% gate.** vLLM recheck stable (CV 1.9%, 189 ms). At the noisy SGLang p50 (149.5 ms) SGLang is *faster* than vLLM → **gap reversed to 0.79×.** Promote only if accepting high CV, else run a W500 probe first.
+- **Case C variance gate + W500 probe:** SGLang W30/W100/W300 CV = 12.5 / 15.2 / 14.9% — failed the 5% gate. A follow-up **W500 probe (5 reps, GPU 1, 0 failures) passed at CV 2.9%**, stable median **249.1 ms**. vLLM recheck stable (CV 1.9%, 189 ms). The W100/W300 "SGLang faster / 0.79× reversal" was an **under-warmup artifact**; at stable warmup SGLang is **~1.32× slower** (matches Phase-1 W30). vLLM is warmup-insensitive (187.9→189.0 across W30→W300), so this is a sound stable reference; a strict same-warmup vLLM W500 is only needed for a "SGLang faster" claim (no longer applicable). **Case C cleanly profilable** at warmup=500. Probe artifacts: `phase2/raw/caseC_sglang_w500_rep*.json`, `phase2/raw/caseC_w500_result.json`.
 - **Case D variance gate:** passed at W30 (CV 3.3%, 206.2 ms); residual 1.09×. The Phase-1 p99 bimodal tail did not reappear.
-- **Phase-3 shortlist:** A (high priority) · B (ceiling M + extra reps) · C (marginal — accept high CV or W500 first) · D (lower priority). Locked protocol: `experiments/run2_qwen3vl8b/phase2/selected_cases.md`.
+- **Phase-3 shortlist:** A (high priority) · B (ceiling M + extra reps) · C (clean at W500, warmup 500/5 reps) · D (lower priority). Locked protocol: `experiments/run2_qwen3vl8b/phase2/selected_cases.md`.
 
 ---
 
@@ -1054,11 +1054,12 @@ Across-rep CV = **76.0%**. Bimodal — rep1 is a periodic outlier (~65 ms), stea
 ## 16. Prioritized Next-Step Checklist
 
 > **run2 progress:** ✅ env recovery (conda `profiling`, vLLM 0.21.0, model re-downloaded) ·
-> ✅ Phase 0 PASS · ✅ Phase 1 (24 runs, 0 failures) · ✅ Phase 2 (GPU 7, 0 failures —
+> ✅ Phase 0 PASS · ✅ Phase 1 (24 runs, 0 failures) · ✅ Phase 2 (GPU 7, 0 failures) ·
+> ✅ Case C W500 probe (GPU 1, CV 2.9% — gate now clean;
 > `experiments/run2_qwen3vl8b/phase2/selected_cases.md`).
-> **Next for run2:** Phase 3 profiling on the 4 promoted cases (see §0 shortlist). **Open decision
-> before Phase 3:** Case C never passed the 5% CV gate (14.9% at W300) — either accept the high-CV
-> baseline or run a W500 probe first. Items 1–5 below are **run1 historical**.
+> **Next for run2:** Phase 3 profiling on the 4 promoted cases (see §0 shortlist). All four cases now
+> have a clean or caveated profiling protocol; the Case C high-CV decision is **resolved** (W500
+> clean, warmup 500/5 reps). Items 1–5 below are **run1 historical**.
 
 1. ✅ Create the filesystem layout from §8.1 (placeholder READMEs in each directory).
 2. ✅ (run1) Phase 0 — servers up, equivalence matrix run. All Tier-A/B pass; outputs EXACT match. *(run2 Phase 0 also ✅ PASS — see §15.)*
