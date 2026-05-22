@@ -12,7 +12,7 @@
 |---|---|
 | Run id | `run2_qwen3vl8b` |
 | Model | `Qwen/Qwen3-VL-8B-Instruct` @ `0c351dd01ed87e9c1b53cbc748cba10e6187ff3b` (weights identical to run1, sha256-verified) |
-| GPU | Phase 0/1: index **0**; **Phase 2+: index 7** (`CUDA_VISIBLE_DEVICES=7`) |
+| GPU | single H200, **serialized** throughout. Phase 0/1: index **0**; Phase 2: index **7**; Case C W500 probe + Phase 3: index **1**. (One GPU at a time; servers never co-resident.) |
 | SGLang | `0.0.0.dev1+g0c8049d9b` (system python3, editable `/sgl-workspace/sglang`) |
 | vLLM | `0.21.0` (conda env `/opt/miniconda3/envs/profiling`) |
 | torch / CUDA | `2.11.0+cu130` / `13.0` (both frameworks aligned) |
@@ -24,9 +24,21 @@
 | 0 — Equivalence | ✅ **complete + PASS** (canonical: `experiments/phase0/`) |
 | 1 — Baseline | ✅ **complete** (24 runs, 0 failures; `experiments/run2_qwen3vl8b/phase1/summary.md`) |
 | 2 — Shaping / Variance gate | ✅ **complete** (0 failures; `experiments/run2_qwen3vl8b/phase2/{summary.md,selected_cases.md}`) |
-| 3 — Profiling | ⬜ not started |
+| 3 — Profiling / Trace collection | ✅ **complete** (GPU 1; `experiments/run2_qwen3vl8b/phase3/{summary.md,extend_supplement_summary.md}`) |
 | 4 — Triage | ⬜ not started |
 | 5 — Validation | ⬜ not started |
+
+**Phase 3 results (run2 — completed 2026-05-22/23, GPU 1).** All 4 cases traced; commits `c6ec1df`
+(main collection), `8f41bd3` (EXTEND supplement), `d822bf3` (Case B EXTEND-formal retry). ~517 MB
+main + EXTEND traces in Git LFS.
+
+- **DECODE stage (SGLang):** mapping (graph-off) + formal (graph-on) complete for **all 4 cases**.
+- **vLLM:** `prefill_like` + `decode_like` windows complete for **all 4 cases** (not re-run since).
+- **EXTEND/prefill stage (SGLang):** supplement captured 7/8 groups — EXTEND **mapping** complete for
+  **all 4 cases**; EXTEND **formal** complete for **A/C/D**. Only **Case B graph-on EXTEND formal is
+  missing** (failed 8 attempts; caveat accepted — see below).
+- **Phase 4 can start.** Profile Case A and Case C first; carry the Case B caveats (graph-on EXTEND
+  formal missing + confidence ceiling M).
 
 **run2 Phase 1 baseline (active — supersedes the run1 table in §15).** 24 runs (4 cases × 2
 frameworks × 3 reps), **error rate 0% on all**. Greedy (`temperature=0, top_p=1`, `ignore_eos`
@@ -278,6 +290,12 @@ Auto-benchmark controls *inputs*; profiler-analysis interprets *outputs*; debug-
 ## 8. Artifact Framework
 
 ### 8.1 Filesystem layout
+
+> **Active-run note:** the tree below shows the original (run1) layout with the repo root drawn as
+> `/data/profiling_lab/`. The real repo root is `/data/sglang-vllm-profiler/`, and the **active run2**
+> mirrors this layout under run2-prefixed paths: `experiments/run2_qwen3vl8b/{phase0,phase1,phase2,phase3}/`,
+> `datasets/run2_qwen3vl8b/`, `traces/run2_qwen3vl8b/`, `logs/run2_qwen3vl8b/`. The unprefixed
+> `experiments/phase1|phase2|...` paths below are **run1 historical** (except canonical `experiments/phase0/`).
 
 **Directory purpose rule:** `logs/` = infrastructure side-effects (server stderr, kernel-API boundary trails) — consult on failure, never cited in analysis. `experiments/` = research artifacts deliberately produced by the experiment protocol — cited in analysis and reports.
 
@@ -601,7 +619,25 @@ GPU 7, serial servers, GPU freed (<2000 MiB) between every server.
 
 ---
 
-### Phase 3 — Profiling & Trace Collection (1–1.5 days)
+### Phase 3 — Profiling & Trace Collection (run2: ✅ complete)
+
+> ✅ **run2 status: complete** (2026-05-22/23, GPU 1, serial servers, GPU freed after each).
+> Collection only — no interpretation. Detail: `experiments/run2_qwen3vl8b/phase3/summary.md` +
+> `extend_supplement_summary.md`. **run2 actual outcome:**
+> - The **initial** collection (`run_phase3_collect.py`, commit `c6ec1df`) captured SGLang **DECODE
+>   stage only** — the `--profile-by-stage` window armed during in-flight decode, so no EXTEND landed.
+>   vLLM `prefill_like` + `decode_like` complete for all 4 cases.
+> - The **EXTEND supplement** (`run_phase3_extend.py`, commit `8f41bd3`) fixed this by driving a
+>   prefill-only load (`/generate max_new_tokens=1`): EXTEND **mapping** captured for **all 4 cases**,
+>   EXTEND **formal** for **A/C/D**.
+> - **Case B graph-on EXTEND formal could not be captured** after 8 attempts (incl. a 5-strategy retry
+>   `d822bf3`): graph-on `--profile-by-stage` prefill capture does not trigger for Case B (small window
+>   → DECODE, large window → empty). **Caveat accepted** — Case B's graph-off mapping EXTEND carries the
+>   kernel→source mapping and Case B already has ceiling M.
+> - run2 mechanism note: vLLM 0.21.0 dropped `VLLM_TORCH_PROFILER_DIR`; the profiler was enabled via
+>   `--profiler-config '{"profiler":"torch","torch_profiler_dir":"<abs>"}'`. SGLang `sglang.profiler`
+>   needs concurrent load (it profiles whatever forward steps run), so a `bench_serving` load ran during
+>   each capture. The method below is the canonical protocol; these are the run2 adaptations.
 
 **Goal.** For each selected case, produce a clean SGLang mapping+formal trace pair *and* a vLLM trace pair shaped to permit stage-level comparison. No interpretation here.
 
@@ -639,9 +675,20 @@ All SGLang runs in Phase 3: `SGLANG_KERNEL_API_LOGLEVEL=1`, `LOGDEST=logs/phase3
 - `debug-cuda-crash` → L1 passive, escalated only on actual crash.
 - `sglang-auto-benchmark` → **not used.**
 
-**Outputs.** `traces/{case}/sglang_mapping/`, `traces/{case}/sglang_formal/` (EXTEND + DECODE each), `traces/{case}/vllm/{prefill_like,decode_like}/`, `traces/{case}/collection_notes.md`, `logs/phase3/*.log`.
+**Outputs (run2, active).**
+- `traces/run2_qwen3vl8b/{case}/sglang_mapping/`, `sglang_formal/` — DECODE-stage (graph-off / graph-on).
+- `traces/run2_qwen3vl8b/{case}/sglang_extend_mapping/`, `sglang_extend_formal/` — EXTEND-stage supplement.
+- `traces/run2_qwen3vl8b/{case}/vllm/{prefill_like,decode_like}/`.
+- `experiments/run2_qwen3vl8b/phase3/summary.md`, `extend_supplement_summary.md`, `metadata/`.
+- `logs/run2_qwen3vl8b/phase3/*.log`.
 
-**Success criteria.** Each SGLang trace covers ≥5 steady-state iterations per stage. Each vLLM window captures ≥5 complete iterations of its target mode. Files between 20 MB and 500 MB; >1 GB → re-collect with fewer steps. No crash, or crash with L1 boundary log preserved.
+**Success criteria — run2 status.**
+- ✅ SGLang **DECODE** (mapping + formal) complete for all 4 cases.
+- ✅ vLLM **prefill_like + decode_like** complete for all 4 cases.
+- ✅ SGLang **EXTEND mapping** complete for all 4 cases.
+- ⚠️ SGLang **EXTEND formal** complete for **A/C/D**; **Case B missing** — accepted with documented
+  caveat (graph-off mapping EXTEND suffices for kernel→source; ceiling M already applies to B).
+- ✅ Phase 4 can start.
 
 ---
 
@@ -836,6 +883,46 @@ Never invert a row. Auto-benchmark does not read kernels; profiler-analysis does
 - **Case C variance gate + W500 probe:** SGLang W30/W100/W300 CV = 12.5 / 15.2 / 14.9% — failed the 5% gate. A follow-up **W500 probe (5 reps, GPU 1, 0 failures) passed at CV 2.9%**, stable median **249.1 ms**. vLLM recheck stable (CV 1.9%, 189 ms). The W100/W300 "SGLang faster / 0.79× reversal" was an **under-warmup artifact**; at stable warmup SGLang is **~1.32× slower** (matches Phase-1 W30). vLLM is warmup-insensitive (187.9→189.0 across W30→W300), so this is a sound stable reference; a strict same-warmup vLLM W500 is only needed for a "SGLang faster" claim (no longer applicable). **Case C cleanly profilable** at warmup=500. Probe artifacts: `phase2/raw/caseC_sglang_w500_rep*.json`, `phase2/raw/caseC_w500_result.json`.
 - **Case D variance gate:** passed at W30 (CV 3.3%, 206.2 ms); residual 1.09×. The Phase-1 p99 bimodal tail did not reappear.
 - **Phase-3 shortlist:** A (high priority) · B (ceiling M + extra reps) · C (clean at W500, warmup 500/5 reps) · D (lower priority). Locked protocol: `experiments/run2_qwen3vl8b/phase2/selected_cases.md`.
+
+### Phase 3 (run2, active) — Trace Collection (completed 2026-05-22/23)
+
+- GPU **1**, serial servers (freed <2000 MiB after each), 0 failed requests. Collection only — no
+  interpretation. Commits: `c6ec1df` (main), `8f41bd3` (EXTEND supplement), `d822bf3` (Case B retry).
+  Artifacts: `experiments/run2_qwen3vl8b/phase3/{summary.md,extend_supplement_summary.md,metadata/}`,
+  `traces/run2_qwen3vl8b/{case}/...`, `logs/run2_qwen3vl8b/phase3/`. ~517 MB traces in Git LFS.
+
+**Main collection** (`run_phase3_collect.py`). Per case: SGLang mapping (graph-off) + formal (graph-on)
+via `sglang.profiler --profile-by-stage` with concurrent `bench_serving` load; vLLM `prefill_like`
+(c=1, `max_tokens=1`) + `decode_like` (steady-state) via `--profiler-config` torch + `/start_profile`,
+`/stop_profile`. Case A ran as a **pilot** (gate: 4 groups non-empty + metadata + no fatal + GPU freed);
+gate passed → C/B/D ran automatically. **All 4 cases × 4 groups non-empty.** But all SGLang traces were
+**DECODE-stage only** (profiler armed during in-flight decode).
+
+**EXTEND supplement** (`run_phase3_extend.py`). Drove a prefill-only load (`/generate max_new_tokens=1`)
+to force EXTEND into the window. Result (7/8 groups):
+
+| Case | EXTEND mapping (graph-off) | EXTEND formal (graph-on) |
+|---|---|---|
+| A 128→128 c1 | ✅ 35 MB | ✅ 35 MB |
+| B 2048→128 c1 | ✅ 64 MB | ❌ not captured (see caveat) |
+| C 512→128 c16 | ✅ 47 MB | ✅ 31 MB |
+| D 512→512 c16 | ✅ 51 MB | ✅ 34 MB |
+
+**Case B graph-on EXTEND-formal caveat.** Failed across **8 attempts** (3 in supplement + a dedicated
+5-strategy retry `d822bf3`: c=1 num_steps 50/100, c=2/c=4 num_steps 100/200). graph-on
+`--profile-by-stage` prefill capture does not trigger for Case B's 2048-prefill path — small windows
+land on fast graph-replayed DECODE, larger windows (≥50) produce **empty** stage traces. Resolving it
+would need SGLang source changes (out of scope). **Accepted** because: (1) Case B's graph-off **mapping**
+EXTEND (64 MB) carries the `kernel→cpu_op→python_scope` mapping needed for prefill-stage attribution;
+(2) Case B already carries confidence ceiling M (both frameworks bimodal). All failed/empty attempt
+dirs were removed (no LFS bloat). Documented in `extend_supplement_summary.md` +
+`metadata/caseB_extend_formal_retry_meta.json`.
+
+**Original DECODE traces remain valid and untouched.** vLLM traces were not re-run.
+
+**Phase 4 readiness:** start with Case A and Case C; carry Case B caveats (graph-on EXTEND formal
+missing + ceiling M). SGLang EXTEND mapping (all 4) + DECODE (all 4) + vLLM prefill/decode (all 4) cover
+both stages for triage.
 
 ---
 
@@ -1065,11 +1152,12 @@ Across-rep CV = **76.0%**. Bimodal — rep1 is a periodic outlier (~65 ms), stea
 
 > **run2 progress:** ✅ env recovery (conda `profiling`, vLLM 0.21.0, model re-downloaded) ·
 > ✅ Phase 0 PASS · ✅ Phase 1 (24 runs, 0 failures) · ✅ Phase 2 (GPU 7, 0 failures) ·
-> ✅ Case C W500 probe (GPU 1, CV 2.9% — gate now clean;
-> `experiments/run2_qwen3vl8b/phase2/selected_cases.md`).
-> **Next for run2:** Phase 3 profiling on the 4 promoted cases (see §0 shortlist). All four cases now
-> have a clean or caveated profiling protocol; the Case C high-CV decision is **resolved** (W500
-> clean, warmup 500/5 reps). Items 1–5 below are **run1 historical**.
+> ✅ Case C W500 probe (GPU 1, CV 2.9% — gate clean) · ✅ **Phase 3 trace collection (GPU 1)** —
+> all 4 cases; SGLang DECODE + EXTEND-mapping (all 4) + EXTEND-formal (A/C/D); vLLM prefill/decode
+> (all 4); Case B graph-on EXTEND-formal missing (caveat accepted). Commits `c6ec1df` / `8f41bd3` / `d822bf3`.
+> **Next for run2: Phase 4 triage.** Start with Case A and Case C; author per-case triage + breakdown +
+> vLLM cross-check, then `hypotheses.md` and `ranked_recommendations.md`. Carry Case B caveats
+> (graph-on EXTEND-formal missing + ceiling M). Items 1–5 below are **run1 historical**.
 
 1. ✅ Create the filesystem layout from §8.1 (placeholder READMEs in each directory).
 2. ✅ (run1) Phase 0 — servers up, equivalence matrix run. All Tier-A/B pass; outputs EXACT match. *(run2 Phase 0 also ✅ PASS — see §15.)*
@@ -1081,7 +1169,7 @@ Across-rep CV = **76.0%**. Bimodal — rep1 is a periodic outlier (~65 ms), stea
    - ✅ Step 2.3 — Case C: PROMOTE (CV 4.2% at warmup=100). Case D: DROP (bimodal, V2 CV=14.8%).
    - ✅ Step 2.4 — vLLM recheck: Case B → CEILING M (CV=76%, bimodal); Case C → CLEAN (CV=5.5%, revised baseline 164→181 ms, ratio 1.49→1.33×).
    - ✅ Step 2.5 — selected_cases.md updated; Phase-3 protocol locked; all 5 exit criteria verified.
-6. Phase 3 — SGLang mapping+formal + vLLM prefill_like+decode_like per selected case (1 day).
-7. Phase 4 — triage + breakdown + vLLM cross-check per case; author `hypotheses.md` and `ranked_recommendations.md` (1–1½ days).
+6. ✅ Phase 3 (run2) — SGLang mapping+formal (DECODE) + EXTEND supplement (mapping all 4, formal A/C/D) + vLLM prefill_like+decode_like, all 4 cases. Case B graph-on EXTEND-formal missing (caveat). See §15 (run2) + `experiments/run2_qwen3vl8b/phase3/`.
+7. **Phase 4 (next)** — triage + breakdown + vLLM cross-check per case (start A, C); author `analysis/run2_qwen3vl8b/hypotheses.md` and `ranked_recommendations.md`. Carry Case B caveats.
 8. Phase 5 (if warranted) — tier-2 validation sweeps for the top 2 hypotheses.
 9. Promote `analysis/**` into `reports/**` deliverables.

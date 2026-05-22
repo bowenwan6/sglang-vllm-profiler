@@ -17,9 +17,9 @@ measurement round** — run1's Phase 1/2 numbers are historical reference only a
 |---|---|---|
 | 0 — Equivalence | ✅ **PASS** | `phase0/` (run-local) + promoted to canonical `../phase0/` |
 | 1 — Baseline | ✅ **complete** (24 runs, 0 failures) | `phase1/summary.md`, `phase1/raw/`, `phase1/scripts/` |
-| 2 — Shaping | ⬜ not started | `phase2/`, `phase2_shaping/` |
-| 3 — Profiling | ⬜ not started | `../../traces/run2_qwen3vl8b/` |
-| 4 — Triage | ⬜ not started | `../../analysis/run2_qwen3vl8b/` |
+| 2 — Shaping / Variance gate | ✅ **complete** (incl. Case C W500 probe, GPU 1) | `phase2/summary.md`, `phase2/selected_cases.md`, `phase2/raw/` |
+| 3 — Profiling / Trace collection | ✅ **complete** (GPU 1; SGLang DECODE + EXTEND, vLLM prefill/decode; Case B graph-on EXTEND-formal missing — caveat) | `phase3/summary.md`, `phase3/extend_supplement_summary.md`, `phase3/metadata/`, `../../traces/run2_qwen3vl8b/` |
+| 4 — Triage | ⬜ not started (next) | `../../analysis/run2_qwen3vl8b/` |
 | 5 — Validation | ⬜ not started | `phase5/` |
 
 ## Artifact index
@@ -43,6 +43,8 @@ measurement round** — run1's Phase 1/2 numbers are historical reference only a
 - Isolation: never overwrite run1 artifacts, `datasets/case*.jsonl`, `plan.md`, or `README.md`.
 
 ## Next step
-Generate run2 datasets for the Qwen3-VL-8B text-only path (special-token-safe, as in run1's
-`gen_datasets.py`), then run Phase 1 baseline (4-case matrix A/B/C/D) on GPU 0. Plan first, no
-execution until confirmed.
+**Phase 4 triage** — interpret the Phase 3 traces (`../../traces/run2_qwen3vl8b/`). Start with Case A
+and Case C; produce per-case kernel/overlap/fuse triage + breakdown + vLLM cross-check, then
+`../../analysis/run2_qwen3vl8b/hypotheses.md` and `ranked_recommendations.md`. Carry Case B caveats
+(graph-on EXTEND-formal trace missing; confidence ceiling M). See `phase3/summary.md` +
+`phase3/extend_supplement_summary.md` for trace inventory and caveats.
