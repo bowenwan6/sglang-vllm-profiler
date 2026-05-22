@@ -27,13 +27,29 @@ formal = without) → start continuous `max_new_tokens=1` load → `sglang.profi
 Paths: `traces/run2_qwen3vl8b/{case}/sglang_extend_mapping/<ts>/*-TP-0-EXTEND.trace.json.gz` (+ `server_args.json`),
 and the same under `sglang_extend_formal/` (except Case B formal).
 
-## Case B graph-on EXTEND — failed attempt (documented deviation)
+## Case B graph-on EXTEND — could not be captured (documented deviation, 8 attempts)
 
-Case B `extend_formal` (graph-on, 2048→prefill, c=1) returned **DECODE-only on all 3 attempts**
-(1 initial + 2 retries). With CUDA graph on and a single large 2048-token prefill at c=1, the 10-step
-profile window consistently lands on fast graph-replayed decode steps. The 3 redundant DECODE-only
-attempt dirs were **removed** (DECODE data already exists in `sglang_formal/`), so no EXTEND-formal
-dir exists for Case B.
+Case B `extend_formal` (graph-on, 2048→prefill) **could not capture EXTEND across 8 total attempts**:
+
+- **First supplement run (3 attempts):** num_steps=10, c=1 → DECODE-only every time.
+- **Targeted retry (5 strategies, `run_phase3_caseB_extend_retry.py`):** graph-on, prefill-only load,
+  escalating window/concurrency — all failed:
+
+  | Strategy | conc | num_steps | result |
+  |---|---|---|---|
+  | s1 | 1 | 50 | DECODE-only (19.5 MB) |
+  | s2 | 1 | 100 | **empty** (0 files) |
+  | s3 | 2 | 100 | **empty** |
+  | s4 | 4 | 100 | **empty** |
+  | s5 | 4 | 200 | **empty** |
+
+Finding: with graph-on, a `num_steps=10` window lands on fast graph-replayed decode (DECODE-only),
+and **larger windows (≥50–100) produce empty stage traces** — the profiler's `--profile-by-stage`
+prefill collection does not trigger for the Case B graph-on path. This is a profiler-behavior limit;
+fixing it would require SGLang source changes (out of scope). All failed/empty attempt dirs were
+removed (no `sglang_extend_formal_retry/` artifacts retained); metadata at
+`metadata/caseB_extend_formal_retry_meta.json`. The original 3 DECODE-only `sglang_extend_formal`
+attempt dirs were already removed in the prior step.
 
 **Impact: low.** The graph-off **mapping** trace is the one that carries the
 `kernel → cpu_op → python_scope` mapping required for prefill-stage attribution, and Case B mapping

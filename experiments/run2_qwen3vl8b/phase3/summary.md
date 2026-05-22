@@ -56,8 +56,10 @@ logs/run2_qwen3vl8b/phase3/                                   # server + kapi L1
    armed during in-flight decode). **RESOLVED by the EXTEND supplement** (see
    `extend_supplement_summary.md`): a prefill-only load (`max_new_tokens=1`) was used to capture
    `sglang_extend_{mapping,formal}/` EXTEND traces — captured for A/C/D (both graph modes) and Case B
-   graph-off mapping; Case B graph-on EXTEND could not be captured (low impact — the graph-off mapping
-   trace carries the kernel→source mapping). Original DECODE traces remain valid and untouched.
+   graph-off mapping; Case B graph-on EXTEND could not be captured **after 8 attempts** (a dedicated
+   5-strategy retry — larger num_steps, higher conc — also failed; num_steps≥50 yields empty stage
+   traces on the graph-on path). Low impact — the graph-off mapping trace carries the kernel→source
+   mapping. Original DECODE traces remain valid and untouched.
 2. **Case B carries confidence ceiling M** (both SGLang and vLLM bimodal at 2048→128 c=1) — recorded
    in `caseB_longprefill_meta.json`; all Case B cross-framework conclusions in Phase 4 must carry M.
 3. **Single representative trace per (framework, stage, case)** — not 3/5 repeated trace reps. The

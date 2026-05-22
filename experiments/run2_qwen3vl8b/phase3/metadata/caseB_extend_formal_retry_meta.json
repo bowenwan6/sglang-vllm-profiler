@@ -1,0 +1,62 @@
+{
+  "case": "caseB_longprefill",
+  "purpose": "targeted graph-on EXTEND formal retry",
+  "model_snapshot": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+  "dataset": "caseB_longprefill.jsonl",
+  "gpu": "1",
+  "graph_mode": "graph-on (formal)",
+  "server_flags": [],
+  "load": "prefill-only /generate max_new_tokens=1",
+  "strategies_tried": [
+    {
+      "name": "s1_c1_n50",
+      "conc": 1,
+      "num_steps": 50,
+      "canonical": true,
+      "ok": false,
+      "stages": [
+        "DECODE"
+      ],
+      "reason": "no_extend"
+    },
+    {
+      "name": "s2_c1_n100",
+      "conc": 1,
+      "num_steps": 100,
+      "canonical": true,
+      "ok": false,
+      "stages": [],
+      "reason": "no_extend"
+    },
+    {
+      "name": "s3_c2_n100",
+      "conc": 2,
+      "num_steps": 100,
+      "canonical": false,
+      "ok": false,
+      "stages": [],
+      "reason": "no_extend"
+    },
+    {
+      "name": "s4_c4_n100",
+      "conc": 4,
+      "num_steps": 100,
+      "canonical": false,
+      "ok": false,
+      "stages": [],
+      "reason": "no_extend"
+    },
+    {
+      "name": "s5_c4_n200",
+      "conc": 4,
+      "num_steps": 200,
+      "canonical": false,
+      "ok": false,
+      "stages": [],
+      "reason": "no_extend"
+    }
+  ],
+  "timestamp_utc": "2026-05-22T17:48:21.192041+00:00",
+  "success": false,
+  "note": "graph-on EXTEND not captured after 5 strategies; graph-off mapping EXTEND remains the prefill-stage source for Case B"
+}
