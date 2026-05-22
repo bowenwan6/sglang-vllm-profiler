@@ -51,11 +51,13 @@ logs/run2_qwen3vl8b/phase3/                                   # server + kapi L1
 
 ## Deviations / caveats (for Phase 4 awareness — not interpretation)
 
-1. **SGLang stage = DECODE only.** `--profile-by-stage` captured 10 decode forward-steps in every
-   SGLang run; **no EXTEND/PREFILL-stage SGLang trace was produced** (the profiler window armed during
-   in-flight decode). vLLM `prefill_like` windows cover the prefill side, but SGLang prefill-stage
-   kernel mapping is **not** in this collection. If Phase 4 needs SGLang prefill-stage kernels, a
-   targeted EXTEND capture (arm profiler at request arrival) is a required follow-up.
+1. **SGLang stage in the ORIGINAL collection = DECODE only.** The initial `--profile-by-stage` runs
+   captured 10 decode forward-steps each; no EXTEND/PREFILL-stage SGLang trace was produced (profiler
+   armed during in-flight decode). **RESOLVED by the EXTEND supplement** (see
+   `extend_supplement_summary.md`): a prefill-only load (`max_new_tokens=1`) was used to capture
+   `sglang_extend_{mapping,formal}/` EXTEND traces — captured for A/C/D (both graph modes) and Case B
+   graph-off mapping; Case B graph-on EXTEND could not be captured (low impact — the graph-off mapping
+   trace carries the kernel→source mapping). Original DECODE traces remain valid and untouched.
 2. **Case B carries confidence ceiling M** (both SGLang and vLLM bimodal at 2048→128 c=1) — recorded
    in `caseB_longprefill_meta.json`; all Case B cross-framework conclusions in Phase 4 must carry M.
 3. **Single representative trace per (framework, stage, case)** — not 3/5 repeated trace reps. The
@@ -69,8 +71,9 @@ logs/run2_qwen3vl8b/phase3/                                   # server + kapi L1
 - ✅ vLLM prefill_like trace exists + non-empty (all 4 cases).
 - ✅ vLLM decode_like trace exists + non-empty (all 4 cases).
 - ✅ Metadata records framework versions/flags/warmup/reps/dataset SHA/GPU/timestamps/sizes; Case B ceiling M.
-- ⚠️ Stage separation: DECODE captured for SGLang; EXTEND/prefill-stage SGLang **not** captured (see Deviation 1).
+- ✅ Stage separation: DECODE captured for SGLang (all 4 cases); EXTEND captured via supplement for
+  all 4 cases (graph-off mapping) + A/C/D graph-on (Case B graph-on EXTEND absent, low impact).
 - ✅ No final hypotheses produced (Phase 4 does that).
 
-**Phase 4 can start** on the collected DECODE-stage SGLang traces + vLLM prefill/decode windows. If
-prefill-stage SGLang attribution is required, schedule the EXTEND follow-up capture first.
+**Phase 4 can start** on both stages: SGLang DECODE (original) + EXTEND (supplement) + vLLM
+prefill/decode windows. See `extend_supplement_summary.md` for the EXTEND details.

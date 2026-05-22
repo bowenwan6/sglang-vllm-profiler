@@ -38,5 +38,31 @@
       "size_bytes": 65948988,
       "trace_dir": "/data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseB_longprefill/vllm/decode_like"
     }
+  },
+  "extend_supplement": {
+    "timestamp_utc": "2026-05-22T16:35:10.861972+00:00",
+    "gpu": "1",
+    "num_steps": 10,
+    "load": "prefill-only /generate max_new_tokens=1",
+    "traces": {
+      "sglang_extend_mapping": {
+        "ok": true,
+        "stages": [
+          "EXTEND"
+        ],
+        "has_extend": true,
+        "size_bytes": 67025639,
+        "trace_dir": "/data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseB_longprefill/sglang_extend_mapping",
+        "reason": null
+      },
+      "sglang_extend_formal": {
+        "ok": false,
+        "stages": [],
+        "has_extend": false,
+        "size_bytes": 37725390,
+        "trace_dir": null,
+        "reason": "graph-on EXTEND not capturable (3 attempts all DECODE); dir removed (redundant DECODE). graph-off mapping EXTEND captured."
+      }
+    }
   }
 }

@@ -1,0 +1,80 @@
+{
+  "caseA_short": {
+    "sglang_extend_mapping": {
+      "ok": true,
+      "stages": [
+        "EXTEND"
+      ],
+      "size_bytes": 36115026,
+      "trace_dir": "/data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseA_short/sglang_extend_mapping",
+      "reason": null
+    },
+    "sglang_extend_formal": {
+      "ok": true,
+      "stages": [
+        "EXTEND"
+      ],
+      "size_bytes": 36098254,
+      "trace_dir": "/data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseA_short/sglang_extend_formal",
+      "reason": null
+    }
+  },
+  "caseB_longprefill": {
+    "sglang_extend_mapping": {
+      "ok": true,
+      "stages": [
+        "EXTEND"
+      ],
+      "size_bytes": 67025639,
+      "trace_dir": "/data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseB_longprefill/sglang_extend_mapping",
+      "reason": null
+    },
+    "sglang_extend_formal": {
+      "ok": false,
+      "stages": [],
+      "size_bytes": null,
+      "trace_dir": null,
+      "reason": "graph-on EXTEND not capturable after 3 attempts; removed redundant DECODE dir"
+    }
+  },
+  "caseC_batched": {
+    "sglang_extend_mapping": {
+      "ok": true,
+      "stages": [
+        "EXTEND"
+      ],
+      "size_bytes": 49226435,
+      "trace_dir": "/data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseC_batched/sglang_extend_mapping",
+      "reason": null
+    },
+    "sglang_extend_formal": {
+      "ok": true,
+      "stages": [
+        "EXTEND"
+      ],
+      "size_bytes": 32160653,
+      "trace_dir": "/data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseC_batched/sglang_extend_formal",
+      "reason": null
+    }
+  },
+  "caseD_decode": {
+    "sglang_extend_mapping": {
+      "ok": true,
+      "stages": [
+        "EXTEND"
+      ],
+      "size_bytes": 52528462,
+      "trace_dir": "/data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseD_decode/sglang_extend_mapping",
+      "reason": null
+    },
+    "sglang_extend_formal": {
+      "ok": true,
+      "stages": [
+        "EXTEND"
+      ],
+      "size_bytes": 35589779,
+      "trace_dir": "/data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseD_decode/sglang_extend_formal",
+      "reason": null
+    }
+  }
+}

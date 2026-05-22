@@ -38,5 +38,33 @@
       "size_bytes": 112427688,
       "trace_dir": "/data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseC_batched/vllm/decode_like"
     }
+  },
+  "extend_supplement": {
+    "timestamp_utc": "2026-05-22T16:37:59.770062+00:00",
+    "gpu": "1",
+    "num_steps": 10,
+    "load": "prefill-only /generate max_new_tokens=1",
+    "traces": {
+      "sglang_extend_mapping": {
+        "ok": true,
+        "stages": [
+          "EXTEND"
+        ],
+        "has_extend": true,
+        "size_bytes": 49226435,
+        "trace_dir": "/data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseC_batched/sglang_extend_mapping",
+        "reason": null
+      },
+      "sglang_extend_formal": {
+        "ok": true,
+        "stages": [
+          "EXTEND"
+        ],
+        "has_extend": true,
+        "size_bytes": 32160653,
+        "trace_dir": "/data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseC_batched/sglang_extend_formal",
+        "reason": null
+      }
+    }
   }
 }
