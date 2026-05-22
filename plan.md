@@ -22,16 +22,41 @@
 | Phase | run2 status |
 |---|---|
 | 0 — Equivalence | ✅ **complete + PASS** (canonical: `experiments/phase0/`) |
-| 1 — Baseline | ⬜ not started |
+| 1 — Baseline | ✅ **complete** (24 runs, 0 failures; `experiments/run2_qwen3vl8b/phase1/summary.md`) |
 | 2 — Shaping | ⬜ not started |
 | 3 — Profiling | ⬜ not started |
 | 4 — Triage | ⬜ not started |
 | 5 — Validation | ⬜ not started |
 
+**run2 Phase 1 baseline (active — supersedes the run1 table in §15).** 24 runs (4 cases × 2
+frameworks × 3 reps), **error rate 0% on all**. Greedy (`temperature=0, top_p=1`, `ignore_eos`
+default), GPU 0, both frameworks on torch 2.11.0+cu130 / CUDA 13.0.
+
+| Case | SGLang TTFT p50 | vLLM TTFT p50 | Ratio | TPOT | Note |
+|---|---|---|---|---|---|
+| A — 128→128, c=1 | 61.8 ms | 12.6 ms | **4.89×** | parity (0.97×) | low CV; cleanest |
+| B — 2048→128, c=1 | 66.7 ms | 20.8 ms | **3.20×** | parity (0.97×) | **vLLM bimodal (cv 114%) → ceiling M** |
+| C — 512→128, c=16 | 247.5 ms | 187.9 ms | **1.32×** | parity (0.99×) | SGLang p50 cv 9.4% (variance gate needed) |
+| D — 512→512, c=16 | 253.0 ms | 189.7 ms | **1.33×** | parity (1.00×) | **SGLang p99 390.6 ms, p99 cv 47% (bimodal tail)** |
+
+Key findings (run2): **TTFT is the only gap**; TPOT and throughput are at parity (0.91–1.01×).
+The c=1 dispatch floor persists and **prefill is cheap** — prompt 16× longer (A→B) adds only
+**+4.9 ms** to SGLang TTFT (61.8→66.7). Direction is highly consistent with run1; magnitudes differ
+(e.g. Case A ratio 4.89× vs run1 3.89×) so **numbers are not interchangeable**. torch/CUDA are now
+aligned across frameworks (removes run1's torch-version confound), but the **attention backend still
+differs (SGLang FlashInfer vs vLLM FlashAttention v3) → any attention-kernel conclusion carries
+confidence ceiling M**. Full table + p95/p99 + CV + error rate: `experiments/run2_qwen3vl8b/phase1/summary.md`.
+
+**Phase 2 entry recommendation (run2):**
+- **Case A — primary.** Enter Phase 2 shaping; confirm whether the ~62 ms scheduler/dispatch floor is still *structural* (no flag closes it by ≥10 ms).
+- **Case B — primary.** Enter Phase 2 shaping; same floor, but all vLLM comparisons carry **confidence ceiling M** (vLLM Case B bimodal).
+- **Case C — secondary.** Enter Phase 2 **variance gate** first (SGLang p50 cv ≈ 9.4%) — extend warmup before any shaping/promotion.
+- **Case D — variance/bimodal gate.** Likely **drop** (p99 cv 47%, bimodal tail), but confirm formally in Phase 2 as run1 did.
+
 **Relationship to run1 (historical):** `experiments/phase1/`, `experiments/phase2/`,
 `experiments/phase2_shaping/` hold **run1** numbers, measured under a different environment
 (GPU 6, CUDA 12.9, SGLang `ga4cf2ea12`, vLLM 0.19.0, torch 2.9.1/2.10.0). Per §6.4, those numbers
-**cannot be reused as run2 conclusions** — run2 re-measures Phase 1+ from scratch. The §15 "Results"
+**cannot be reused as run2 conclusions** — run2 re-measured Phase 0+1 from scratch. The §15 "Results"
 section below is **run1 historical** except where marked run2. Active environment detail:
 `experiments/env_snapshot.md`. run2 working tree: `experiments/run2_qwen3vl8b/` (see its `README.md`).
 
@@ -370,6 +395,12 @@ A human reviewer validating the project should inspect artifacts in this sequenc
 
 ### Phase 1 — Minimal Fair Baseline (1 day)
 
+> ✅ **run2 status: complete.** Executed on GPU 0 with run2 scripts at
+> `experiments/run2_qwen3vl8b/phase1/scripts/` (greedy via `--extra-request-body`, datasets under
+> `datasets/run2_qwen3vl8b/`). Results in §0 and §15. The protocol below is the method; the commands
+> show the original run1 form (GPU 6, and note the run1 dataset-generator caveat) — run2 used GPU 0
+> and the custom special-token-safe generator.
+
 **Goal.** Produce one head-to-head table on a small deliberate matrix — clean enough to believe.
 
 **Case matrix.**
@@ -441,7 +472,7 @@ A human reviewer validating the project should inspect artifacts in this sequenc
 
 ---
 
-### Phase 2 — Identify Informative Cases ✅ complete
+### Phase 2 — Identify Informative Cases  *(run1: ✅ complete · run2: ⬜ not started)*
 
 **Goal.** Given Phase-1 evidence (TTFT gap is universal, TPOT at parity), decide which cases enter Phase-3 profiling and with what shaping. All four questions below are now answered.
 
@@ -788,6 +819,26 @@ Never invert a row. Auto-benchmark does not read kernels; profiler-analysis does
 - Tier B **EXACT** byte-identical greedy outputs on all 3 prompts.
 - **Verdict: PASS** → cleared for run2 Phase 1. Canonical artifacts: `experiments/phase0/`.
 
+### Phase 1 (run2, active) — Minimal Fair Baseline (completed 2026-05-22)
+
+- 24 runs (4 cases × 2 frameworks × 3 reps), **error rate 0% on every run**. GPU 0, serial servers;
+  greedy (`temperature=0, top_p=1`, `ignore_eos` default); both frameworks torch 2.11.0+cu130 / CUDA 13.0.
+- Datasets: `datasets/run2_qwen3vl8b/case{A,B,C,D}.jsonl` (text-only, special-token-safe, SEED=1; SHA-256 logged). Old `datasets/case*.jsonl` untouched.
+
+| Case | SGLang TTFT p50/p95/p99 (ms) | vLLM TTFT p50/p95/p99 (ms) | p50 ratio | TPOT | Throughput | CV / variance |
+|---|---|---|---|---|---|---|
+| A 128→128 c1 | 61.8 / 66.1 / 66.4 | 12.6 / 17.9 / 18.0 | **4.89×** | 0.97× ≈ | 0.96× | low (1.5–4.4%) |
+| B 2048→128 c1 | 66.7 / 70.6 / 71.6 | 20.8 / 25.4 / 26.0 | **3.20×** | 0.97× ≈ | 0.97× | SGLang low; **vLLM bimodal cv 114% → ceiling M** |
+| C 512→128 c16 | 247.5 / 255.4 / 257.4 | 187.9 / 196.7 / 209.1 | **1.32×** | 0.99× ≈ | 0.91× ↓ | SGLang p50 cv 9.4% (gate) |
+| D 512→512 c16 | 253.0 / 257.3 / **390.6** | 189.7 / 196.2 / 222.4 | **1.33×** | 1.00× ≈ | 0.98× | **SGLang p99 cv 47% (bimodal tail)** |
+
+- **TTFT is the only gap; TPOT/throughput at parity** (0.91–1.01×).
+- **Fixed overhead / prefill cheap holds:** A→B prompt 16× longer adds only **+4.9 ms** SGLang TTFT.
+- **Direction matches run1**, magnitudes differ (Case A 4.89× vs run1 3.89×; vLLM Case B bimodal again; Case D bimodal tail again) — **numbers not interchangeable**.
+- **Confidence ceilings:** vLLM Case B comparisons → M (bimodal); any attention-kernel finding → M (FlashInfer vs FA3 backend mismatch).
+- Phase 2 entry: A primary, B primary (vLLM ceiling M), C secondary (variance gate), D likely drop (bimodal). See §0.
+- Artifacts: `experiments/run2_qwen3vl8b/phase1/summary.md`, `phase1/raw/`, `phase1/scripts/`; logs `logs/run2_qwen3vl8b/phase1/`.
+
 ---
 
 ### Phase 0 — Environment & Functional Equivalence (run1 historical, completed 2026-04-17)
@@ -869,7 +920,7 @@ All 3 outputs byte-identical under greedy sampling. No downstream "semantic-leve
 
 ---
 
-### Phase 1 — Minimal Fair Baseline (completed 2026-04-17)
+### Phase 1 — Minimal Fair Baseline (run1 historical, completed 2026-04-17)
 
 #### Run conditions
 - GPU: H200 index 6, `CUDA_VISIBLE_DEVICES=6`, `HF_HUB_OFFLINE=1`
@@ -905,7 +956,7 @@ All CV values for TPOT and throughput are ≤2% — decode metrics are stable. T
 - Case A is highest priority: the scheduling overhead hypothesis is clean, low-noise, and directly actionable.
 - Cases C and D: run a short reshaping sweep to reduce TTFT variance before committing to profiling.
 
-### Phase 2 — Identify Informative Cases (completed 2026-04-24)
+### Phase 2 — Identify Informative Cases (run1 historical, completed 2026-04-24)
 
 #### Step 2.1 — Case A scheduler-overhead sweep (completed 2026-04-24)
 
