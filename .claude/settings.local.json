@@ -77,7 +77,14 @@
       "Bash(/opt/miniconda3/envs/profiling/bin/python -m pip install pandas datasets)",
       "Bash(/opt/miniconda3/envs/profiling/bin/python -c 'import torch; print\\('\\\\''torch'\\\\'', torch.__version__, '\\\\''| cuda avail'\\\\'', torch.cuda.is_available\\(\\), '\\\\''| cuda'\\\\'', torch.version.cuda, '\\\\''| device_count'\\\\'', torch.cuda.device_count\\(\\)\\)')",
       "Bash(/opt/miniconda3/envs/profiling/bin/python -c 'import vllm; print\\('\\\\''vllm'\\\\'', vllm.__version__\\)')",
-      "Bash(echo \"orchestrator PID: $!\")"
+      "Bash(echo \"orchestrator PID: $!\")",
+      "Bash(mkdir -p /root/.claude/skills)",
+      "Bash([ -e \"$SKILLDIR/$s\" ])",
+      "Bash(ln -s __TRACKED_VAR__/__TRACKED_VAR__ /root/.claude/skills/__TRACKED_VAR__)",
+      "Bash(gh auth *)",
+      "Bash(gh api *)",
+      "Bash(curl -s --max-time 20 \"https://api.github.com/repos/BBuf/SGLang-Auto-Driven-SKILLS/contents/skills\")",
+      "Bash(curl -sL --max-time 25 \"https://api.github.com/repos/BBuf/SGLang-Auto-Driven-SKILLS/contents/skills\")"
     ]
   }
 }

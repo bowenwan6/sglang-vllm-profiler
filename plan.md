@@ -167,6 +167,38 @@ Findings that rest on framework-intrinsic variables are valid *design observatio
 
 Authoritative role definitions. The Quick-Reference in §13 is a summary; this section wins on any conflict.
 
+### 7.0 Skill availability & invocation (run2, verified 2026-05-22)
+
+All three skills this project relies on are **present in the SGLang checkout** at
+`/sgl-workspace/sglang/.claude/skills/` and have been registered for Claude Code by symlinking them
+into `~/.claude/skills/` (no source modification, no overwrite). Two were upstreamed and **renamed**
+to framework-independent names — the names in §7.1/§7.2/§13 below are the original plan names; use
+the right-hand column when invoking:
+
+| Plan name (§7/§13) | Installed skill name (current) | Source / status | Availability |
+|---|---|---|---|
+| `sglang-auto-benchmark` | **`llm-serving-auto-benchmark`** | PR #21736 **merged** into current repo | ✅ `python3 -m sglang.auto_benchmark {convert,validate,run}` works; skill has scripts/configs/references |
+| `sglang-torch-profiler-analysis` | **`llm-torch-profiler-analysis`** | upstreamed (unified sglang/vllm/trtllm); BBuf standalone is the older fork | ✅ `analyze_llm_torch_profile.py --help` OK (shim `analyze_sglang_torch_profile.py` kept); catalogs present |
+| `debug-cuda-crash` | `debug-cuda-crash` (unchanged) | in current repo; `SGLANG_KERNEL_API_LOGLEVEL/LOGDEST` supported in source | ✅ L1 already in use on every run2 server launch |
+
+Notes: skills load at **session start**, so newly symlinked skills become Skill-tool-invokable only
+after a session reload — but their scripts are runnable now via direct path. The optional `b200` /
+`h100` / `h200` skills referenced historically no longer exist under those names (BBuf repo
+reorganized); no extra install needed.
+
+**When/how to use in run2:**
+- **Phase 2 (shaping):** `llm-serving-auto-benchmark` `run` for pure-SGLang YAML flag sweeps, *or*
+  the run2 custom scripts (`experiments/run2_qwen3vl8b/phase1/scripts/`-style) when a sweep must also
+  drive vLLM or needs full flag control. `debug-cuda-crash` at L1 on every server launch.
+- **Phase 3 (collection):** `llm-torch-profiler-analysis` collection scripts
+  (`run_sglang_torch_profile_host.sh` + `--profile-by-stage` for SGLang mapping+formal;
+  `run_vllm_torch_profile_host.sh` for vLLM windows). No triage yet. `debug-cuda-crash` L1; escalate
+  to L3/L5/L10 only on an actual crash.
+- **Phase 4 (triage):** `llm-torch-profiler-analysis` `triage` (two-trace SGLang + single-trace vLLM)
+  with mandatory catalog lookup against `references/{fuse-overlap-catalog,overlap-catalog,source-map}.md`.
+- **Phase 5 (validation):** `llm-serving-auto-benchmark` `run` tier-2 on the hypothesis-named flag;
+  optional re-`triage` to confirm the mechanism moved.
+
 ### 7.1 `sglang-auto-benchmark` — controlled experimentation on SGLang
 
 **Solves.** Manual flag sweeps are combinatorial, error-prone, non-resumable. This skill takes a YAML spec of candidate flags × QPS × concurrency × SLA, runs each candidate with a fresh server, tracks SLA pass/fail, and writes resumable results. It also owns the canonical autobench JSONL format (`convert` / `validate`).
@@ -777,7 +809,9 @@ Ordered by reviewer reading priority.
 
 ## 13. Skill Usage Quick-Reference
 
-Authoritative definitions in §7. If this table disagrees, §7 wins.
+Authoritative definitions in §7. If this table disagrees, §7 wins. Current installed skill names
+(see §7.0): auto-benchmark = `llm-serving-auto-benchmark`, profiler-analysis = `llm-torch-profiler-analysis`,
+debug-cuda-crash = `debug-cuda-crash`.
 
 | Phase | auto-benchmark | profiler-analysis | debug-cuda-crash |
 |---|---|---|---|
