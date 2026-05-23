@@ -1,0 +1,33 @@
+Triage View
+Mode: mapping-formal
+Framework: SGLang
+Mapping traces: /data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseB_longprefill/sglang_mapping/1779464996.7876115/1779464996.8229702-TP-0-DECODE.trace.json.gz
+Formal traces: /data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseB_longprefill/sglang_formal/1779465083.412213/1779465083.4224756-TP-0-DECODE.trace.json.gz
+
+Kernel Table
+##### decode
+| Kernel | Category | GPU time | Share | Launches | Python location (site share) | CPU op |
+| --- | --- | ---: | ---: | ---: | --- | --- |
+| nvjet_sm90_tst_256x144_64x4_2x1_v_bz_coopA_TNT | gemm | 19.45 ms | 40.0% | 36 | python/sglang/srt/layers/quantization/unquant.py:138 apply | aten::mm |
+| nvjet_sm90_tst_128x272_64x4_2x1_v_bz_coopA_TNT | gemm | 18.22 ms | 37.5% | 108 | python/sglang/srt/layers/quantization/unquant.py:138 apply | aten::mm |
+| void flashinfer::BatchPrefillWithPagedKVCacheKernel<flashinfer::KernelTraits<(flashinfer::MaskMode)1, 128u, 2u, 4u, 8u, 8u, 4u, 1u, (flashinfer::PosEncodingMode)0, __nv_bfloat16, __nv_bfloat16, __nv_bfloat16, float, int, flashinfer::DefaultAttention<false, false, false, false> >, PagedParams> | attention | 6.28 ms | 12.9% | 36 | python/sglang/srt/layers/attention/flashinfer_backend.py:779 forward_extend | cudaLaunchKernelExC |
+| void (anonymous namespace)::act_and_mul_kernel<__nv_bfloat16, ((anonymous namespace)::ActivationKind)0, true, false> | activation | 1.28 ms | 2.6% | 36 | python/sglang/kernel_api_logging.py:417 wrapper | sglang::_run_activation_inplace |
+| kernel_cutlass_kernel_flashinfernormkernelsfused_add_rmsnormFusedAddRMSNormKernel_object_at__tensorptrbf16gmemalign128o409640961_tensorptrbf16gmemalign128o409640961_tensorptrbf16gmemalign_0 | gemm | 1.09 ms | 2.2% | 72 | python/sglang/kernel_api_logging.py:417 wrapper | cudaLaunchKernelExC |
+| void at::native::elementwise_kernel<128, 4, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#12}::operator()() const::{lambda(c10::BFloat16)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#12}::operator()() const::{lambda(c10::BFloat16)#1} const&)::{lambda(int)#1}> | memory | 0.62 ms | 1.3% | 36 | python/sglang/srt/layers/attention/flashinfer_backend.py:779 forward_extend | aten::copy_ |
+
+Overlap Opportunity Table
+##### decode
+| Priority | Verdict | Kernel | Python scope | Formal signal | Dep risk | Recommendation |
+| --- | --- | --- | --- | --- | --- | --- |
+| P2 | headroom | nvjet_sm90_tst_256x144_64x4_2x1_v_bz_coopA_TNT | python/sglang/srt/layers/quantization/unquant.py:138 apply | 19447.5 us, share 40.1%, excl 100.0% / hid 0.0% | high | check deps |
+| P1 | headroom | nvjet_sm90_tst_128x272_64x4_2x1_v_bz_coopA_TNT | python/sglang/srt/layers/quantization/unquant.py:138 apply | 18215.3 us, share 37.5%, excl 100.0% / hid 0.0% | low | try fusion |
+| P1 | headroom | void (anonymous namespace)::act_and_mul_kernel<__nv_bfloat16, ((anonymous namespace)::ActivationKind)0, true, false> | python/sglang/kernel_api_logging.py:417 wrapper | 1278.7 us, share 2.6%, excl 100.0% / hid 0.0% | low | try fusion |
+| P1 | headroom | void at::native::elementwise_kernel<128, 4, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#12}::operator()() const::{lambda(c10::BFloat16)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#12}::operator()() const::{lambda(c10::BFloat16)#1} const&)::{lambda(int)#1}> | python/sglang/srt/layers/attention/flashinfer_backend.py:779 forward_extend | 620.1 us, share 1.3%, excl 100.0% / hid 0.0% | low | try fusion |
+
+Fuse Opportunity Table
+##### decode
+| Pattern | Confidence | Related GPU time | Share | Evidence kernels | Current kernel Python location | Candidate fused Python path | Rationale |
+| --- | --- | ---: | ---: | --- | --- | --- | --- |
+| PR #22392 CUTLASS FP8 scaled MM replacing nvjet | Confirmed | 38.02 ms | 78.3% | nvjet_sm90_tst_256x144_64x4_2x1_v_bz_coopA_TNT (40.0%)<br>nvjet_sm90_tst_128x272_64x4_2x1_v_bz_coopA_TNT (37.5%) | apply @ python/sglang/srt/layers/quantization/unquant.py:138<br>_compute_lm_head @ python/sglang/srt/layers/logits_processor.py:887<br>forward @ python/sglang/srt/layers/sampler.py:93 | PR #22392<br>sgl-kernel/python/sgl_kernel/gemm.py<br>python/sglang/srt/layers/quantization/fp8_utils.py | Matches an open upstream path (78.3% related GPU time). Open SGLang PR replaces nvjet FP8 GEMM with CUTLASS to remove memset bubbles and extra copies. |
+| Fused QK RoPE reshape + KV cache write | Confirmed | 6.82 ms | 14.1% | void flashinfer::BatchPrefillWithPagedKVCacheKernel<flashinfer::KernelTraits<(flashinfer::MaskMode)1, 128u, 2u, 4u, 8u, 8u, 4u, 1u, (flashinfer::PosEncodingMode)0, __nv_bfloat16, __nv_bfloat16, __nv_bfloat16, float, int, flashinfer::DefaultAttention<false, false, false, false> >, PagedParams> (12.9%) | triton_mrope_fused @ python/sglang/srt/layers/rotary_embedding/triton_kernels.py:111<br>_compute_mrope_positions @ python/sglang/srt/model_executor/forward_batch_info.py:823<br>call_begin_forward @ python/sglang/srt/layers/attention/flashinfer_backend.py:1102<br>forward_extend @ python/sglang/srt/layers/attention/flashinfer_backend.py:779 | python/sglang/srt/layers/attention/utils.py | Split kernels in this family take 14.1% of GPU time. This tree already has a matching path. Attention prep already has a fused RoPE plus reshape plus cache write path. |
+| Fused residual add + RMSNorm | Confirmed | 1.09 ms | 2.2% | kernel_cutlass_kernel_flashinfernormkernelsfused_add_rmsnormFusedAddRMSNormKernel_object_at__tensorptrbf16gmemalign128o409640961_tensorptrbf16gmemalign128o409640961_tensorptrbf16gmemalign_0 (2.2%) | wrapper @ python/sglang/kernel_api_logging.py:417 | python/sglang/srt/layers/layernorm.py<br>python/sglang/srt/layers/quantization/modelslim/modelslim.py | `Fused residual add + RMSNorm` is present in this trace (2.2% related GPU time). Residual add plus RMSNorm already has fused implementations across several backends. |

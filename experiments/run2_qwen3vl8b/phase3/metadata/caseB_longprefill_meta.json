@@ -64,5 +64,18 @@
         "reason": "graph-on EXTEND not capturable (3 attempts all DECODE); dir removed (redundant DECODE). graph-off mapping EXTEND captured."
       }
     }
+  },
+  "extend_mapping_recollect": {
+    "timestamp_utc": "2026-05-23T00:56:41.912861+00:00",
+    "attempt": 3,
+    "fix": "--disable-radix-cache to force real long prefill; post-kill flush poll",
+    "gpu": "1",
+    "graph_off": true,
+    "radix_cache_disabled": true,
+    "num_steps": 10,
+    "ok": false,
+    "extend_gz": null,
+    "decode_gz_seen": "/data/sglang-vllm-profiler/traces/run2_qwen3vl8b/caseB_longprefill/sglang_extend_mapping/1779497567.4676898/1779497567.514245-TP-0-DECODE.trace.json.gz",
+    "size_bytes": 0
   }
 }

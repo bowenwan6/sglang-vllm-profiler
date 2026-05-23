@@ -1,0 +1,28 @@
+Traceback (most recent call last):
+  File "/root/.claude/skills/llm-torch-profiler-analysis/scripts/analyze_llm_torch_profile.py", line 858, in <module>
+    raise SystemExit(main(sys.argv[1:]))
+                     ^^^^^^^^^^^^^^^^^^
+  File "/root/.claude/skills/llm-torch-profiler-analysis/scripts/analyze_llm_torch_profile.py", line 854, in main
+    return run_triage(parse_triage_args(argv))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/.claude/skills/llm-torch-profiler-analysis/scripts/analyze_llm_torch_profile.py", line 636, in run_triage
+    mapping_kernel_map = build_mapping_kernel_map(mapping_traces, mapping_framework)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/.claude/skills/llm-torch-profiler-analysis/scripts/analyze_llm_torch_profile.py", line 328, in build_mapping_kernel_map
+    trace = load_trace_json(trace_path)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/sgl-workspace/sglang/.claude/skills/llm-torch-profiler-analysis/scripts/profile_common.py", line 192, in load_trace_json
+    return json.load(handle)
+           ^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/json/__init__.py", line 293, in load
+    return loads(fp.read(),
+                 ^^^^^^^^^
+  File "/usr/lib/python3.12/gzip.py", line 324, in read
+    return self._buffer.read(size)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/_compression.py", line 118, in readall
+    while data := self.read(sys.maxsize):
+                  ^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/gzip.py", line 547, in read
+    raise EOFError("Compressed file ended before the "
+EOFError: Compressed file ended before the end-of-stream marker was reached
