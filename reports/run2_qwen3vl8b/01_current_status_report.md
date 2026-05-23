@@ -1,15 +1,13 @@
-# SGLang vs vLLM Profiling 当前状态报告（run2_qwen3vl8b）
+# SGLang vs vLLM Profiling 当前状态报告
 
 <aside>
 📌
 
 **Key findings**
 
-1. **关键差距在 TTFT，而不是 TPOT。** 四个 workload 中，SGLang 与 vLLM 的 TPOT / decode throughput 基本 parity；主要差异集中在 first-token 之前的 prefill / dispatch / scheduler 路径。
-2. **SGLang 的 TTFT 在 run2 baseline 中显著慢于 vLLM。** Phase 1 的 SGLang/vLLM TTFT p50 ratio 为：Case A **4.89x**、Case B **3.20x**、Case C **1.32x**、Case D **1.33x**。
-3. **稳定性本身是关键发现。** Case C 在 W30/W100/W300 下 CV 都较高，并曾出现 misleading 的 “SGLang faster” 假象；W500 后 CV 收敛到 **2.9%**，稳定结论回到 SGLang 慢约 **1.32x**。
-4. **Phase 4 的主要发现：最大 GPU 开销是共享的 GEMM，不是跨框架差异源。** SGLang 和 vLLM 都主要花在同一类 `nvjet_sm90_*` FP8 GEMM kernel 上，因此 GEMM 是 absolute-speed 问题，不是解释 SGLang-vLLM gap 的首要原因。
-5. **当前最强待验证 hypothesis 是 dispatch / graph coverage 差异。** 在 graph-on formal traces 中，SGLang 仍有不少 GEMM 路径没有像 vLLM 那样稳定落入 CUDA graph / compile region；但这还不是最终结论，Phase 5 必须直接测 CPU launch / dispatch gap。
+1. **主要差距是 TTFT，而不是 TPOT。** 在四个 workload 中，SGLang 与 vLLM 的 TPOT / decode throughput 基本 parity；但 SGLang 的 TTFT p50 明显更慢：Case A **4.89x**、Case B **3.20x**、Case C **1.32x**、Case D **1.33x**。
+2. **最大 GPU 开销是跨框架共享的 GEMM。** Trace 显示两边在各 workload 中都主要消耗在同一类 `nvjet_sm90_*` FP8 GEMM kernel 上；因此 GEMM 是本实验中跨 workload、跨框架普遍存在的 absolute-cost，而不是解释 SGLang-vLLM gap 的主要差异源。
+3. **最强待验证假设是 dispatch / graph coverage 差异。** 在 graph-on formal traces 中，SGLang 仍有部分关键 GEMM 路径没有像 vLLM 那样稳定落入 CUDA graph / compile region；这可能导致额外 CPU launch / dispatch overhead，但必须在 Phase 5 中直接测量验证。
 
 </aside>
 
@@ -22,21 +20,20 @@
 
 ## 摘要
 
-本报告总结 `run2_qwen3vl8b` 中 SGLang 与 vLLM 在 `Qwen/Qwen3-VL-8B-Instruct` text-only serving 路径上的阶段性结果。研究目标不是给出泛化 benchmark 排名，而是回答一个更工程化的问题：**SGLang 相对 vLLM 的 first-token 延迟差距来自哪个阶段、哪类系统路径，以及下一步应验证哪些优化假设**。
+本报告总结 SGLang 与 vLLM 在 `Qwen/Qwen3-VL-8B-Instruct` text-only serving 路径上的阶段性 profiling 结果。研究目标不是给出泛化 benchmark 排名，而是回答一个更工程化的问题：**SGLang 相对 vLLM 的 first-token 延迟差距来自哪个阶段、哪类系统路径，以及下一步应验证哪些优化假设**。
 
-当前 run2 已完成 Phase 0–4：功能等价性验证、baseline benchmark、shaping / variance gate、trace collection 和 trace triage。核心实验事实比较稳定：TPOT 与 decode throughput 基本 parity，而 TTFT 上 SGLang 全部慢于 vLLM。Phase 1 显示四个 workload 的 TTFT ratio 分别为 4.89x、3.20x、1.32x、1.33x；Phase 2 进一步将 A/C/D 收敛为可分析 case，并把 Case C 的 noisy reversal 修正为稳定的 1.32x SGLang-slower gap。
+当前主实验已完成 Phase 0–4：功能等价性验证、baseline benchmark、shaping / variance gate、trace collection 和 trace triage。核心事实比较稳定：TPOT 与 decode throughput 基本 parity，而 TTFT 上 SGLang 全部慢于 vLLM。Phase 1 显示四个 workload 的 TTFT ratio 分别为 4.89x、3.20x、1.32x、1.33x；Phase 2 进一步将 A/C/D 收敛为可分析 case，并把 Case C 的 noisy reversal 修正为稳定的 1.32x SGLang-slower gap。
 
-Phase 4 的主要贡献是把“哪个 GPU kernel 慢”与“什么导致跨框架 gap”区分开。trace 显示两边 GPU time 都主要消耗在同一类 `nvjet_sm90_*` FP8 GEMM kernel 上，因此 GEMM 是共享的 absolute-speed 成本，不是解释 SGLang-vLLM gap 的首要差异源。当前最强但尚未验证的 hypothesis 是：SGLang 在 graph-on formal traces 中仍有部分关键 GEMM 路径没有像 vLLM 那样稳定落入 CUDA graph / compile region，可能留下额外 CPU launch / dispatch overhead。该判断仍需 Phase 5 直接测量 CPU launch gap 后才能升级为 root cause。
+Phase 4 的主要贡献是把“哪个 GPU kernel 贡献最多绝对时间”与“什么导致跨框架 gap”区分开。trace 显示两边 GPU time 都主要消耗在同一类 `nvjet_sm90_*` FP8 GEMM kernel 上，因此 GEMM 是共享的 absolute-cost，不是解释 SGLang-vLLM gap 的首要差异源。当前最强但尚未验证的 hypothesis 是：SGLang 在 graph-on formal traces 中仍有部分关键 GEMM 路径没有像 vLLM 那样稳定落入 CUDA graph / compile region，可能留下额外 CPU launch / dispatch overhead。该判断仍需 Phase 5 直接测量 CPU launch gap 后才能升级为 root cause。
 
 ---
 
 ## 1. 实验范围与环境
 
-run2 是机器重装后的重新测量。模型 snapshot 与 run1 一致，但框架、torch、CUDA、FlashInfer 等版本均已变化，因此 **run1 只能作为 historical reference，不能与 run2 数字直接混用**。
+本文只讨论当前主实验结果；历史实验用于内部排查，不纳入本文的数值比较或结论推导。
 
 | Item | Value |
 | --- | --- |
-| Active run | `run2_qwen3vl8b` |
 | Model | `Qwen/Qwen3-VL-8B-Instruct` |
 | Snapshot | `0c351dd01ed87e9c1b53cbc748cba10e6187ff3b` |
 | Hardware | Single H200, serialized runs |
