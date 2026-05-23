@@ -25,8 +25,24 @@
 | 1 — Baseline | ✅ **complete** (24 runs, 0 failures; `experiments/run2_qwen3vl8b/phase1/summary.md`) |
 | 2 — Shaping / Variance gate | ✅ **complete** (0 failures; `experiments/run2_qwen3vl8b/phase2/{summary.md,selected_cases.md}`) |
 | 3 — Profiling / Trace collection | ✅ **complete** (GPU 1; `experiments/run2_qwen3vl8b/phase3/{summary.md,extend_supplement_summary.md}`) |
-| 4 — Triage | ⬜ not started |
+| 4 — Triage | ✅ **complete** (all 4 cases; `analysis/run2_qwen3vl8b/` + `reports/run2_qwen3vl8b/03_profiling_analysis.md`) |
 | 5 — Validation | ⬜ not started |
+
+**Phase 4 results (run2 — completed 2026-05-23, offline triage, no GPU).** All 4 cases triaged.
+A/C/D EXTEND+DECODE two-trace triage successful; B DECODE two-trace successful but **EXTEND
+unavailable** (original gz corrupt + 3 re-collect attempts failed — prefix-cache + `--profile-by-stage`
+long-prefill limit; caveat, all Case B conclusions ≤ M). vLLM prefill/decode cross-check successful for
+all 4 cases. Both stages dominated by the same `nvjet_sm90_*` FP8 GEMM family (72–86%) in **both**
+frameworks → GEMM is shared cost, not the differentiator. Global hypotheses + ranked recommendations
+available. Commits `871565f` (A) · `440fe0e` (C) · `051e812` (B) · `947fd35` (D) · `55232b3` (synthesis).
+
+- **H1** (impact H / conf M, fairness-independent): SGLang eager `aten::mm` dispatch vs vLLM
+  torch.compile/CUDA-graph is the primary TTFT-gap candidate (A, C; not Case B prefill).
+- **H2** (abs M / gap L): nvjet FP8 GEMM dominant; PR #22392 CUTLASS-FP8 is an absolute-speed lead, not a gap-closer.
+- **H3** (L, ceiling M, fairness-dependent): FlashInfer vs FA3 — not the driver.
+- **H4** (L, ceiling M): Case B gap = bimodality + c=1 fixed overhead, not graph coverage.
+- **Phase 5 next:** validate H1 first (CPU launch-gap + graph/compile coverage); H2 as a parallel
+  absolute-speed track; H3/H4 deprioritized. See §15 + `reports/run2_qwen3vl8b/03_profiling_analysis.md`.
 
 **Phase 3 results (run2 — completed 2026-05-22/23, GPU 1).** All 4 cases traced; commits `c6ec1df`
 (main collection), `8f41bd3` (EXTEND supplement), `d822bf3` (Case B EXTEND-formal retry). ~517 MB
@@ -692,7 +708,25 @@ All SGLang runs in Phase 3: `SGLANG_KERNEL_API_LOGLEVEL=1`, `LOGDEST=logs/phase3
 
 ---
 
-### Phase 4 — Trace Interpretation & Synthesis (1–2 days)
+### Phase 4 — Trace Interpretation & Synthesis (run2: ✅ complete)
+
+> **run2 outcome (completed 2026-05-23, offline triage — no GPU).** All 4 cases triaged via
+> `llm-torch-profiler-analysis` `triage` (two-trace SGLang per stage + single-trace vLLM per window),
+> each with mandatory catalog lookup. **A/C/D:** EXTEND + DECODE + vLLM cross-check all successful.
+> **B:** DECODE + vLLM cross-check successful; **EXTEND unavailable** — the original graph-off mapping
+> gz was corrupt (`EOFError`) and 3 GPU-1 re-collect attempts failed (truncated EXTEND / valid-DECODE ×2,
+> incl. `--disable-radix-cache`); root cause = prefix-cache + `--profile-by-stage` long-prefill window
+> limit (same family as the prior 8-attempt graph-on miss). Quarantined attempt dirs preserved
+> (`CORRUPT_/TRUNC_/DECODEONLY_`), trace deletions not staged. All Case B conclusions ≤ ceiling M.
+>
+> **Headline:** both frameworks are GEMM-bound by the same `nvjet_sm90_*` FP8 family (72–86% per stage)
+> → GEMM is shared cost, not the differentiator. The differentiator is dispatch/compile (SGLang eager
+> `aten::mm` vs vLLM torch.compile/CUDA-graph). The gap is a first-token fixed-overhead effect (Phase-1
+> TPOT parity + Case D 1.09× both confirm). Hypotheses H1–H4 in §15 + `reports/run2_qwen3vl8b/03_profiling_analysis.md`.
+>
+> **run2 outputs.** Per case `analysis/run2_qwen3vl8b/{case}/{extend_triage,decode_triage,breakdown,vllm_crosscheck,preliminary_observations}.md`
+> (+ `*_raw.txt`); global `analysis/run2_qwen3vl8b/{hypotheses,ranked_recommendations}.md`; shared
+> `analysis/category_regex.md`; narrative `reports/run2_qwen3vl8b/03_profiling_analysis.md`.
 
 **Goal.** Convert traces into ranked evidence-backed hypotheses.
 
@@ -924,6 +958,42 @@ dirs were removed (no LFS bloat). Documented in `extend_supplement_summary.md` +
 missing + ceiling M). SGLang EXTEND mapping (all 4) + DECODE (all 4) + vLLM prefill/decode (all 4) cover
 both stages for triage.
 
+### Phase 4 (run2, active) — Trace Interpretation & Synthesis (completed 2026-05-23)
+
+Offline triage (no GPU) of Phase 3 traces; all 4 cases. Commits `871565f` (A) · `440fe0e` (C) ·
+`051e812` (B) · `947fd35` (D) · `55232b3` (global synthesis). Outputs under `analysis/run2_qwen3vl8b/`
++ narrative `reports/run2_qwen3vl8b/03_profiling_analysis.md`.
+
+**Per-case summary:**
+
+| Case | EXTEND | DECODE | vLLM crosscheck | Largest category | Key finding |
+|---|---|---|---|---|---|
+| A 128→128 c1 | ✅ | ✅ | ✅ | GEMM (84%/75%) | eager `aten::mm` vs vLLM graph → dispatch-overhead lead (OBS-A1); cleanest, highest priority |
+| C 512→128 c16 | ✅ | ✅ | ✅ | GEMM (73%/85%) | vLLM prefill in torch.compile/inductor regions; batched radix-cache copies hidden; supports H1 |
+| B 2048→128 c1 | ❌ unavailable | ✅ | ✅ | GEMM (—/78%) | vLLM long-prefill **also eager** → graph coverage NOT the Case B driver; bimodal → all ≤ M |
+| D 512→512 c16 | ✅ | ✅ | ✅ | GEMM (72%/85%) | smallest gap (1.09×); long decode amortizes fixed overhead → corroborates first-token thesis |
+
+**Global hypotheses:**
+
+| ID | Hypothesis | Closes gap? | Impact | Confidence | Fairness dep. |
+|---|---|---|---|---|---|
+| H1 | SGLang eager `aten::mm` vs vLLM torch.compile/CUDA-graph | **Yes (primary)** | H | M | no |
+| H2 | nvjet FP8 GEMM dominant; PR #22392 CUTLASS-FP8 | No (absolute only) | M/L | H/L | no |
+| H3 | FlashInfer vs FA3 attention backend | No | L | M (capped) | **yes** |
+| H4 | Case B gap = bimodality + c=1 fixed overhead | n/a | L | M | no |
+
+**Phase 5 recommendation:**
+
+| Priority | Hypothesis | Phase 5 action |
+|---|---|---|
+| 1 | H1 | Measure SGLang prefill CPU launch-gap (A, C); test CUDA-graph / piecewise-graph / torch.compile coverage |
+| 2 | H2 | A/B PR #22392 CUTLASS-FP8 as a parallel **absolute-speed** track (not a gap-closer) |
+| 3 (low) | H3 / H4 | No kernel-level effort unless later evidence changes — H3 fairness-ceilinged M; H4 bimodal + no SGLang EXTEND trace |
+
+**Caveats:** Case B SGLang EXTEND unavailable → all Case B conclusions ceiling M; attention findings
+ceiling M (FlashInfer vs FA3); **Phase 5 has NOT validated anything — H1/H2 remain hypotheses, not final
+conclusions.**
+
 ---
 
 ### Phase 0 — Environment & Functional Equivalence (run1 historical, completed 2026-04-17)
@@ -1154,10 +1224,13 @@ Across-rep CV = **76.0%**. Bimodal — rep1 is a periodic outlier (~65 ms), stea
 > ✅ Phase 0 PASS · ✅ Phase 1 (24 runs, 0 failures) · ✅ Phase 2 (GPU 7, 0 failures) ·
 > ✅ Case C W500 probe (GPU 1, CV 2.9% — gate clean) · ✅ **Phase 3 trace collection (GPU 1)** —
 > all 4 cases; SGLang DECODE + EXTEND-mapping (all 4) + EXTEND-formal (A/C/D); vLLM prefill/decode
-> (all 4); Case B graph-on EXTEND-formal missing (caveat accepted). Commits `c6ec1df` / `8f41bd3` / `d822bf3`.
-> **Next for run2: Phase 4 triage.** Start with Case A and Case C; author per-case triage + breakdown +
-> vLLM cross-check, then `hypotheses.md` and `ranked_recommendations.md`. Carry Case B caveats
-> (graph-on EXTEND-formal missing + ceiling M). Items 1–5 below are **run1 historical**.
+> (all 4); Case B graph-on EXTEND-formal missing (caveat accepted). Commits `c6ec1df` / `8f41bd3` / `d822bf3`. ·
+> ✅ **Phase 4 triage (offline, all 4 cases)** — A/C/D EXTEND+DECODE + vLLM; B DECODE+vLLM (EXTEND
+> unavailable, ≤ M). Hypotheses H1–H4 + ranked recommendations. Commits `871565f` / `440fe0e` /
+> `051e812` / `947fd35` / `55232b3`.
+> **Next for run2: Phase 5 validation.** Validate H1 first (SGLang prefill CPU launch-gap +
+> graph/compile coverage on Case A/C); H2 as a parallel absolute-speed track (PR #22392); H3/H4 low
+> priority. Items 1–5 below are **run1 historical**.
 
 1. ✅ Create the filesystem layout from §8.1 (placeholder READMEs in each directory).
 2. ✅ (run1) Phase 0 — servers up, equivalence matrix run. All Tier-A/B pass; outputs EXACT match. *(run2 Phase 0 also ✅ PASS — see §15.)*
@@ -1170,6 +1243,6 @@ Across-rep CV = **76.0%**. Bimodal — rep1 is a periodic outlier (~65 ms), stea
    - ✅ Step 2.4 — vLLM recheck: Case B → CEILING M (CV=76%, bimodal); Case C → CLEAN (CV=5.5%, revised baseline 164→181 ms, ratio 1.49→1.33×).
    - ✅ Step 2.5 — selected_cases.md updated; Phase-3 protocol locked; all 5 exit criteria verified.
 6. ✅ Phase 3 (run2) — SGLang mapping+formal (DECODE) + EXTEND supplement (mapping all 4, formal A/C/D) + vLLM prefill_like+decode_like, all 4 cases. Case B graph-on EXTEND-formal missing (caveat). See §15 (run2) + `experiments/run2_qwen3vl8b/phase3/`.
-7. **Phase 4 (next)** — triage + breakdown + vLLM cross-check per case (start A, C); author `analysis/run2_qwen3vl8b/hypotheses.md` and `ranked_recommendations.md`. Carry Case B caveats.
-8. Phase 5 (if warranted) — tier-2 validation sweeps for the top 2 hypotheses.
-9. Promote `analysis/**` into `reports/**` deliverables.
+7. ✅ Phase 4 (run2) — triage + breakdown + vLLM cross-check for all 4 cases; `analysis/run2_qwen3vl8b/hypotheses.md` + `ranked_recommendations.md` + `reports/run2_qwen3vl8b/03_profiling_analysis.md`. Case B EXTEND unavailable (≤ M). See §15 (run2 Phase 4).
+8. **Phase 5 (next)** — validate **H1 first** (SGLang prefill CPU launch-gap + CUDA-graph/torch.compile coverage on Case A/C); **H2** as a parallel absolute-speed track (PR #22392 CUTLASS-FP8); **H3/H4** low priority. H1/H2 remain hypotheses until validated.
+9. Promote `analysis/**` into `reports/**` deliverables. *(03_profiling_analysis.md done; PR-ready writeup pending Phase 5.)*
