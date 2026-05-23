@@ -1,6 +1,6 @@
 <div align="center">
 
-# SGLang vs vLLM — Latency Profiling
+# SGLang vs vLLM — Latency Profiling Lab
 
 <p>
   <a href="https://github.com/sgl-project/sglang">
@@ -12,242 +12,122 @@
   </a>
 </p>
 
-Structured, phase-gated profiling of SGLang against vLLM on **Qwen3-VL-8B-Instruct** to extract actionable optimization targets — not a benchmark report.
+Phase-gated profiling of SGLang against vLLM on **Qwen3-VL-8B-Instruct** to locate *where* SGLang's
+latency gap comes from — not a generic benchmark ranking.
 
-*Single H200 · TP=1 · bfloat16 · text-only path*
+*Single H200 · TP=1 · bfloat16 · greedy · text-only path*
 
 </div>
 
----
+## Overview
 
-## Key Findings
+This repo holds one experiment, **`qwen3vl8b`**, that asks a focused question: **where does SGLang's
+time-to-first-token (TTFT) gap versus vLLM come from?** The goal is not to declare a winner but to
+attribute the gap to a specific stage (prefill vs decode), kernel family, and system path, and to
+turn that into ranked, evidence-backed hypotheses for optimization.
 
-- **TTFT is the only gap.** TPOT and throughput are at parity (±2%) across all tested workloads.
-- **SGLang carries a ~56 ms fixed scheduler/dispatch overhead at c=1.** Prompt length barely moves it — 128→2048 tokens adds just +7.7 ms. vLLM's verified floor is ~14 ms.
-- **The floor is structural, not configurational.** Four scheduler flags (`--disable-overlap-schedule`, `--schedule-policy fcfs`, `--stream-interval`, `--chunked-prefill-size`) each moved TTFT by ≤2 ms.
-- **Secondary finding.** When chunked prefill is actually triggered (chunk_size < prompt_len), TTFT scales linearly with chunk count — each chunk adds ~65–85 ms — suggesting the dispatch floor is incurred *per chunk*, not per request.
-- **vLLM baselines revised by extended warmup.** Phase-1 measured vLLM Case C at 164 ms (warmup=30, insufficient for c=16). Stable recheck gives **181 ms**, correcting the SGLang/vLLM ratio from 1.49× → **1.33×**. vLLM Case B is bimodal — all Case B vLLM comparisons carry confidence ceiling M.
+The work is organized as a phase-gated pipeline (Phase 0 → 5): prove the two servers are comparable,
+establish a baseline, shape/​de-noise the workloads, collect torch-profiler traces, triage them, and
+(next) validate the top hypothesis.
 
----
+## Main Findings
 
-## Experiment Pipeline
+1. **TTFT is the gap; TPOT is at parity.** Across all four workloads SGLang and vLLM match on
+   per-token decode throughput; the difference lives in the first-token (prefill / dispatch) path.
+2. **The biggest GPU cost is shared GEMM, not the gap source.** Both frameworks spend 72–86% of GPU
+   time in the *same* `nvjet_sm90_*` FP8 GEMM family — so GEMM cost is shared and does not by itself
+   explain the cross-framework gap.
+3. **The strongest hypothesis is a dispatch / graph-coverage difference.** SGLang dispatches those
+   GEMMs eagerly (`aten::mm`), while vLLM runs them under torch.compile/inductor (prefill) and CUDA
+   graph (decode). This **dispatch-overhead hypothesis (H1)** is the leading TTFT-gap candidate and
+   still needs Phase 5 validation.
 
-```mermaid
-flowchart LR
-    P0("⚙️ Phase 0\nEquivalence"):::done -->
-    P1("📊 Phase 1\nBaseline"):::done -->
-    P2("🔬 Phase 2\nShaping"):::done -->
-    P3("🔍 Phase 3\nProfiling"):::pending -->
-    P4("💡 Phase 4\nTriage"):::pending -->
-    P5("✅ Phase 5\nValidation"):::pending
+## Experiment Setup
 
-    classDef done fill:#2ea44f,color:#fff,stroke:#2ea44f
-    classDef pending fill:#f0f0f0,color:#888,stroke:#ccc
-```
+| Item | Value |
+|---|---|
+| Model | `Qwen/Qwen3-VL-8B-Instruct` @ `0c351dd01ed87e9c1b53cbc748cba10e6187ff3b` (sha256-verified) |
+| Hardware | single **H200**, servers run serialized (never co-resident) |
+| SGLang | `0.0.0.dev1+g0c8049d9b` (system python3) |
+| vLLM | `0.21.0` (conda env `/opt/miniconda3/envs/profiling`) |
+| torch / CUDA | `2.11.0+cu130` / CUDA `13.0` (aligned across both frameworks) |
+| Precision / TP | bfloat16 / TP=1 |
+| Sampling | greedy (`temperature=0`, `top_p=1`) |
 
-<br>
+> Attention backends are **not** aligned (SGLang FlashInfer vs vLLM FlashAttention v3) — a *measured*
+> variable, so any attention-kernel-level conclusion carries **confidence ceiling M**.
 
-<table>
-<tr>
-  <th width="120">Phase</th>
-  <th width="80" align="center">Status</th>
-  <th>Goal</th>
-  <th>Key Output</th>
-</tr>
-<tr>
-  <td><b>0 — Equivalence</b></td>
-  <td align="center">✅</td>
-  <td>Verify both frameworks load the same weights and produce equivalent outputs before any benchmarking</td>
-  <td>Byte-identical greedy outputs confirmed · attention backend delta logged</td>
-</tr>
-<tr>
-  <td><b>1 — Baseline</b></td>
-  <td align="center">✅</td>
-  <td>Establish a clean 4-case head-to-head table under controlled, fair conditions</td>
-  <td>TTFT 3.89× / 2.59× / 1.49× / 1.34× · TPOT at parity across all cases</td>
-</tr>
-<tr>
-  <td><b>2 — Shaping</b></td>
-  <td align="center">✅</td>
-  <td>Determine whether gaps are structural or configurational; select cases for profiling</td>
-  <td>Cases A, B, C promoted · Case D dropped (bimodal variance) · floor confirmed structural</td>
-</tr>
-<tr>
-  <td><b>3 — Profiling</b></td>
-  <td align="center">⬜</td>
-  <td>Collect SGLang mapping+formal traces and vLLM comparison traces for each selected case</td>
-  <td>Torch profiler traces per case (EXTEND + DECODE stages separated)</td>
-</tr>
-<tr>
-  <td><b>4 — Triage</b></td>
-  <td align="center">⬜</td>
-  <td>Interpret traces into ranked, evidence-backed hypotheses with vLLM cross-validation</td>
-  <td>Kernel triage tables · category breakdown · structured hypotheses</td>
-</tr>
-<tr>
-  <td><b>5 — Validation</b></td>
-  <td align="center">⬜</td>
-  <td>Confirm top hypotheses with flag-level sweeps before any PR is written</td>
-  <td>Validated recommendations concrete enough for a direct PR</td>
-</tr>
-</table>
+## Workloads
 
-> Each phase is a hard gate — a phase only runs on cases and data that survived the previous one. Full decision rules in [`plan.md`](plan.md).
+| Case | Shape | Concurrency | Purpose |
+|---|---|---|---|
+| **A** `caseA_short` | 128 → 128 | 1 | short latency; cleanest fixed-overhead case |
+| **B** `caseB_longprefill` | 2048 → 128 | 1 | long prefill; chunk/prefill behavior (bimodal → ceiling M) |
+| **C** `caseC_batched` | 512 → 128 | 16 | batched serving; concurrency path |
+| **D** `caseD_decode` | 512 → 512 | 16 | decode-heavy sanity check |
 
----
+Phase-1 baseline SGLang/vLLM TTFT p50 ratios: **A 4.89× · B 3.20× · C 1.32× · D 1.33×** (TPOT at
+parity throughout).
 
-## Baseline Results (Phase 1)
+## Phase Status
 
-> 24 runs · 4 cases × 2 frameworks × 3 reps · H200 clocked at 1980 MHz
+| Phase | Purpose | Status |
+|---|---|---|
+| 0 — Equivalence | weights/tokenizer/greedy-output parity | ✅ PASS |
+| 1 — Baseline | establish gap; isolate TTFT vs TPOT | ✅ complete (24 runs, 0 failures) |
+| 2 — Shaping / Variance gate | lock profilable cases (incl. Case C W500 probe) | ✅ complete |
+| 3 — Profiling / Trace collection | SGLang DECODE+EXTEND, vLLM prefill/decode | ✅ complete (Case B SGLang EXTEND unavailable — caveat) |
+| 4 — Triage | per-case kernel/overlap/fuse + hypotheses | ✅ complete |
+| 5 — Validation | validate top hypothesis (H1) | ⬜ not started (next) |
 
-| Case | Prompt → Output | Concurrency | SGLang TTFT p50 | vLLM TTFT p50 | Ratio | TPOT |
-|:-----|:---------------|:-----------:|----------------:|---------------:|------:|-----:|
-| A — Short | 128 → 128 | 1 | 54.6 ms | 14.1 ms | **3.89×** | 1.00× |
-| B — Long prefill | 2048 → 128 | 1 | 62.3 ms | ~24 ms ⚠ | **~2.59×** | 0.99× |
-| C — Batched | 512 → 128 | 16 | 243.9 ms | 164.1 ms | **1.49×** | 0.98× |
-| D — Decode-heavy | 512 → 512 | 16 | 247.0 ms | 184.8 ms | **1.34×** | 1.02× |
+## Directory Layout
 
-> Phase-1 numbers. Case A→B spans 16× more tokens yet TTFT grows only 7.7 ms — prefill compute is cheap.
-> ⚠ vLLM Case B was bimodal in Phase-1 (cv=99.3%). Phase-2 recheck confirmed bimodal behavior — comparisons carry **confidence ceiling M**.
+Every data directory has one `qwen3vl8b/` subtree (the single experiment):
 
----
+| Path | Contents |
+|---|---|
+| `experiments/qwen3vl8b/` | per-phase research artifacts: `phase0/`…`phase4/` (summaries, `raw/`, `metadata/`, `scripts/`), `env_snapshot.md`, `README.md`, `phase3/caseB_trace_issue.md` |
+| `datasets/qwen3vl8b/` | canonical autobench JSONL (`caseA..D.jsonl`) — never regenerate mid-project |
+| `traces/qwen3vl8b/` | raw torch-profiler traces (**Git LFS**): per case `sglang_{mapping,formal}/` (DECODE), `sglang_extend_{mapping,formal}/` (EXTEND), `vllm/{prefill_like,decode_like}/` |
+| `analysis/qwen3vl8b/` | triage outputs: per-case `{extend,decode}_triage.md`, `breakdown.md`, `vllm_crosscheck.md`, `preliminary_observations.md`; global `hypotheses.md`, `ranked_recommendations.md`; `category_regex.md` |
+| `reports/qwen3vl8b/` | human-facing reports: `01_current_status_report.md`, `03_profiling_analysis.md` |
+| `logs/qwen3vl8b/` | infrastructure side-effects (server stderr, kernel-API trails) — consult on failure only |
+| `configs/qwen3vl8b/` | reserved for Phase 5 sweep configs |
+| `plan.md` | the execution plan — single source of truth for methodology |
 
-## Shaping Results (Phase 2)
+## How To Read This Repo
 
-### Case A — scheduler-overhead sweep
+1. **`reports/qwen3vl8b/01_current_status_report.md`** — start here; the narrative status + key findings.
+2. **`reports/qwen3vl8b/03_profiling_analysis.md`** — detailed Phase 4 per-case triage analysis.
+3. **`analysis/qwen3vl8b/hypotheses.md`** — structured hypotheses (H1–H4) with evidence + confidence.
+4. **`analysis/qwen3vl8b/ranked_recommendations.md`** — what to validate first, and why.
+5. **Phase summaries** — `experiments/qwen3vl8b/phase{1,2,3}/summary.md` for baseline / shaping / trace inventory.
+6. **Raw artifacts** — only when auditing (see Artifact Policy).
 
-Can any scheduler flag compress the ~56 ms floor?
+## Artifact Policy
 
-| Flag | TTFT p50 | Δ |
-|:-----|--------:|--:|
-| *(default — baseline)* | 57.1 ms | — |
-| `--disable-overlap-schedule` | 55.4 ms | −1.7 ms |
-| `--schedule-policy fcfs` | 57.5 ms | +0.4 ms |
-| `--stream-interval 8` | 57.0 ms | −0.0 ms |
+- **Raw provenance is not edited.** Benchmark raw JSON (`experiments/qwen3vl8b/*/raw/`), trace metadata
+  JSON (`experiments/qwen3vl8b/phase3/metadata/`), and triage tool output (`analysis/qwen3vl8b/**/*_raw.txt`)
+  are append-only records of what was collected; their embedded paths/timestamps are historical and
+  should not be hand-edited.
+- **Traces are Git LFS.** Everything under `traces/qwen3vl8b/` (`*.gz`) and the kernel-API `*.log`
+  files are stored via Git LFS.
+- **Processed/deliverable docs** (summaries, `analysis/**` markdown, reports, `plan.md`, this README)
+  are hand-edited and reviewed.
 
-**→ Structural.** 3-rep reconfirm: 56.0 ms, CV = 0.1%.
+## Current Caveats
 
-### Case B — chunked-prefill sweep
+- **Attention backend mismatch** (FlashInfer vs FA3) → all attention-kernel-level findings carry **ceiling M**.
+- **Case B** is bimodal in both frameworks, and its **SGLang EXTEND trace is unavailable** (corrupt +
+  un-recapturable under the profiler's long-prefill stage mechanism — see
+  `experiments/qwen3vl8b/phase3/caseB_trace_issue.md`). All Case B conclusions carry **ceiling M**.
+- **H1 is a hypothesis, not a conclusion** — kernel-share tables show the dispatch *path* but not the
+  launch-gap *time*; Phase 5 must measure it before any optimization claim graduates.
 
-Does chunked-prefill explain the gap?
+## Next Step
 
-| chunk-size | Chunks | TTFT p50 | Δ vs default |
-|:----------:|:------:|--------:|-------------:|
-| 8192 *(default)* | 1 | 68.5 ms | — |
-| −1 *(disabled)* | — | 66.7 ms | −1.8 ms |
-| 1024 | 2 | 169.2 ms | +100.7 ms |
-| 512 | 4 | 261.5 ms | +193.0 ms |
-
-**→ Same structural floor.** Default chunk=8192 never splits a 2048-tok prompt. When chunking is active, TTFT ∝ chunk count — the floor is paid *per chunk*.
-
-### Cases C & D — variance gate
-
-Can extended warmup reduce TTFT variance to a profilable level?
-
-| Case | warmup=30 | warmup=100 | warmup=300 | Decision |
-|:-----|:---------:|:----------:|:----------:|:--------:|
-| C — 512→128, c=16 | CV 9.5% | **CV 4.2%** | CV 2.1% | ✅ Promote |
-| D — 512→512, c=16 | CV 19.8% | CV 0.1% † | CV 14.8% | ❌ Drop |
-
-<sup>† 3-rep lucky window — V2 (5 reps) re-exposed a bimodal pattern: periodic ~160 ms outliers vs ~243 ms steady state.</sup>
-
-### vLLM baseline recheck (Step 2.4)
-
-Phase-1 vLLM baselines re-measured with warmup=300, 5 reps to validate promoted cases.
-
-| Case | Phase-1 vLLM | Recheck vLLM | Across-rep CV | Verdict |
-|:-----|:------------:|:------------:|:-------------:|:-------:|
-| B (2048→128, c=1) | 24.1 ms | ~24 ms (bimodal ⚠) | **76.0%** | ⚠ **Ceiling M** |
-| C (512→128, c=16) | 164.1 ms | **180.9 ms** | 5.5% | ✅ Clean |
-
-> Phase-1 vLLM Case C was underestimated — warmup=30 insufficient for c=16. True stable baseline: **180.9 ms**. Ratio corrected: 1.49× → **1.33×**.
-
-### Phase 3 shortlist
-
-| Case | Priority | Phenomenon | SGLang TTFT | vLLM TTFT | Ratio | vLLM ceiling |
-|:-----|:--------:|:-----------|------------:|----------:|------:|:------------:|
-| **A** | Primary | ~56 ms structural dispatch floor at c=1 | 56.0 ms | 14.1 ms | **4.0×** | None |
-| **B** | Primary | Same floor; per-chunk overhead when chunking active | 64.4 ms | ~24 ms ⚠ | **~2.7×** | **M** |
-| **C** | Secondary | 1.33× TTFT gap at c=16, variance stable | 241 ms | 180.9 ms | **1.33×** | None |
-| D | Dropped | Bimodal TTFT under sustained decode load | — | — | — | — |
-
----
-
-## Environment
-
-| | SGLang | vLLM |
-|:--|:-------|:-----|
-| Version | `0.0.0.dev1+ga4cf2ea12` | `0.19.0` |
-| PyTorch | 2.9.1+cu129 | 2.10.0+cu128 |
-| Attention (text) | FlashInfer 0.6.7.post3 | FlashAttention v3 |
-| KV cache | ~102 GB | ~105.9 GB |
-| GPU | H200 index 6, 144 GB | ← same |
-| Model | Qwen3-VL-8B-Instruct @ [`0c351dd`](https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct) | ← same |
-
-**Functional equivalence verified:** byte-identical greedy outputs on 3 test prompts (128 tokens, temperature=0).
-
-> ⚠️ Attention backends differ (FlashInfer vs FlashAttention v3). Any Phase-4 attention-kernel finding carries confidence ceiling **M** until a version-matched re-run with aligned backends is done.
-
----
-
-## Reproducing
-
-### Requirements
-
-```
-GPU:    Single H200 (80 GB+ for Qwen3-VL KV cache)
-SGLang: dev install at /sgl-workspace/sglang
-vLLM:   0.19.0 in conda env `vllm`
-Model:  Qwen/Qwen3-VL-8B-Instruct (HF cache, offline)
-```
-
-### ⚠️ Dataset generation — read before running
-
-`sglang.auto_benchmark convert --kind random` samples the full vocabulary, including Qwen3-VL multimodal special tokens (`<|image_pad|>` ID 151655, `<|vision_start|>` 151652, etc.). These trigger the vision embedding path and cause OOM. **Use the custom generator instead:**
-
-```bash
-HF_HUB_OFFLINE=1 python3 experiments/phase1/scripts/gen_datasets.py
-# Restricts sampling to token IDs 0–151642
-# Outputs → datasets/case{A,B,C,D}.jsonl
-```
-
-### Running the experiments
-
-```bash
-# Phase 1 — baseline (24 runs, ~6 h total)
-CUDA_VISIBLE_DEVICES=6 python3 experiments/phase1/scripts/run_phase1.py
-
-# Phase 2 — shaping sweeps (run sequentially)
-CUDA_VISIBLE_DEVICES=6 python3 experiments/phase2/scripts/run_phase2_caseA.py    # ~2 h
-CUDA_VISIBLE_DEVICES=6 python3 experiments/phase2/scripts/run_phase2_caseB.py    # ~1.5 h
-CUDA_VISIBLE_DEVICES=6 python3 experiments/phase2/scripts/run_phase2_caseCD.py   # ~2 h
-```
-
----
-
-## Repository Layout
-
-```
-profiling_lab/
-├── plan.md                          ← Master document: execution plan, decisions, all results
-│
-├── datasets/                        ← Canonical autobench JSONL — never regenerate mid-project
-│
-├── experiments/
-│   ├── env_snapshot.md              ← Framework versions, attention backends, GPU memory
-│   ├── phase0/equivalence.md        ← Tier A/B/C equivalence matrix and greedy output comparison
-│   ├── phase1/                      ← Raw bench_serving JSON per (case × framework × rep)
-│   ├── phase2/selected_cases.md     ← Phase-3 entry gate with per-case verdicts
-│   └── phase2_shaping/              ← Per-case sweep raw results and summary tables
-│
-├── logs/                            ← Server stderr · kernel-API boundary trails (L1 passive)
-├── traces/                          ← Torch profiler artifacts — Phase 3, pending
-├── analysis/                        ← Triage tables · hypotheses · recommendations — Phase 4, pending
-└── reports/                         ← Final deliverables — Phase 5, pending
-```
-
----
-
-<div align="center">
-<sub>👤 Bowen Wang &nbsp;·&nbsp; 🐳 sglang-bowenw</sub>
-</div>
+**Phase 5 — validate H1.** Measure SGLang's prefill-stage CPU launch / dispatch gap on Cases A and C,
+and test whether enabling/extending CUDA-graph / piecewise-graph / torch.compile coverage narrows the
+measured TTFT gap. Run H2 (the `nvjet → CUTLASS-FP8` GEMM swap, SGLang PR #22392) as a parallel
+*absolute-speed* track, kept separate from the gap question. See
+`analysis/qwen3vl8b/ranked_recommendations.md`.

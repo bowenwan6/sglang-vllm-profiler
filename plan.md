@@ -2,33 +2,33 @@
 
 ---
 
-## 0. Active Run Status — `run2_qwen3vl8b`
+## 0. Active Run Status — `qwen3vl8b`
 
-> **The active run is `run2_qwen3vl8b`.** It reuses the methodology, fairness model, and artifact
+> **The active run is `qwen3vl8b`.** It reuses the methodology, fairness model, and artifact
 > spec below, but is a *fresh measurement round* on a rebuilt machine. The original run ("run1") is
 > historical reference only.
 
-| Item | Active run2 value |
+| Item | Value |
 |---|---|
-| Run id | `run2_qwen3vl8b` |
+| Run id | `qwen3vl8b` |
 | Model | `Qwen/Qwen3-VL-8B-Instruct` @ `0c351dd01ed87e9c1b53cbc748cba10e6187ff3b` (weights identical to run1, sha256-verified) |
 | GPU | single H200, **serialized** throughout. Phase 0/1: index **0**; Phase 2: index **7**; Case C W500 probe + Phase 3: index **1**. (One GPU at a time; servers never co-resident.) |
 | SGLang | `0.0.0.dev1+g0c8049d9b` (system python3, editable `/sgl-workspace/sglang`) |
 | vLLM | `0.21.0` (conda env `/opt/miniconda3/envs/profiling`) |
 | torch / CUDA | `2.11.0+cu130` / `13.0` (both frameworks aligned) |
 
-**Phase status (run2):**
+**Phase status:**
 
-| Phase | run2 status |
+| Phase | status |
 |---|---|
-| 0 — Equivalence | ✅ **complete + PASS** (canonical: `experiments/phase0/`) |
-| 1 — Baseline | ✅ **complete** (24 runs, 0 failures; `experiments/run2_qwen3vl8b/phase1/summary.md`) |
-| 2 — Shaping / Variance gate | ✅ **complete** (0 failures; `experiments/run2_qwen3vl8b/phase2/{summary.md,selected_cases.md}`) |
-| 3 — Profiling / Trace collection | ✅ **complete** (GPU 1; `experiments/run2_qwen3vl8b/phase3/{summary.md,extend_supplement_summary.md}`) |
-| 4 — Triage | ✅ **complete** (all 4 cases; `analysis/run2_qwen3vl8b/` + `reports/run2_qwen3vl8b/03_profiling_analysis.md`) |
+| 0 — Equivalence | ✅ **complete + PASS** (canonical: `experiments/qwen3vl8b/phase0/`) |
+| 1 — Baseline | ✅ **complete** (24 runs, 0 failures; `experiments/qwen3vl8b/phase1/summary.md`) |
+| 2 — Shaping / Variance gate | ✅ **complete** (0 failures; `experiments/qwen3vl8b/phase2/{summary.md,selected_cases.md}`) |
+| 3 — Profiling / Trace collection | ✅ **complete** (GPU 1; `experiments/qwen3vl8b/phase3/{summary.md,extend_supplement_summary.md}`) |
+| 4 — Triage | ✅ **complete** (all 4 cases; `analysis/qwen3vl8b/` + `reports/qwen3vl8b/03_profiling_analysis.md`) |
 | 5 — Validation | ⬜ not started |
 
-**Phase 4 results (run2 — completed 2026-05-23, offline triage, no GPU).** All 4 cases triaged.
+**Phase 4 results (completed 2026-05-23, offline triage, no GPU).** All 4 cases triaged.
 A/C/D EXTEND+DECODE two-trace triage successful; B DECODE two-trace successful but **EXTEND
 unavailable** (original gz corrupt + 3 re-collect attempts failed — prefix-cache + `--profile-by-stage`
 long-prefill limit; caveat, all Case B conclusions ≤ M). vLLM prefill/decode cross-check successful for
@@ -42,9 +42,9 @@ available. Commits `871565f` (A) · `440fe0e` (C) · `051e812` (B) · `947fd35` 
 - **H3** (L, ceiling M, fairness-dependent): FlashInfer vs FA3 — not the driver.
 - **H4** (L, ceiling M): Case B gap = bimodality + c=1 fixed overhead, not graph coverage.
 - **Phase 5 next:** validate H1 first (CPU launch-gap + graph/compile coverage); H2 as a parallel
-  absolute-speed track; H3/H4 deprioritized. See §15 + `reports/run2_qwen3vl8b/03_profiling_analysis.md`.
+  absolute-speed track; H3/H4 deprioritized. See §15 + `reports/qwen3vl8b/03_profiling_analysis.md`.
 
-**Phase 3 results (run2 — completed 2026-05-22/23, GPU 1).** All 4 cases traced; commits `c6ec1df`
+**Phase 3 results (completed 2026-05-22/23, GPU 1).** All 4 cases traced; commits `c6ec1df`
 (main collection), `8f41bd3` (EXTEND supplement), `d822bf3` (Case B EXTEND-formal retry). ~517 MB
 main + EXTEND traces in Git LFS.
 
@@ -56,7 +56,7 @@ main + EXTEND traces in Git LFS.
 - **Phase 4 can start.** Profile Case A and Case C first; carry the Case B caveats (graph-on EXTEND
   formal missing + confidence ceiling M).
 
-**run2 Phase 1 baseline (active — supersedes the run1 table in §15).** 24 runs (4 cases × 2
+**Phase 1 baseline (active).** 24 runs (4 cases × 2
 frameworks × 3 reps), **error rate 0% on all**. Greedy (`temperature=0, top_p=1`, `ignore_eos`
 default), GPU 0, both frameworks on torch 2.11.0+cu130 / CUDA 13.0.
 
@@ -67,16 +67,16 @@ default), GPU 0, both frameworks on torch 2.11.0+cu130 / CUDA 13.0.
 | C — 512→128, c=16 | 247.5 ms | 187.9 ms | **1.32×** | parity (0.99×) | SGLang p50 cv 9.4% (variance gate needed) |
 | D — 512→512, c=16 | 253.0 ms | 189.7 ms | **1.33×** | parity (1.00×) | **SGLang p99 390.6 ms, p99 cv 47% (bimodal tail)** |
 
-Key findings (run2): **TTFT is the only gap**; TPOT and throughput are at parity (0.91–1.01×).
+Key findings: **TTFT is the only gap**; TPOT and throughput are at parity (0.91–1.01×).
 The c=1 dispatch floor persists and **prefill is cheap** — prompt 16× longer (A→B) adds only
 **+4.9 ms** to SGLang TTFT (61.8→66.7). Direction is highly consistent with run1; magnitudes differ
 (e.g. Case A ratio 4.89× vs run1 3.89×) so **numbers are not interchangeable**. torch/CUDA are now
 aligned across frameworks (removes run1's torch-version confound), but the **attention backend still
 differs (SGLang FlashInfer vs vLLM FlashAttention v3) → any attention-kernel conclusion carries
-confidence ceiling M**. Full table + p95/p99 + CV + error rate: `experiments/run2_qwen3vl8b/phase1/summary.md`.
+confidence ceiling M**. Full table + p95/p99 + CV + error rate: `experiments/qwen3vl8b/phase1/summary.md`.
 
-**Phase 2 results (run2 — completed 2026-05-22, GPU 7, 0 failures).** Full detail:
-`experiments/run2_qwen3vl8b/phase2/{summary.md,selected_cases.md}`.
+**Phase 2 results (completed 2026-05-22, GPU 7, 0 failures).** Full detail:
+`experiments/qwen3vl8b/phase2/{summary.md,selected_cases.md}`.
 
 | Case | SGLang config (Phase 3) | SGLang TTFT p50 (CV) | vLLM TTFT p50 (CV) | Residual gap | Phase 3 protocol |
 |---|---|---|---|---|---|
@@ -92,7 +92,7 @@ Key Phase 2 findings:
 - **Case D — clean at warmup=30.** CV 3.3% with no extra warmup; residual gap 1.09× (Phase-1 p99 bimodal tail did not reappear). Lowest Phase-3 priority.
 
 **Phase 3 shortlist (all 4 promote; profiling order A → C → B → D).** Full collection protocol:
-`experiments/run2_qwen3vl8b/phase3/plan.md`.
+`experiments/qwen3vl8b/phase3/plan.md`.
 
 | Case | Decision | SGLang flags | warmup / reps | Phenomenon to profile |
 |---|---|---|---|---|
@@ -103,12 +103,11 @@ Key Phase 2 findings:
 
 Order rationale: **A** is the cleanest, most actionable remaining overhead; **C** is now clean post-W500 and represents batched c=16; **B** is important but noisy + ceiling M; **D** has the smallest gap and lowest payoff.
 
-**Relationship to run1 (historical):** `experiments/phase1/`, `experiments/phase2/`,
-`experiments/phase2_shaping/` hold **run1** numbers, measured under a different environment
-(GPU 6, CUDA 12.9, SGLang `ga4cf2ea12`, vLLM 0.19.0, torch 2.9.1/2.10.0). Per §6.4, those numbers
-**cannot be reused as run2 conclusions** — run2 re-measured Phase 0+1 from scratch. The §15 "Results"
-section below is **run1 historical** except where marked run2. Active environment detail:
-`experiments/env_snapshot.md`. run2 working tree: `experiments/run2_qwen3vl8b/` (see its `README.md`).
+**Historical note.** An earlier exploratory round (informally "run1", different environment — GPU 6,
+CUDA 12.9, SGLang `ga4cf2ea12`, vLLM 0.19.0, torch 2.9.1/2.10.0) was **removed** during the repo
+restructure; its numbers were not comparable (per §6.4) and are not reused here. The single retained
+experiment is `qwen3vl8b`. Environment detail: `experiments/qwen3vl8b/env_snapshot.md`. Working tree:
+`experiments/qwen3vl8b/` (see its `README.md`).
 
 ---
 
@@ -149,14 +148,14 @@ Decision rule at every phase boundary: if the gap on a case is <5% we *reshape t
 - **Text-only fallback** if Qwen3-VL is not supported on either framework at pinned versions: `Qwen/Qwen3-8B`.
 - **Later (Phase 6+, TBD)**: a larger Qwen3-VL variant.
 
-## 5. Environment (active run2)
+## 5. Environment (active)
 
 - GPUs: 8× H200 144 GB; **active GPU index 0** (`CUDA_VISIBLE_DEVICES=0`); NVIDIA driver 580.159.03, CUDA 13.0.
 - **SGLang**: `0.0.0.dev1+g0c8049d9b`, system python3 (3.12), editable at `/sgl-workspace/sglang`, torch 2.11.0+cu130, FlashInfer 0.6.11.post1.
 - **vLLM**: `0.21.0` (V1 engine) in conda env `profiling` at `/opt/miniconda3/envs/profiling`, torch 2.11.0+cu130, FlashInfer 0.6.8.post1, FlashAttention v3.
 - HF cache: `/root/.cache/huggingface`. Model snapshot `0c351dd…` fully cached, `HF_HUB_OFFLINE=1`.
-- Servers run strictly serially (one at a time on GPU 0). Full detail: `experiments/env_snapshot.md`.
-- *(run1 historical environment — GPU 6, CUDA 12.9, SGLang `ga4cf2ea12`, vLLM 0.19.0, torch 2.9.1/2.10.0 — recorded at the bottom of `experiments/env_snapshot.md`.)*
+- Servers run strictly serially (one at a time on GPU 0). Full detail: `experiments/qwen3vl8b/env_snapshot.md`.
+- *(An earlier exploratory round used a different stack — GPU 6, CUDA 12.9, SGLang `ga4cf2ea12`, vLLM 0.19.0, torch 2.9.1/2.10.0 — and was removed; see Historical note in §0.)*
 
 ---
 
@@ -217,7 +216,7 @@ Findings that rest on framework-intrinsic variables are valid *design observatio
 
 Authoritative role definitions. The Quick-Reference in §13 is a summary; this section wins on any conflict.
 
-### 7.0 Skill availability & invocation (run2, verified 2026-05-22)
+### 7.0 Skill availability & invocation (verified 2026-05-22)
 
 All three skills this project relies on are **present in the SGLang checkout** at
 `/sgl-workspace/sglang/.claude/skills/` and have been registered for Claude Code by symlinking them
@@ -229,16 +228,16 @@ the right-hand column when invoking:
 |---|---|---|---|
 | `sglang-auto-benchmark` | **`llm-serving-auto-benchmark`** | PR #21736 **merged** into current repo | ✅ `python3 -m sglang.auto_benchmark {convert,validate,run}` works; skill has scripts/configs/references |
 | `sglang-torch-profiler-analysis` | **`llm-torch-profiler-analysis`** | upstreamed (unified sglang/vllm/trtllm); BBuf standalone is the older fork | ✅ `analyze_llm_torch_profile.py --help` OK (shim `analyze_sglang_torch_profile.py` kept); catalogs present |
-| `debug-cuda-crash` | `debug-cuda-crash` (unchanged) | in current repo; `SGLANG_KERNEL_API_LOGLEVEL/LOGDEST` supported in source | ✅ L1 already in use on every run2 server launch |
+| `debug-cuda-crash` | `debug-cuda-crash` (unchanged) | in current repo; `SGLANG_KERNEL_API_LOGLEVEL/LOGDEST` supported in source | ✅ L1 already in use on every server launch |
 
 Notes: skills load at **session start**, so newly symlinked skills become Skill-tool-invokable only
 after a session reload — but their scripts are runnable now via direct path. The optional `b200` /
 `h100` / `h200` skills referenced historically no longer exist under those names (BBuf repo
 reorganized); no extra install needed.
 
-**When/how to use in run2:**
+**When/how to use:**
 - **Phase 2 (shaping):** `llm-serving-auto-benchmark` `run` for pure-SGLang YAML flag sweeps, *or*
-  the run2 custom scripts (`experiments/run2_qwen3vl8b/phase1/scripts/`-style) when a sweep must also
+  the custom scripts (`experiments/qwen3vl8b/phase1/scripts/`-style) when a sweep must also
   drive vLLM or needs full flag control. `debug-cuda-crash` at L1 on every server launch.
 - **Phase 3 (collection):** `llm-torch-profiler-analysis` collection scripts
   (`run_sglang_torch_profile_host.sh` + `--profile-by-stage` for SGLang mapping+formal;
@@ -307,89 +306,63 @@ Auto-benchmark controls *inputs*; profiler-analysis interprets *outputs*; debug-
 
 ### 8.1 Filesystem layout
 
-> **Active-run note:** the tree below shows the original (run1) layout with the repo root drawn as
-> `/data/profiling_lab/`. The real repo root is `/data/sglang-vllm-profiler/`, and the **active run2**
-> mirrors this layout under run2-prefixed paths: `experiments/run2_qwen3vl8b/{phase0,phase1,phase2,phase3}/`,
-> `datasets/run2_qwen3vl8b/`, `traces/run2_qwen3vl8b/`, `logs/run2_qwen3vl8b/`. The unprefixed
-> `experiments/phase1|phase2|...` paths below are **run1 historical** (except canonical `experiments/phase0/`).
+> **Layout note:** the single retained experiment is `qwen3vl8b`; every top-level data directory has a
+> matching `qwen3vl8b/` subtree. The earlier exploratory round was removed (see Historical note in §0).
 
 **Directory purpose rule:** `logs/` = infrastructure side-effects (server stderr, kernel-API boundary trails) — consult on failure, never cited in analysis. `experiments/` = research artifacts deliberately produced by the experiment protocol — cited in analysis and reports.
 
 ```
-/data/profiling_lab/
+/data/sglang-vllm-profiler/
 ├── plan.md                          this document — single source of truth
 ├── README.md                        GitHub-facing project overview
 │
-├── datasets/                        canonical autobench JSONL (never regenerate mid-project)
-│   ├── caseA_short.jsonl            128→128, n=600
-│   ├── caseB_longprefill.jsonl      2048→128, n=300
-│   ├── caseC_batched.jsonl          512→128, n=2500
-│   └── caseD_decode.jsonl           512→512, n=1200
+├── datasets/qwen3vl8b/              canonical autobench JSONL (never regenerate mid-project)
+│   ├── caseA_short.jsonl            128→128
+│   ├── caseB_longprefill.jsonl      2048→128
+│   ├── caseC_batched.jsonl          512→128
+│   └── caseD_decode.jsonl           512→512
 │
-├── logs/                            infrastructure side-effects (consult on failure only)
-│   ├── phase0/                      server startup logs + kernel-API boundary trails
-│   ├── phase1/
-│   ├── phase2/
-│   ├── phase3/                      (pending)
+├── logs/qwen3vl8b/                  infrastructure side-effects (consult on failure only)
+│   ├── phase1/  phase2/  phase3/    server startup logs + kernel-API (LFS) boundary trails
+│
+├── experiments/qwen3vl8b/           research artifacts (cited in analysis)
+│   ├── README.md                    run overview + phase status
+│   ├── env_snapshot.md              versions, backends, GPU memory — all phases
+│   ├── phase0/                      equivalence.md + Tier-A/B outputs + scripts (canonical Phase 0)
+│   ├── phase1/                      raw/ (bench JSON+meta) + summary.md + scripts/
+│   ├── phase2/                      summary.md + selected_cases.md + raw/ + scripts/
+│   ├── phase3/                      summary.md + extend_supplement_summary.md + caseB_trace_issue.md
+│   │                               + metadata/ + scripts/
+│   ├── phase4/                      plan.md
 │   └── phase5/                      (pending)
 │
-├── experiments/                     research artifacts (cited in analysis)
-│   ├── env_snapshot.md              versions, backends, GPU memory — all phases
-│   ├── phase0/
-│   │   ├── equivalence.md           Tier A/B/C equivalence results
-│   │   ├── sglang_outputs.json      Tier-B greedy outputs from SGLang
-│   │   ├── vllm_outputs.json        Tier-B greedy outputs from vLLM
-│   │   └── scripts/                 tier_a_tokenizer.py, tier_b_sglang.py, tier_b_vllm_compare.py
-│   ├── phase1/
-│   │   ├── raw/                     bench_serving JSON + meta.json per (case × framework × rep)
-│   │   ├── summary.md               4×2 baseline table with CV flags
-│   │   └── scripts/                 gen_datasets.py, run_phase1.py, summarize_phase1.py
-│   ├── phase2/
-│   │   ├── selected_cases.md        Phase-3 entry gate (locked protocol per case)
-│   │   └── scripts/                 run_phase2_case{A,B,CD}.py, run_phase2_vllm_recheck.py
-│   ├── phase2_shaping/
-│   │   ├── caseA/                   Case A sweep raw JSON + summary.md
-│   │   ├── caseB/                   Case B sweep raw JSON + summary.md
-│   │   ├── caseCD/                  Cases C/D variance sweep raw JSON + summary.md
-│   │   ├── vllm_recheck_caseB.json  vLLM Case B recheck (5 reps, warmup=300)
-│   │   └── vllm_recheck_caseC.json  vLLM Case C recheck (5 reps, warmup=300)
-│   └── phase5/
-│       └── {hypothesis}/            (pending)
-│
-├── traces/                          raw torch profiler artifacts (Phase 3, pending)
+├── traces/qwen3vl8b/                raw torch profiler artifacts (Git LFS)
 │   └── {case}/
-│       ├── sglang_mapping/          graph-off, --profile-by-stage (EXTEND / DECODE)
-│       ├── sglang_formal/           graph-on,  --profile-by-stage (EXTEND / DECODE)
-│       └── vllm/
-│           ├── prefill_like/        concurrency=1 window
-│           └── decode_like/         steady-state concurrency window
+│       ├── sglang_mapping/          graph-off DECODE      sglang_extend_mapping/  graph-off EXTEND
+│       ├── sglang_formal/           graph-on DECODE       sglang_extend_formal/   graph-on EXTEND
+│       └── vllm/{prefill_like,decode_like}/
 │
-├── analysis/                        interpretation layer (processed from traces)
-│   ├── {case}/
-│   │   ├── extend_triage.md
-│   │   ├── decode_triage.md
-│   │   ├── breakdown.md             category split: attn/gemm/comm/norm/quant/mem/sched
-│   │   └── vllm_crosscheck.md       falsification / corroboration record
+├── analysis/qwen3vl8b/              interpretation layer (processed from traces)
 │   ├── category_regex.md            shared regex applied symmetrically to both frameworks
-│   ├── vllm_source_map.md           curated kernel-name → vllm/ module path
+│   ├── {case}/                      extend_triage.md, decode_triage.md, breakdown.md,
+│   │                               vllm_crosscheck.md, preliminary_observations.md (+ *_raw.txt)
 │   ├── hypotheses.md                structured hypotheses, de-duplicated
-│   └── ranked_recommendations.md    top 5–10, sorted by confidence × impact × feasibility
+│   └── ranked_recommendations.md    sorted by confidence × impact × feasibility
 │
-└── reports/                         final deliverables (human-facing)
-    ├── 01_experiment_summary.md
-    ├── 02_benchmark_table.md
-    ├── 03_profiling_analysis.md
-    ├── 04_hypotheses.md
-    └── 05_recommendations.md
+├── reports/qwen3vl8b/               final deliverables (human-facing)
+│   ├── 01_current_status_report.md
+│   └── 03_profiling_analysis.md
+│
+└── configs/qwen3vl8b/               (reserved for Phase 5 sweep configs)
 ```
 
 ### 8.2 Artifact layers
 
 | Layer | Contents | Mutability | Purged on rerun? |
 |---|---|---|---|
-| **Raw** | `datasets/`, `logs/`, `traces/`, `experiments/*/raw/`, `experiments/phase2_shaping/*/` JSON files | Append-only, never edited by hand | Never — raw evidence is the ground truth |
+| **Raw** | `datasets/`, `logs/`, `traces/`, `experiments/qwen3vl8b/*/raw/` JSON files | Append-only, never edited by hand | Never — raw evidence is the ground truth |
 | **Processed** | `experiments/*/summary.md`, `analysis/**`, `experiments/phase2/selected_cases.md` | Regenerated from raw | Yes, on rerun of the source phase |
-| **Deliverable** | `reports/**`, `plan.md`, `README.md`, `experiments/env_snapshot.md`, `experiments/phase0/equivalence.md` | Hand-edited, reviewed | No — edited in place |
+| **Deliverable** | `reports/**`, `plan.md`, `README.md`, `experiments/qwen3vl8b/env_snapshot.md`, `experiments/qwen3vl8b/phase0/equivalence.md` | Hand-edited, reviewed | No — edited in place |
 
 ### 8.3 Reviewer reading order
 
@@ -406,7 +379,7 @@ A human reviewer validating the project should inspect artifacts in this sequenc
 
 | Produced in | Consumed by | As what |
 |---|---|---|
-| `datasets/case*.jsonl` | Phase 1, Phase 2, Phase 5 | Byte-identical workload |
+| `datasets/qwen3vl8b/case*.jsonl` | Phase 1, Phase 2, Phase 5 | Byte-identical workload |
 | `experiments/phase1/summary.md` | Phase 2 | Input to the Decision Rule |
 | `experiments/phase2/selected_cases.md` | Phase 3 | Sole gate into profiling |
 | `traces/{case}/sglang_{mapping,formal}` | Phase 4 | Two-trace triage input |
@@ -420,15 +393,15 @@ A human reviewer validating the project should inspect artifacts in this sequenc
 
 ### Phase 0 — Environment & Functional Equivalence (≤1 day)
 
-> ✅ **run2 status: complete + PASS.** Executed on GPU 0 with the run2 stack; canonical artifacts in
-> `experiments/phase0/` (equivalence.md, sglang/vllm outputs, model_files_sha256.txt, tier_a_results.txt).
-> The protocol below is retained as the method; the constants reflect the original run1 execution
-> except where noted (run2 used GPU **0** and the run2 framework versions in §5).
+> ✅ **Status: complete + PASS.** Executed on GPU 0 with the current stack; canonical artifacts in
+> `experiments/qwen3vl8b/phase0/` (equivalence.md, sglang/vllm outputs, model_files_sha256.txt, tier_a_results.txt).
+> The protocol below is the method; the constants reflect the actual execution
+> except where noted (Phase 0/1 used GPU **0** and the framework versions in §5).
 
 **Goal.** Establish that both servers are comparable — weights, tokenizer, vocab identical; decoding behavior equivalent under a realistic equivalence standard.
 
-**Operational constants (run1 protocol; run2 used GPU 0).**
-- GPU: `CUDA_VISIBLE_DEVICES=6` (run1) → **`CUDA_VISIBLE_DEVICES=0` for run2**
+**Operational constants.**
+- GPU: **`CUDA_VISIBLE_DEVICES=0`** (Phase 0/1; later phases used GPU 7 then GPU 1 — see §0)
 - Model snapshot: `/root/.cache/huggingface/hub/models--Qwen--Qwen3-VL-8B-Instruct/snapshots/0c351dd01ed87e9c1b53cbc748cba10e6187ff3b`
 - `HF_HUB_OFFLINE=1` — model is fully cached; no network call or token needed
 - Servers run **sequentially** (SGLang first, then vLLM after shutdown) so each gets full GPU memory and there is no cross-process interference during the equivalence test. Phase 1 benchmarks follow the same pattern.
@@ -445,7 +418,7 @@ A human reviewer validating the project should inspect artifacts in this sequenc
      --dtype bfloat16 --port 30000 --tp 1 --attention-backend flashinfer
    ```
    Wait for `server is fired up` in log. Record FlashInfer version, chunked-prefill default, idle GPU memory.
-2. Run equivalence tiers (Tier A tokenizer check + Tier B greedy outputs). Save outputs to `experiments/phase0/sglang_outputs.json`.
+2. Run equivalence tiers (Tier A tokenizer check + Tier B greedy outputs). Save outputs to `experiments/qwen3vl8b/phase0/sglang_outputs.json`.
 3. Kill SGLang. Launch vLLM:
    ```
    CUDA_VISIBLE_DEVICES=6 HF_HUB_OFFLINE=1 \
@@ -454,8 +427,8 @@ A human reviewer validating the project should inspect artifacts in this sequenc
      --port 30001 --tensor-parallel-size 1
    ```
    Wait for `Application startup complete`. Record attention backend, idle GPU memory.
-4. Run same Tier B prompts against vLLM. Save to `experiments/phase0/vllm_outputs.json`. Compare.
-5. Record all findings in `experiments/env_snapshot.md` and `experiments/phase0/equivalence.md`.
+4. Run same Tier B prompts against vLLM. Save to `experiments/qwen3vl8b/phase0/vllm_outputs.json`. Compare.
+5. Record all findings in `experiments/qwen3vl8b/env_snapshot.md` and `experiments/qwen3vl8b/phase0/equivalence.md`.
 
 **Equivalence framework.** Byte-identical greedy decoding across frameworks is not a realistic target — attention kernel, matmul tiling, and reduction order all legitimately differ, and bf16 accumulation order compounds the divergence. The correct standard is tiered:
 
@@ -475,7 +448,7 @@ A human reviewer validating the project should inspect artifacts in this sequenc
 
 **Downstream effect on profiling.** Because token-level output equivalence is not required, we do not gate Phase 3 on it. What *does* matter for profiling validity: Tier-A identity (so both frameworks execute the same underlying model) and workload byte-identity (§6.1). Profiling under these conditions is methodologically sound even if produced tokens differ.
 
-**Outputs.** `experiments/env_snapshot.md`, `experiments/phase0/equivalence.md`.
+**Outputs.** `experiments/qwen3vl8b/env_snapshot.md`, `experiments/qwen3vl8b/phase0/equivalence.md`.
 
 **Risks.** Qwen3-VL may not be fully supported at pinned versions; fall back to `Qwen3-8B` and record the substitution. Vision tower may load even for text-only; record idle memory.
 
@@ -483,10 +456,10 @@ A human reviewer validating the project should inspect artifacts in this sequenc
 
 ### Phase 1 — Minimal Fair Baseline (1 day)
 
-> ✅ **run2 status: complete.** Executed on GPU 0 with run2 scripts at
-> `experiments/run2_qwen3vl8b/phase1/scripts/` (greedy via `--extra-request-body`, datasets under
-> `datasets/run2_qwen3vl8b/`). Results in §0 and §15. The protocol below is the method; the commands
-> show the original run1 form (GPU 6, and note the run1 dataset-generator caveat) — run2 used GPU 0
+> ✅ **Status: complete.** Executed on GPU 0 with the scripts at
+> `experiments/qwen3vl8b/phase1/scripts/` (greedy via `--extra-request-body`, datasets under
+> `datasets/qwen3vl8b/`). Results in §0 and §15. The protocol below is the method; the commands
+> show the actual form (note the dataset-generator caveat)
 > and the custom special-token-safe generator.
 
 **Goal.** Produce one head-to-head table on a small deliberate matrix — clean enough to believe.
@@ -507,7 +480,7 @@ A human reviewer validating the project should inspect artifacts in this sequenc
 1. Generate byte-identical datasets using the custom generator (do **not** use `sglang.auto_benchmark convert --kind random` — it samples multimodal special tokens that trigger Qwen3-VL OOM):
    ```bash
    HF_HUB_OFFLINE=1 python3 experiments/phase1/scripts/gen_datasets.py
-   # Samples token IDs 0–151642 only; outputs datasets/case{A,B,C,D}.jsonl
+   # Samples token IDs 0–151642 only; outputs datasets/qwen3vl8b/case{A,B,C,D}.jsonl
    # SHA-256 logged to experiments/phase1/raw/dataset_sha256.txt
    ```
 
@@ -537,11 +510,11 @@ A human reviewer validating the project should inspect artifacts in this sequenc
    ```
    python -m sglang.bench_serving --backend sglang-oai \
      --base-url http://127.0.0.1:30000 \
-     --dataset-name autobench --dataset-path datasets/caseC_batched.jsonl \
+     --dataset-name autobench --dataset-path datasets/qwen3vl8b/caseC_batched.jsonl \
      --max-concurrency 16 --seed 1 --warmup-requests 30
    python -m sglang.bench_serving --backend vllm \
      --base-url http://127.0.0.1:30001 \
-     --dataset-name autobench --dataset-path datasets/caseC_batched.jsonl \
+     --dataset-name autobench --dataset-path datasets/qwen3vl8b/caseC_batched.jsonl \
      --max-concurrency 16 --seed 1 --warmup-requests 30
    ```
 4. Write `experiments/phase1/raw/{case}_{framework}_{rep}.json` per run with `meta.json` (versions, attn backend, dataset sha, seed).
@@ -560,19 +533,19 @@ A human reviewer validating the project should inspect artifacts in this sequenc
 
 ---
 
-### Phase 2 — Identify Informative Cases  *(run2: ✅ complete · run1: historical, see §15)*
+### Phase 2 — Identify Informative Cases 
 
-> ✅ **run2 status: complete** (2026-05-22, GPU 7, 0 failures). Executed with run2 scripts at
-> `experiments/run2_qwen3vl8b/phase2/scripts/` (5-variant Case A sweep, 4-variant Case B sweep,
+> ✅ **Status: complete** (2026-05-22, GPU 7, 0 failures). Executed with the scripts at
+> `experiments/qwen3vl8b/phase2/scripts/` (5-variant Case A sweep, 4-variant Case B sweep,
 > C/D warmup variance gate, vLLM B/C recheck). Results summarized in §0 and detailed in §15
-> (run2). The decision rule and methodology below are the **method**; the run1 execution narrative
-> that previously lived here has moved to §15 as historical. **run2 outcome:** all 4 cases promote
+> . The decision rule and methodology below are the **method**; the earlier execution narrative
+> has been removed (earlier round). **Outcome:** all 4 cases promote
 > to Phase 3 — see the §0 shortlist.
 
 **Goal.** Given Phase-1 evidence (TTFT gap is universal, TPOT at parity), decide which cases enter
-Phase-3 profiling and with what shaping. In run2 this was answered as follows:
+Phase-3 profiling and with what shaping. This was answered as follows:
 
-1. **Case A:** the TTFT floor is **partly configurational** — `--disable-overlap-schedule` removed ~10% (gap 4.89×→1.56×). The residual is the Phase-3 target. *(This differs from run1, where the floor looked fully structural; run2's newer SGLang build responds to the overlap flag.)*
+1. **Case A:** the TTFT floor is **partly configurational** — `--disable-overlap-schedule` removed ~10% (gap 4.89×→1.56×). The residual is the Phase-3 target. *(This differs from run1, where the floor looked fully structural; the current SGLang build responds to the overlap flag.)*
 2. **Case B:** `chunk_off` did not beat default beyond the 5% threshold → default base. Both SGLang and vLLM are bimodal here → all cross-framework Case B conclusions carry ceiling M.
 3. **Case C:** vLLM stabilized at warmup=300 (CV 1.9%). SGLang failed the 5% CV gate at W30/W100/W300 (12.5/15.2/14.9%) but a follow-up **W500 probe passed cleanly (CV 2.9%, 249.1 ms)**. The noisy W100/W300 "SGLang faster / 0.79× reversal" was an under-warmup artifact; clean W500 data shows SGLang **~1.32× slower** (matches Phase-1 W30). **Cleanly profilable at warmup=500.**
 4. **Case D:** clean at warmup=30 (CV 3.3%); residual gap 1.09×. No bimodal tail this round.
@@ -586,12 +559,12 @@ Phase-3 profiling and with what shaping. In run2 this was answered as follows:
 | > 15%, both CVs ≤10% | ≤10% | Run shaping sweep *before* promoting. If gap survives any flag combo, promote as **structural**. |
 | > 15%, either CV > 10% | > 10% | Run **variance-reduction** sweep first. Re-evaluate gap after. Do not profile on noisy data (§14 anti-pattern). |
 
-#### run2 shaping design (as executed)
+#### Shaping design (as executed)
 
-Custom Python orchestration scripts under `experiments/run2_qwen3vl8b/phase2/scripts/`
+Custom Python orchestration scripts under `experiments/qwen3vl8b/phase2/scripts/`
 (`run_phase2_caseA.py` + `resume_phase2_caseA.py`, `run_phase2_caseB.py`, `run_phase2_variance.py`,
 `run_phase2_BCD.sh` chainer, `summarize_phase2.py`). Direct `bench_serving` against
-`datasets/run2_qwen3vl8b/case*.jsonl`. Greedy `{"temperature":0,"top_p":1}`, `--output-details`,
+`datasets/qwen3vl8b/case*.jsonl`. Greedy `{"temperature":0,"top_p":1}`, `--output-details`,
 GPU 7, serial servers, GPU freed (<2000 MiB) between every server.
 
 - **Case A — scheduler/dispatch floor (5 variants, screen 1 rep → finalist 3 reps):** `default`,
@@ -608,15 +581,15 @@ GPU 7, serial servers, GPU freed (<2000 MiB) between every server.
 - **vLLM recheck (B + C, warmup=300, 5 reps):** Case B still bimodal (CV 85.9% → ceiling M);
   Case C stable (CV 1.9%, 189 ms — Phase-1 Case C CV 5.8% was warmup-starvation).
 
-#### run2 artifacts (Phase 2)
+#### Artifacts (Phase 2)
 
 | Path | Role |
 |---|---|
-| `experiments/run2_qwen3vl8b/phase2/scripts/` | All orchestration + summarizer scripts |
-| `experiments/run2_qwen3vl8b/phase2/raw/` | Per-(case × variant/warmup × rep) bench JSON + meta + `*_result.json` rollups |
-| `experiments/run2_qwen3vl8b/phase2/summary.md` | Full shaping + variance-gate + vLLM-recheck tables |
-| `experiments/run2_qwen3vl8b/phase2/selected_cases.md` | **Phase-3 entry gate** — per-case config, warmup, reps, residual gap, CV, ceiling |
-| `logs/run2_qwen3vl8b/phase2/` | Server logs (one per server lifetime) + orchestrator logs + L1 kernel trails |
+| `experiments/qwen3vl8b/phase2/scripts/` | All orchestration + summarizer scripts |
+| `experiments/qwen3vl8b/phase2/raw/` | Per-(case × variant/warmup × rep) bench JSON + meta + `*_result.json` rollups |
+| `experiments/qwen3vl8b/phase2/summary.md` | Full shaping + variance-gate + vLLM-recheck tables |
+| `experiments/qwen3vl8b/phase2/selected_cases.md` | **Phase-3 entry gate** — per-case config, warmup, reps, residual gap, CV, ceiling |
+| `logs/qwen3vl8b/phase2/` | Server logs (one per server lifetime) + orchestrator logs + L1 kernel trails |
 
 #### Skill usage
 
@@ -624,22 +597,22 @@ GPU 7, serial servers, GPU freed (<2000 MiB) between every server.
 - `debug-cuda-crash` → L1 passive (`SGLANG_KERNEL_API_LOGLEVEL=1`) on all SGLang server launches.
 - `llm-torch-profiler-analysis` → **not used.** No interpretation in Phase 2.
 
-#### Exit criteria — run2 status
+#### Exit criteria
 
 1. **Met.** Case A has a shaped SGLang config (`--disable-overlap-schedule`) that holds a stable, low-CV residual gap (1.56×); Case B sweep found no winner beyond default and is promoted on default.
 2. **Met.** Case D reached CV ≤5% (promote, W30). Case C failed the gate at W30/W100/W300 but the **W500 probe passed cleanly (CV 2.9%)** — promoted **clean** at warmup=500/5 reps. The earlier high-CV/marginal status is resolved.
 3. **Met.** vLLM baselines documented: Case C clean (CV 1.9%), Case B ceiling M (CV 85.9%); Case A/D compared to stable Phase-1 vLLM p50.
-4. **Met.** `experiments/run2_qwen3vl8b/phase2/selected_cases.md` locks the Phase-3 protocol for all 4 promoted cases.
+4. **Met.** `experiments/qwen3vl8b/phase2/selected_cases.md` locks the Phase-3 protocol for all 4 promoted cases.
 
-> The run1 execution-order narrative (Steps 2.0–2.5, GPU 6) is preserved in §15 (run1 historical).
+
 
 ---
 
-### Phase 3 — Profiling & Trace Collection (run2: ✅ complete)
+### Phase 3 — Profiling & Trace Collection (✅ complete)
 
-> ✅ **run2 status: complete** (2026-05-22/23, GPU 1, serial servers, GPU freed after each).
-> Collection only — no interpretation. Detail: `experiments/run2_qwen3vl8b/phase3/summary.md` +
-> `extend_supplement_summary.md`. **run2 actual outcome:**
+> ✅ **Status: complete** (2026-05-22/23, GPU 1, serial servers, GPU freed after each).
+> Collection only — no interpretation. Detail: `experiments/qwen3vl8b/phase3/summary.md` +
+> `extend_supplement_summary.md`. **Actual outcome:**
 > - The **initial** collection (`run_phase3_collect.py`, commit `c6ec1df`) captured SGLang **DECODE
 >   stage only** — the `--profile-by-stage` window armed during in-flight decode, so no EXTEND landed.
 >   vLLM `prefill_like` + `decode_like` complete for all 4 cases.
@@ -650,10 +623,10 @@ GPU 7, serial servers, GPU freed (<2000 MiB) between every server.
 >   `d822bf3`): graph-on `--profile-by-stage` prefill capture does not trigger for Case B (small window
 >   → DECODE, large window → empty). **Caveat accepted** — Case B's graph-off mapping EXTEND carries the
 >   kernel→source mapping and Case B already has ceiling M.
-> - run2 mechanism note: vLLM 0.21.0 dropped `VLLM_TORCH_PROFILER_DIR`; the profiler was enabled via
+> - mechanism note: vLLM 0.21.0 dropped `VLLM_TORCH_PROFILER_DIR`; the profiler was enabled via
 >   `--profiler-config '{"profiler":"torch","torch_profiler_dir":"<abs>"}'`. SGLang `sglang.profiler`
 >   needs concurrent load (it profiles whatever forward steps run), so a `bench_serving` load ran during
->   each capture. The method below is the canonical protocol; these are the run2 adaptations.
+>   each capture. The method below is the canonical protocol; these are the adaptations.
 
 **Goal.** For each selected case, produce a clean SGLang mapping+formal trace pair *and* a vLLM trace pair shaped to permit stage-level comparison. No interpretation here.
 
@@ -691,14 +664,14 @@ All SGLang runs in Phase 3: `SGLANG_KERNEL_API_LOGLEVEL=1`, `LOGDEST=logs/phase3
 - `debug-cuda-crash` → L1 passive, escalated only on actual crash.
 - `sglang-auto-benchmark` → **not used.**
 
-**Outputs (run2, active).**
-- `traces/run2_qwen3vl8b/{case}/sglang_mapping/`, `sglang_formal/` — DECODE-stage (graph-off / graph-on).
-- `traces/run2_qwen3vl8b/{case}/sglang_extend_mapping/`, `sglang_extend_formal/` — EXTEND-stage supplement.
-- `traces/run2_qwen3vl8b/{case}/vllm/{prefill_like,decode_like}/`.
-- `experiments/run2_qwen3vl8b/phase3/summary.md`, `extend_supplement_summary.md`, `metadata/`.
-- `logs/run2_qwen3vl8b/phase3/*.log`.
+**Outputs (completed).**
+- `traces/qwen3vl8b/{case}/sglang_mapping/`, `sglang_formal/` — DECODE-stage (graph-off / graph-on).
+- `traces/qwen3vl8b/{case}/sglang_extend_mapping/`, `sglang_extend_formal/` — EXTEND-stage supplement.
+- `traces/qwen3vl8b/{case}/vllm/{prefill_like,decode_like}/`.
+- `experiments/qwen3vl8b/phase3/summary.md`, `extend_supplement_summary.md`, `metadata/`.
+- `logs/qwen3vl8b/phase3/*.log`.
 
-**Success criteria — run2 status.**
+**Success criteria.**
 - ✅ SGLang **DECODE** (mapping + formal) complete for all 4 cases.
 - ✅ vLLM **prefill_like + decode_like** complete for all 4 cases.
 - ✅ SGLang **EXTEND mapping** complete for all 4 cases.
@@ -708,9 +681,9 @@ All SGLang runs in Phase 3: `SGLANG_KERNEL_API_LOGLEVEL=1`, `LOGDEST=logs/phase3
 
 ---
 
-### Phase 4 — Trace Interpretation & Synthesis (run2: ✅ complete)
+### Phase 4 — Trace Interpretation & Synthesis (✅ complete)
 
-> **run2 outcome (completed 2026-05-23, offline triage — no GPU).** All 4 cases triaged via
+> **Outcome (completed 2026-05-23, offline triage — no GPU).** All 4 cases triaged via
 > `llm-torch-profiler-analysis` `triage` (two-trace SGLang per stage + single-trace vLLM per window),
 > each with mandatory catalog lookup. **A/C/D:** EXTEND + DECODE + vLLM cross-check all successful.
 > **B:** DECODE + vLLM cross-check successful; **EXTEND unavailable** — the original graph-off mapping
@@ -722,11 +695,11 @@ All SGLang runs in Phase 3: `SGLANG_KERNEL_API_LOGLEVEL=1`, `LOGDEST=logs/phase3
 > **Headline:** both frameworks are GEMM-bound by the same `nvjet_sm90_*` FP8 family (72–86% per stage)
 > → GEMM is shared cost, not the differentiator. The differentiator is dispatch/compile (SGLang eager
 > `aten::mm` vs vLLM torch.compile/CUDA-graph). The gap is a first-token fixed-overhead effect (Phase-1
-> TPOT parity + Case D 1.09× both confirm). Hypotheses H1–H4 in §15 + `reports/run2_qwen3vl8b/03_profiling_analysis.md`.
+> TPOT parity + Case D 1.09× both confirm). Hypotheses H1–H4 in §15 + `reports/qwen3vl8b/03_profiling_analysis.md`.
 >
-> **run2 outputs.** Per case `analysis/run2_qwen3vl8b/{case}/{extend_triage,decode_triage,breakdown,vllm_crosscheck,preliminary_observations}.md`
-> (+ `*_raw.txt`); global `analysis/run2_qwen3vl8b/{hypotheses,ranked_recommendations}.md`; shared
-> `analysis/category_regex.md`; narrative `reports/run2_qwen3vl8b/03_profiling_analysis.md`.
+> **Outputs.** Per case `analysis/qwen3vl8b/{case}/{extend_triage,decode_triage,breakdown,vllm_crosscheck,preliminary_observations}.md`
+> (+ `*_raw.txt`); global `analysis/qwen3vl8b/{hypotheses,ranked_recommendations}.md`; shared
+> `analysis/category_regex.md`; narrative `reports/qwen3vl8b/03_profiling_analysis.md`.
 
 **Goal.** Convert traces into ranked evidence-backed hypotheses.
 
@@ -866,23 +839,18 @@ Never invert a row. Auto-benchmark does not read kernels; profiler-analysis does
 
 ## 15. Results
 
-> ⚠️ **This section is run1 HISTORICAL** (measured 2026-04-17/04-24 on the run1 environment).
-> It is reference only and **not comparable to run2** (different SGLang/vLLM/torch/CUDA/FlashInfer
-> versions; see §0 and `experiments/env_snapshot.md`). The active run2 Phase-0 result is summarized
-> immediately below; run2 Phase 1+ results will be added as they are produced.
-
-### Phase 0 (run2, active) — Functional Equivalence (completed 2026-05-21)
+### Phase 0 — Functional Equivalence (completed 2026-05-21)
 
 - GPU 0; SGLang `0c8049d9b` (flashinfer text) vs vLLM `0.21.0` (FlashAttention v3); torch 2.11.0+cu130 both.
 - Tier A **PASS** — same snapshot `0c351dd`, safetensors sha256-verified; tokenizer/config/ChatML identical.
 - Tier B **EXACT** byte-identical greedy outputs on all 3 prompts.
-- **Verdict: PASS** → cleared for run2 Phase 1. Canonical artifacts: `experiments/phase0/`.
+- **Verdict: PASS** → cleared for Phase 1. Canonical artifacts: `experiments/qwen3vl8b/phase0/`.
 
-### Phase 1 (run2, active) — Minimal Fair Baseline (completed 2026-05-22)
+### Phase 1 — Minimal Fair Baseline (completed 2026-05-22)
 
 - 24 runs (4 cases × 2 frameworks × 3 reps), **error rate 0% on every run**. GPU 0, serial servers;
   greedy (`temperature=0, top_p=1`, `ignore_eos` default); both frameworks torch 2.11.0+cu130 / CUDA 13.0.
-- Datasets: `datasets/run2_qwen3vl8b/case{A,B,C,D}.jsonl` (text-only, special-token-safe, SEED=1; SHA-256 logged). Old `datasets/case*.jsonl` untouched.
+- Datasets: `datasets/qwen3vl8b/case{A,B,C,D}.jsonl` (text-only, special-token-safe, SEED=1; SHA-256 logged). Old root `datasets/case*.jsonl` were removed in the restructure.
 
 | Case | SGLang TTFT p50/p95/p99 (ms) | vLLM TTFT p50/p95/p99 (ms) | p50 ratio | TPOT | Throughput | CV / variance |
 |---|---|---|---|---|---|---|
@@ -896,14 +864,14 @@ Never invert a row. Auto-benchmark does not read kernels; profiler-analysis does
 - **Direction matches run1**, magnitudes differ (Case A 4.89× vs run1 3.89×; vLLM Case B bimodal again; Case D bimodal tail again) — **numbers not interchangeable**.
 - **Confidence ceilings:** vLLM Case B comparisons → M (bimodal); any attention-kernel finding → M (FlashInfer vs FA3 backend mismatch).
 - Phase 2 entry: A primary, B primary (vLLM ceiling M), C secondary (variance gate), D likely drop (bimodal). See §0.
-- Artifacts: `experiments/run2_qwen3vl8b/phase1/summary.md`, `phase1/raw/`, `phase1/scripts/`; logs `logs/run2_qwen3vl8b/phase1/`.
+- Artifacts: `experiments/qwen3vl8b/phase1/summary.md`, `phase1/raw/`, `phase1/scripts/`; logs `logs/qwen3vl8b/phase1/`.
 
-### Phase 2 (run2, active) — Shaping / Variance Gate (completed 2026-05-22)
+### Phase 2 — Shaping / Variance Gate (completed 2026-05-22)
 
 - GPU **7**, serial servers (GPU freed <2000 MiB between every server), greedy
   (`temperature=0, top_p=1`), `--output-details`. **0 failed requests across the entire phase.**
-- Artifacts: `experiments/run2_qwen3vl8b/phase2/summary.md`, `phase2/selected_cases.md`,
-  `phase2/raw/`, `phase2/scripts/`; logs `logs/run2_qwen3vl8b/phase2/`.
+- Artifacts: `experiments/qwen3vl8b/phase2/summary.md`, `phase2/selected_cases.md`,
+  `phase2/raw/`, `phase2/scripts/`; logs `logs/qwen3vl8b/phase2/`.
 
 | Case | Winner config | SGLang TTFT p50 (CV) | vLLM TTFT p50 (CV) | Residual gap | Phase-3 protocol |
 |---|---|---|---|---|---|
@@ -912,18 +880,18 @@ Never invert a row. Auto-benchmark does not read kernels; profiler-analysis does
 | C 512→128 c16 | default | **249.1 ms (2.9%, W500)** | 189.0 ms (1.9%) | **1.32×** | warmup 500, 5 reps — clean |
 | D 512→512 c16 | default | 206.2 ms (3.3%) | 189.7 ms (Phase 1) | 1.09× | warmup 30, 3 reps |
 
-- **Case A shaping:** screen p50 — `no_overlap` 19.5 / `default` 22.2 / `stream8` 22.2 / `chunk_off` 22.5 / `chunk_64` 53.9 ms. Finalist (3 reps): `no_overlap` median 19.6 ms (CV 3.2%) vs `default` 21.8 ms (CV 1.7%). **The overlap scheduler costs ~10% at c=1; the Phase-1 4.89× gap collapses to 1.56×.** (run1 had called this floor fully structural — run2's newer build responds to the flag.)
+- **Case A shaping:** screen p50 — `no_overlap` 19.5 / `default` 22.2 / `stream8` 22.2 / `chunk_off` 22.5 / `chunk_64` 53.9 ms. Finalist (3 reps): `no_overlap` median 19.6 ms (CV 3.2%) vs `default` 21.8 ms (CV 1.7%). **The overlap scheduler costs ~10% at c=1; the Phase-1 4.89× gap collapses to 1.56×.** (run1 had called this floor fully structural — the current build responds to the flag.)
 - **Case B shaping:** screen p50 — `chunk_off` 62.8 / `default` 64.9 / `chunk_1024` 80.6 / `chunk_512` 91.6 ms. `chunk_off` < 5% better → default. Finalist reps 64.3 / 30.3 / 26.9 ms (CV 68.4%) — **SGLang itself is bimodal here.** vLLM recheck (w=300, 5 reps): first rep high, rest ~21.5 ms, CV 85.9% — **bimodality not a warmup artifact → ceiling M on all Case B cross-framework claims.**
 - **Case C variance gate + W500 probe:** SGLang W30/W100/W300 CV = 12.5 / 15.2 / 14.9% — failed the 5% gate. A follow-up **W500 probe (5 reps, GPU 1, 0 failures) passed at CV 2.9%**, stable median **249.1 ms**. vLLM recheck stable (CV 1.9%, 189 ms). The W100/W300 "SGLang faster / 0.79× reversal" was an **under-warmup artifact**; at stable warmup SGLang is **~1.32× slower** (matches Phase-1 W30). vLLM is warmup-insensitive (187.9→189.0 across W30→W300), so this is a sound stable reference; a strict same-warmup vLLM W500 is only needed for a "SGLang faster" claim (no longer applicable). **Case C cleanly profilable** at warmup=500. Probe artifacts: `phase2/raw/caseC_sglang_w500_rep*.json`, `phase2/raw/caseC_w500_result.json`.
 - **Case D variance gate:** passed at W30 (CV 3.3%, 206.2 ms); residual 1.09×. The Phase-1 p99 bimodal tail did not reappear.
-- **Phase-3 shortlist:** A (high priority) · B (ceiling M + extra reps) · C (clean at W500, warmup 500/5 reps) · D (lower priority). Locked protocol: `experiments/run2_qwen3vl8b/phase2/selected_cases.md`.
+- **Phase-3 shortlist:** A (high priority) · B (ceiling M + extra reps) · C (clean at W500, warmup 500/5 reps) · D (lower priority). Locked protocol: `experiments/qwen3vl8b/phase2/selected_cases.md`.
 
-### Phase 3 (run2, active) — Trace Collection (completed 2026-05-22/23)
+### Phase 3 — Trace Collection (completed 2026-05-22/23)
 
 - GPU **1**, serial servers (freed <2000 MiB after each), 0 failed requests. Collection only — no
   interpretation. Commits: `c6ec1df` (main), `8f41bd3` (EXTEND supplement), `d822bf3` (Case B retry).
-  Artifacts: `experiments/run2_qwen3vl8b/phase3/{summary.md,extend_supplement_summary.md,metadata/}`,
-  `traces/run2_qwen3vl8b/{case}/...`, `logs/run2_qwen3vl8b/phase3/`. ~517 MB traces in Git LFS.
+  Artifacts: `experiments/qwen3vl8b/phase3/{summary.md,extend_supplement_summary.md,metadata/}`,
+  `traces/qwen3vl8b/{case}/...`, `logs/qwen3vl8b/phase3/`. ~517 MB traces in Git LFS.
 
 **Main collection** (`run_phase3_collect.py`). Per case: SGLang mapping (graph-off) + formal (graph-on)
 via `sglang.profiler --profile-by-stage` with concurrent `bench_serving` load; vLLM `prefill_like`
@@ -958,11 +926,11 @@ dirs were removed (no LFS bloat). Documented in `extend_supplement_summary.md` +
 missing + ceiling M). SGLang EXTEND mapping (all 4) + DECODE (all 4) + vLLM prefill/decode (all 4) cover
 both stages for triage.
 
-### Phase 4 (run2, active) — Trace Interpretation & Synthesis (completed 2026-05-23)
+### Phase 4 — Trace Interpretation & Synthesis (completed 2026-05-23)
 
 Offline triage (no GPU) of Phase 3 traces; all 4 cases. Commits `871565f` (A) · `440fe0e` (C) ·
-`051e812` (B) · `947fd35` (D) · `55232b3` (global synthesis). Outputs under `analysis/run2_qwen3vl8b/`
-+ narrative `reports/run2_qwen3vl8b/03_profiling_analysis.md`.
+`051e812` (B) · `947fd35` (D) · `55232b3` (global synthesis). Outputs under `analysis/qwen3vl8b/`
++ narrative `reports/qwen3vl8b/03_profiling_analysis.md`.
 
 **Per-case summary:**
 
@@ -996,231 +964,21 @@ conclusions.**
 
 ---
 
-### Phase 0 — Environment & Functional Equivalence (run1 historical, completed 2026-04-17)
-
-#### Run conditions
-- GPU: H200 index 6, `CUDA_VISIBLE_DEVICES=6`
-- `HF_HUB_OFFLINE=1`, direct snapshot path (no network)
-- Servers run sequentially (SGLang first, then vLLM after full shutdown)
-
-#### Environment snapshot
-
-**Host:** radixark02, container sglang-bowenw. GPU: H200 index 6, 144 GB, CUDA 12.9. `HF_HUB_OFFLINE=1`.
-
-**Model:** `Qwen/Qwen3-VL-8B-Instruct` snapshot `0c351dd01ed87e9c1b53cbc748cba10e6187ff3b`. dtype bfloat16. vocab_size=151643, eos=151645, pad=151643, model_max_length=262144, chat_template=ChatML.
-
-**SGLang server (port 30000):**
-- Version: 0.0.0.dev1+ga4cf2ea12 | torch 2.9.1+cu129 | FlashInfer 0.6.7.post3
-- attention_backend (text): flashinfer | attention_backend (mm): fa3
-- chunked_prefill_size=8192, piecewise_cuda_graph=disabled
-- mem_fraction_static=0.8388, max_total_num_tokens=729090
-- CUDA graphs: 36 captured (batch sizes 1–256)
-- Weight load: 16.52 GB / 4.07 s | KV cache: ~102 GB | Idle memory: 124,914 MiB used / 18,244 MiB free
-
-**vLLM server (port 30001):**
-- Version: 0.19.0 | torch 2.10.0+cu128 (conda env vllm)
-- attention_backend (text + mm): FLASH_ATTN (FlashAttention v3, auto-selected)
-- gpu_memory_utilization=0.90 | CUDA graphs: PIECEWISE 51 + FULL 51
-- Weight load: 16.78 GB / 5.33 s | KV cache: 105.89 GiB | Idle memory: 129,933 MiB used / 13,224 MiB free
-
-**Fairness tier assignments:**
-- Controlled: GPU, model snapshot, dtype, TP=1, sampler, HF_HUB_OFFLINE
-- Measured: torch version (SGLang 2.9.1 vs vLLM 2.10.0), attention backend (FlashInfer vs FA3), KV cache size (~102 GB vs ~105.9 GB)
-- Framework-intrinsic: scheduler policy, CUDA graph shape selection, chunked-prefill scheduling
-
-#### Tokenizer probe results
-
-| Probe string | Token count | First 8 IDs |
-|---|---|---|
-| "Hello world" | 2 | [9707, 1879] |
-| "你好世界" | 2 | [108386, 99489] |
-| "def foo(): return 42" | 7 | [750, 15229, 4555, 470, 220, 19, 17] |
-| "🚀" | 1 | [145836] |
-| "The quick brown fox…" (×8) | 81 | [785, 3974, 13876, 38835, …] |
-
-Byte-identical across SGLang and vLLM (both load from same snapshot path). Tier-A PASS.
-
-#### Greedy output comparison (128 tokens, temperature=0)
-
-| Prompt | SGLang output | vLLM output | Match |
-|---|---|---|---|
-| "What is 2+2? Answer in one word." | "Four" | "Four" | **EXACT** |
-| "Explain gradient descent in exactly one sentence." | "Gradient descent is an iterative optimization algorithm…" | identical | **EXACT** |
-| "Write a Python function that reverses a string. Just the code." | ` ```python\ndef reverse_string(s):\n    return s[::-1]\n``` ` | identical | **EXACT** |
-
-All 3 outputs byte-identical under greedy sampling. No downstream "semantic-level only" annotation needed.
-
-#### Equivalence results
-
-| Tier | Check | Result |
-|---|---|---|
-| A | Tokenizer byte-equality (5 probes) | ✅ PASS |
-| A | Model weights (same snapshot path) | ✅ PASS |
-| A | Vocab size (151,643), EOS/BOS/PAD ids | ✅ PASS |
-| A | Chat template (ChatML) | ✅ PASS |
-| B | Top-1 first token on 3 greedy prompts | ✅ PASS |
-| B | Full 128-token output | ✅ **EXACT MATCH** on all 3 prompts |
-| B | Coherent continuation | ✅ PASS |
-
-#### Key environment findings (carry into Phase 1+)
-
-| Finding | Variable tier | Impact on conclusions |
-|---|---|---|
-| SGLang attention backend: **FlashInfer 0.6.7.post3** (text) + FA3 (multimodal) | Measured | Any Phase-4 attention-kernel difference has confidence ceiling M until backends are aligned |
-| vLLM attention backend: **FlashAttention v3** (text + multimodal) | Measured | Same as above |
-| torch version differs: SGLang 2.9.1+cu129 vs vLLM 2.10.0+cu128 | Measured | Log in every run meta.json; re-confirm if version changes |
-| KV cache: SGLang ~102 GB vs vLLM ~105.9 GB | Measured | Not a practical constraint at Phase-1 concurrency (≤16); no fairness action needed |
-| SGLang `chunked_prefill_size=8192`, `piecewise_cuda_graph=disabled` | Controlled (logged) | Pinned; record in Phase-1 meta.json |
-| Both frameworks: **EXACT greedy output match** at temperature=0 | — | No downstream "semantic-level only" annotation needed |
-
----
-
-### Phase 1 — Minimal Fair Baseline (run1 historical, completed 2026-04-17)
-
-#### Run conditions
-- GPU: H200 index 6, `CUDA_VISIBLE_DEVICES=6`, `HF_HUB_OFFLINE=1`
-- Servers run sequentially; 3 reps per (case × framework); median taken
-- Dataset: text-only random prompts (token IDs 0–151642, special tokens excluded)
-
-#### Key engineering issue resolved
-The `sglang.auto_benchmark convert --kind random` sampler draws from the full tokenizer vocabulary including multimodal special tokens (`<|image_pad|>` ID 151655, `<|vision_start|>` 151652, etc.). These trigger `general_mm_embed_routine` in Qwen3-VL, exhausting GPU activation memory and causing OOM crashes. Fixed with a custom generator (`experiments/phase1/scripts/gen_datasets.py`) that restricts sampling to IDs 0–151642.
-
-#### Results summary (SGLang / vLLM ratios)
-
-| Case | TTFT p50 ratio | TPOT p50 ratio | Req/s ratio | Verdict |
-|---|---|---|---|---|
-| A — Short (128→128, c=1) | **3.89×** ↑ SGLang slower | 1.00× parity | 0.95× | Gap >15% → Phase 3 candidate |
-| B — Long prefill (2048→128, c=1) | **2.59×** ↑ SGLang slower | 0.99× parity | 0.96× | Gap >15% → Phase 3 candidate |
-| C — Batched (512→128, c=16) | **1.49×** ↑ SGLang slower | 0.98× parity | 0.93× | CV ⚠ (20%) — stabilize first |
-| D — Decode-heavy (512→512, c=16) | **1.34×** ↑ SGLang slower | 1.02× parity | 0.97× | Marginal gap; p99 CV ⚠ (42%) |
-
-All CV values for TPOT and throughput are ≤2% — decode metrics are stable. TTFT is where all variance lives.
-
-#### Key findings
-
-1. **TTFT gap is universal; TPOT/throughput gap is negligible.** SGLang decode (TPOT) is on par with vLLM (within 2%) across all 4 cases. Every significant gap is in first-token latency.
-
-2. **Case A TTFT overhead is scheduling/dispatch, not compute.** SGLang TTFT increases only 7.7 ms from Case A (128 tok) to Case B (2048 tok), while vLLM increases 10 ms. The actual prefill compute for 16× more tokens would be far larger — SGLang's TTFT is dominated by pre-prefill overhead (~50 ms fixed cost at concurrency=1).
-
-3. **vLLM Case B TTFT is noisy (cv=99.3%).** Likely chunked-prefill scheduling jitter or CUDA graph warmup. The median (24.1 ms) is a lower bound; the gap with SGLang is real but the vLLM baseline needs re-examination before drawing strong conclusions for Case B.
-
-4. **Cases C and D TTFT CV is elevated (20–42%)** — scheduler queuing jitter at concurrency=16. The gap is real (1.34–1.49×) but confidence is M until variance is reduced.
-
-#### Phase 2 action
-- Apply Phase-2 decision rule: all 4 cases have TTFT gap >15%; Cases A and B are primary candidates.
-- Case A is highest priority: the scheduling overhead hypothesis is clean, low-noise, and directly actionable.
-- Cases C and D: run a short reshaping sweep to reduce TTFT variance before committing to profiling.
-
-### Phase 2 — Identify Informative Cases (run1 historical, completed 2026-04-24)
-
-#### Step 2.1 — Case A scheduler-overhead sweep (completed 2026-04-24)
-
-**Run conditions:** GPU 6, clock-locked 1980 MHz, dataset SHA verified, `SGLANG_KERNEL_API_LOGLEVEL=1`.
-
-**Results:**
-
-| Candidate | Flag | TTFT p50 (ms) | Δ vs baseline |
-|---|---|---|---|
-| A0 baseline | (default) | 57.1 | — |
-| A1 | `--disable-overlap-schedule` | 55.4 | −1.7 ms |
-| A2 | `--schedule-policy fcfs` | 57.5 | +0.4 ms |
-| A3 | `--stream-interval 8` | 57.0 | −0.0 ms |
-
-**Finalist 3-rep reconfirm (A0 baseline):** median = **56.0 ms**, CV = **0.1%**.
-
-**Verdict: STRUCTURAL.** No scheduler flag moved TTFT by ≥10 ms (maximum Δ = 1.7 ms). The ~56 ms TTFT floor is intrinsic to SGLang's c=1 request-dispatch path and cannot be closed by any combination of overlap scheduling, scheduling policy, or stream interval settings. 2-way combo step was bypassed — threshold not triggered.
-
-**Phase-3 entry:** Case A promotes with phenomenon label: *"SGLang ~56 ms structural scheduler/dispatch floor at c=1, unresponsive to overlap/policy/stream flags."* Base config = default (no shaping). Fairness dependence: Framework-intrinsic.
-
-**Produced files:** `experiments/phase2_shaping/caseA/summary.md`, `experiments/phase2_shaping/caseA/A{0..3}_baseline_rep*.json`, `logs/phase2/sglang_caseA_*.log`.
-
-#### Step 2.2 — Case B chunked-prefill sweep (completed 2026-04-24)
-
-**Candidates:** B0 chunk=8192 (default, 1 chunk) / B1 chunk=512 (4 chunks) / B2 chunk=1024 (2 chunks) / B3 chunk=-1 (disabled).
-
-| Candidate | Chunks | TTFT p50 |
-|---|---|---|
-| B0 chunk=8192 | 1 (no actual chunking) | 68.5 ms |
-| B3 chunk=-1 | disabled | 66.7 ms |
-| B2 chunk=1024 | 2 | 169.2 ms |
-| B1 chunk=512 | 4 | 261.5 ms |
-
-**Finalist 3-rep (B0 default):** median = **64.4 ms**, CV = **0.9%**.
-
-**Verdict: STRUCTURAL (same floor as Case A).** Chunked prefill in default config (chunk=8192 ≥ prompt_len=2048) is a no-op — B0 and B3 are functionally equivalent. The gap is the same scheduler/dispatch floor.
-
-**Secondary finding:** When chunked prefill IS triggered (chunk_size < prompt_len), TTFT scales linearly with chunk count — each chunk pays an independent ~65–85 ms dispatch overhead. This implies the structural floor is incurred **per chunk dispatched**, not per request. Record in hypotheses.md.
-
-**Phase-3 entry:** Case B promotes with phenomenon: *"Same structural floor as Case A; secondary finding: per-chunk dispatch overhead when chunking active."*
-
----
-
-#### Step 2.3 — Cases C/D variance reduction (completed 2026-04-24)
-
-Single SGLang server (default flags). Client-only warmup sweep across V0/V1/V2.
-
-**Case C (512→128, c=16):**
-
-| Variant | warmup | Cross-rep CV | Decision |
-|---|---|---|---|
-| V0 | 30 | 9.5% | Borderline |
-| V1 | 100 | **4.2%** | ✅ Profilable |
-| V2 | 300 | **2.1%** | ✅ Profilable |
-
-**→ PROMOTE** with warmup=100 (V1). Residual TTFT: ~241 ms vs vLLM 164 ms (1.47×), CV stable.
-
-**Case D (512→512, c=16):**
-
-| Variant | warmup | Cross-rep CV | Decision |
-|---|---|---|---|
-| V0 | 30 | 19.8% | ❌ (rep3 outlier: 160 ms) |
-| V1 | 100 | **0.1%** | ✅ (3 reps, lucky window) |
-| V2 | 300 | **14.8%** | ❌ (rep3 outlier again: 160 ms) |
-
-**→ DROP.** V1's 0.1% CV was a 3-rep lucky window; V2's 5-rep run re-exposed the bimodal pattern (periodic drop to ~160 ms vs steady ~243 ms). Consistent with a periodic server-side event (KV eviction / CUDA graph re-capture / scheduler housekeeping) under sustained c=16 + 512-tok decode load. Record in `analysis/hypotheses.md` as a low-confidence Phase-4 finding candidate.
-
----
-
-#### Step 2.4 — vLLM baseline recheck (completed 2026-04-24)
-
-Protocol: warmup=300, 5 reps, GPU 6. Single vLLM server.
-
-**Case B (2048→128, c=1) — CEILING M:**
-
-| Rep | TTFT p50 |
-|---|---|
-| 1 | 65.4 ms ← outlier |
-| 2 | 24.2 ms |
-| 3 | 24.3 ms |
-| 4 | 23.9 ms |
-| 5 | 24.3 ms |
-
-Across-rep CV = **76.0%**. Bimodal — rep1 is a periodic outlier (~65 ms), steady state is ~24 ms but unpredictable. All Phase-4 vLLM cross-checks for Case B carry **confidence ceiling M**.
-
-**Case C (512→128, c=16) — CLEAN:**
-
-5-rep TTFT p50 values: [180.9, 185.5, 174.3, 161.0, 183.7] ms. Median = **180.9 ms**, CV = **5.5%**. Baseline stable.
-
-**Key revision:** Phase-1 vLLM Case C was 164.1 ms (warmup=30, insufficient for c=16). True stable baseline is **180.9 ms**. Corrected SGLang/vLLM ratio: **1.33×** (was 1.49×). Gap is real and profilable.
-
----
-
-#### Phase 2 — Final shortlist (complete)
-
-**Phase-3 shortlist:** A (primary), B (primary), C (secondary). Case D dropped.
-
-| Case | Priority | SGLang TTFT | vLLM TTFT (verified) | Ratio | SGLang CV | vLLM ceiling | Phase-3 config |
-|---|---|---|---|---|---|---|---|
-| A — 128→128, c=1 | Primary | 56.0 ms | 14.1 ms (Phase-1, cv=3.3%) | **4.0×** | 0.1% | None | default, warmup=30 |
-| B — 2048→128, c=1 | Primary | 64.4 ms | ~24 ms (bimodal ⚠, cv=76%) | **~2.7×** | 0.9% | **M** | default, warmup=30 |
-| C — 512→128, c=16 | Secondary | 241 ms | 180.9 ms (recheck, cv=5.5%) | **1.33×** | 4.2% | None | default, warmup=100 |
-| D — 512→512, c=16 | Dropped | — | — | — | bimodal (14.8%) | — | — |
+### Historical note — earlier exploratory round (removed)
+
+An earlier exploratory measurement round (informally "run1", 2026-04-17/04-24) was run on a
+different machine/stack (GPU 6, CUDA 12.9, older SGLang/vLLM/torch/FlashInfer). Its artifacts
+(`experiments/phase1|phase2|phase2_shaping`, root `datasets/case*.jsonl`, `logs/phase*`) were
+**removed** during the repo restructure — they used a different environment and were **not
+comparable** to the current `qwen3vl8b` results above (e.g. Case A ratio 4.0× then vs 4.89× now).
+Only the current experiment is retained. Direction was consistent across both rounds (TTFT is the
+gap; TPOT parity; vLLM Case B bimodal); magnitudes are not interchangeable.
 
 ---
 
 ## 16. Prioritized Next-Step Checklist
 
-> **run2 progress:** ✅ env recovery (conda `profiling`, vLLM 0.21.0, model re-downloaded) ·
+> **Progress:** ✅ env recovery (conda `profiling`, vLLM 0.21.0, model re-downloaded) ·
 > ✅ Phase 0 PASS · ✅ Phase 1 (24 runs, 0 failures) · ✅ Phase 2 (GPU 7, 0 failures) ·
 > ✅ Case C W500 probe (GPU 1, CV 2.9% — gate clean) · ✅ **Phase 3 trace collection (GPU 1)** —
 > all 4 cases; SGLang DECODE + EXTEND-mapping (all 4) + EXTEND-formal (A/C/D); vLLM prefill/decode
@@ -1228,13 +986,13 @@ Across-rep CV = **76.0%**. Bimodal — rep1 is a periodic outlier (~65 ms), stea
 > ✅ **Phase 4 triage (offline, all 4 cases)** — A/C/D EXTEND+DECODE + vLLM; B DECODE+vLLM (EXTEND
 > unavailable, ≤ M). Hypotheses H1–H4 + ranked recommendations. Commits `871565f` / `440fe0e` /
 > `051e812` / `947fd35` / `55232b3`.
-> **Next for run2: Phase 5 validation.** Validate H1 first (SGLang prefill CPU launch-gap +
+> **Next: Phase 5 validation.** Validate H1 first (SGLang prefill CPU launch-gap +
 > graph/compile coverage on Case A/C); H2 as a parallel absolute-speed track (PR #22392); H3/H4 low
-> priority. Items 1–5 below are **run1 historical**.
+> priority. Items 1–5 are project setup (done).
 
 1. ✅ Create the filesystem layout from §8.1 (placeholder READMEs in each directory).
-2. ✅ (run1) Phase 0 — servers up, equivalence matrix run. All Tier-A/B pass; outputs EXACT match. *(run2 Phase 0 also ✅ PASS — see §15.)*
-3. ✅ Generate `datasets/case{A..D}.jsonl` — text-only random prompts (special tokens excluded), SHA-256 logged.
+2. ✅ Phase 0 — servers up, equivalence matrix run. All Tier-A/B pass; outputs EXACT match. *(Phase 0 also ✅ PASS — see §15.)*
+3. ✅ Generate `datasets/qwen3vl8b/case{A..D}.jsonl` — text-only random prompts (special tokens excluded), SHA-256 logged.
 4. ✅ Phase 1 — 24 runs (4 cases × 2 frameworks × 3 reps); `experiments/phase1/summary.md` complete.
 5. ✅ Phase 2 (fully complete — all 5 exit criteria verified):
    - ✅ Step 2.1 — Case A: STRUCTURAL floor at 56 ms, CV=0.1%. No flag closes it.
@@ -1242,7 +1000,7 @@ Across-rep CV = **76.0%**. Bimodal — rep1 is a periodic outlier (~65 ms), stea
    - ✅ Step 2.3 — Case C: PROMOTE (CV 4.2% at warmup=100). Case D: DROP (bimodal, V2 CV=14.8%).
    - ✅ Step 2.4 — vLLM recheck: Case B → CEILING M (CV=76%, bimodal); Case C → CLEAN (CV=5.5%, revised baseline 164→181 ms, ratio 1.49→1.33×).
    - ✅ Step 2.5 — selected_cases.md updated; Phase-3 protocol locked; all 5 exit criteria verified.
-6. ✅ Phase 3 (run2) — SGLang mapping+formal (DECODE) + EXTEND supplement (mapping all 4, formal A/C/D) + vLLM prefill_like+decode_like, all 4 cases. Case B graph-on EXTEND-formal missing (caveat). See §15 (run2) + `experiments/run2_qwen3vl8b/phase3/`.
-7. ✅ Phase 4 (run2) — triage + breakdown + vLLM cross-check for all 4 cases; `analysis/run2_qwen3vl8b/hypotheses.md` + `ranked_recommendations.md` + `reports/run2_qwen3vl8b/03_profiling_analysis.md`. Case B EXTEND unavailable (≤ M). See §15 (run2 Phase 4).
+6. ✅ Phase 3  — SGLang mapping+formal (DECODE) + EXTEND supplement (mapping all 4, formal A/C/D) + vLLM prefill_like+decode_like, all 4 cases. Case B graph-on EXTEND-formal missing (caveat). See §15  + `experiments/qwen3vl8b/phase3/`.
+7. ✅ Phase 4  — triage + breakdown + vLLM cross-check for all 4 cases; `analysis/qwen3vl8b/hypotheses.md` + `ranked_recommendations.md` + `reports/qwen3vl8b/03_profiling_analysis.md`. Case B EXTEND unavailable (≤ M). See §15 (Phase 4).
 8. **Phase 5 (next)** — validate **H1 first** (SGLang prefill CPU launch-gap + CUDA-graph/torch.compile coverage on Case A/C); **H2** as a parallel absolute-speed track (PR #22392 CUTLASS-FP8); **H3/H4** low priority. H1/H2 remain hypotheses until validated.
 9. Promote `analysis/**` into `reports/**` deliverables. *(03_profiling_analysis.md done; PR-ready writeup pending Phase 5.)*
