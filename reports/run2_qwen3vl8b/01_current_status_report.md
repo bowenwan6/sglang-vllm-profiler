@@ -9,7 +9,7 @@
 2. **SGLang 的 TTFT 在 run2 baseline 中显著慢于 vLLM。** Phase 1 的 SGLang/vLLM TTFT p50 ratio 为：Case A **4.89x**、Case B **3.20x**、Case C **1.32x**、Case D **1.33x**。
 3. **稳定性本身是关键发现。** Case C 在 W30/W100/W300 下 CV 都较高，并曾出现 misleading 的 “SGLang faster” 假象；W500 后 CV 收敛到 **2.9%**，稳定结论回到 SGLang 慢约 **1.32x**。
 4. **Phase 4 的主要发现：最大 GPU 开销是共享的 GEMM，不是跨框架差异源。** SGLang 和 vLLM 都主要花在同一类 `nvjet_sm90_*` FP8 GEMM kernel 上，因此 GEMM 是 absolute-speed 问题，不是解释 SGLang-vLLM gap 的首要原因。
-5. **当前最强 hypothesis 是 dispatch / graph coverage 差异。** SGLang 主要表现为 eager `aten::mm` dispatch；vLLM 更多落在 torch.compile / CUDA graph 路径。Phase 5 应优先验证这个 CPU launch / dispatch gap。
+5. **当前最强待验证 hypothesis 是 dispatch / graph coverage 差异。** 在 graph-on formal traces 中，SGLang 仍有不少 GEMM 路径没有像 vLLM 那样稳定落入 CUDA graph / compile region；但这还不是最终结论，Phase 5 必须直接测 CPU launch / dispatch gap。
 
 </aside>
 
@@ -26,7 +26,7 @@
 
 当前已完成 Phase 0–4：功能等价性验证、baseline benchmark、shaping / variance gate、trace collection，以及 trace triage。主要结论是：**SGLang 的性能差距主要体现在 TTFT，而不是 TPOT**。Phase 1 baseline 中，四个 case 的 TPOT 基本相等，但 TTFT 上 SGLang 均慢于 vLLM。Phase 2 进一步表明，Case A 的一部分差距来自 overlap scheduler 的 c=1 固定开销；Case C 需要足够 warmup 才能稳定，W500 后确认其稳定 gap 为 1.32x；Case B 两边均存在 bimodal，因此只能作为带 caveat 的辅助证据。
 
-Phase 4 已完成对 A/C/B/D 的离线 trace triage。当前最重要的分析结果是：两边 GPU time 都由同一类 `nvjet_sm90_*` FP8 GEMM 主导，说明 GEMM 是共享成本，不是跨框架 gap 的主要差异源；更强的 hypothesis 是 **SGLang eager dispatch / CUDA graph coverage 不足** 相比 vLLM torch.compile / CUDA graph 路径带来了 first-token 前的固定开销。该判断仍是 hypothesis，Phase 5 尚未验证，因此本文不把它写成最终 root cause 或确定优化结论。
+Phase 4 已完成对 A/C/B/D 的离线 trace triage。当前最重要的分析结果是：两边 GPU time 都由同一类 `nvjet_sm90_*` FP8 GEMM 主导，说明 GEMM 是共享成本，不是跨框架 gap 的主要差异源；更强的待验证 hypothesis 是 **SGLang graph / compile coverage 不如 vLLM 充分**，从而在 first-token 前留下更多 CPU launch / dispatch 固定开销。该判断不是最终 root cause：graph-off mapping trace 只用于 kernel-to-source 映射，不能单独证明真实 serving eager；真正需要验证的是 graph-on formal traces 中观察到的 coverage 差异是否对应可量化 CPU gap。
 
 ---
 
@@ -132,8 +132,8 @@ Phase 4 对 A/C/B/D 的 SGLang traces 与 vLLM cross-check traces 做了离线 t
 
 | Case | Triage status | Main observation | Interpretation strength |
 | --- | --- | --- | --- |
-| A | EXTEND/DECODE + vLLM complete | SGLang eager `aten::mm`，vLLM 更多为 graph/compile 路径；residual gap 1.56x | Strongest evidence for H1 |
-| C | EXTEND/DECODE + vLLM complete | batched c=16 下仍是同类 dispatch/graph coverage 差异；gap 1.32x | Strong evidence for H1 |
+| A | EXTEND/DECODE + vLLM complete | graph-on formal 中 SGLang coverage 不如 vLLM graph/compile 路径充分；residual gap 1.56x | Strongest evidence for H1, pending validation |
+| C | EXTEND/DECODE + vLLM complete | batched c=16 下仍观察到同类 graph/compile coverage 差异；gap 1.32x | Strong evidence for H1, pending validation |
 | B | DECODE + vLLM complete；EXTEND unavailable | 双框架 bimodal；长 prefill 结论受限 | Ceiling M；deprioritize |
 | D | EXTEND/DECODE + vLLM complete | decode-heavy sanity，gap 仅 1.09x | Corroborating evidence |
 
@@ -141,12 +141,14 @@ Phase 4 对 A/C/B/D 的 SGLang traces 与 vLLM cross-check traces 做了离线 t
 
 | ID | Hypothesis | Gap relevance | Impact | Confidence | Phase 5 action |
 | --- | --- | --- | --- | --- | --- |
-| H1 | SGLang eager dispatch / limited graph coverage vs vLLM compile/CUDA graph | Primary gap candidate | High | Medium | 测 SGLang prefill CPU launch gap；测试 CUDA graph / piecewise graph / torch.compile 覆盖是否收窄 TTFT |
+| H1 | SGLang graph / compile coverage 相比 vLLM 不充分，导致额外 CPU launch / dispatch gap | Primary gap candidate | High | Medium | 测 SGLang prefill CPU launch gap；测试 CUDA graph / piecewise graph / torch.compile 覆盖是否收窄 TTFT |
 | H2 | `nvjet_sm90_*` FP8 GEMM 是最大 GPU cost；PR #22392 CUTLASS FP8 可能加速 | Absolute speed, not gap closer | Medium absolute / Low gap | High for attribution | 可并行 A/B PR #22392，但不要当成 vLLM gap fix |
 | H3 | FlashInfer vs FlashAttention v3 attention backend 差异 | Not primary driver | Low | Medium ceiling | 仅作为 confidence ceiling 记录 |
 | H4 | Case B gap 来自 bimodality + c=1 fixed overhead | Deprioritize Case B | Low | Medium | 先解决 bimodality / trace availability，再谈 kernel claim |
 
-Phase 4 最关键的区分是：**最大 GPU kernel 不等于最大 gap source**。SGLang 与 vLLM 都被同一类 FP8 GEMM kernel 主导，这解释了绝对 GPU time，但不能解释为什么 SGLang TTFT 更慢。更能解释跨框架差异的是 CPU-side launch / dispatch / graph coverage：SGLang trace 中大量 GEMM 以 eager `aten::mm` 方式出现，而 vLLM 在多个窗口中体现为 torch.compile / CUDA graph 路径。
+Phase 4 最关键的区分是：**最大 GPU kernel 不等于最大 gap source**。SGLang 与 vLLM 都被同一类 FP8 GEMM kernel 主导，这解释了绝对 GPU time，但不能解释为什么 SGLang TTFT 更慢。当前更值得验证的是 CPU-side launch / dispatch / graph coverage：在 graph-on formal traces 中，SGLang 的 graph coverage 看起来不如 vLLM 的 CUDA graph / compile region 充分；但 GPU-time kernel table 本身不能直接量化 CPU launch gap，因此 H1 只能保持 Medium confidence。
+
+方法学上需要特别注意：SGLang 的 two-trace workflow 包含 graph-off mapping trace 和 graph-on formal trace。**graph-off mapping trace 是有意关闭 CUDA graph 的源码映射工具，不能用来证明真实 serving 路径没有 graph。** 本报告中的 H1 只把 mapping trace 用于定位源码，把 graph-on formal trace、vLLM cross-check 和 Phase 1/2 的 TTFT scaling 共同作为 hypothesis 证据。
 
 ---
 
@@ -155,7 +157,7 @@ Phase 4 最关键的区分是：**最大 GPU kernel 不等于最大 gap source**
 当前报告支持以下中间结论：
 
 1. **SGLang 的主要问题在 TTFT，不在 TPOT。**
-2. **H1 是当前最值得验证的方向。** Case A/C/D 的 trace 都支持 SGLang eager dispatch vs vLLM graph/compile coverage 这一解释，但它还需要 Phase 5 的 CPU launch-gap 直接测量。
+2. **H1 是当前最值得验证的方向。** Case A/C/D 的 graph-on traces 支持 “SGLang graph/compile coverage 不如 vLLM 充分” 这一方向，但它还需要 Phase 5 的 CPU launch-gap 直接测量。
 3. **GEMM 是最大 GPU 成本，但不是主要 gap 解释。** PR #22392 可能提高 SGLang 绝对性能，但由于 vLLM 也使用同一类 GEMM kernel，它不应被描述为主要 gap-closer。
 4. **Case B 是 noisy long-prefill 辅助证据。** EXTEND trace unavailable 且双框架 bimodal，所有 cross-framework claim 都要带 confidence ceiling M。
 5. **Case D 是 decode-heavy sanity check。** residual gap 小，说明 decode token-by-token 路径并非主要问题。
@@ -171,6 +173,7 @@ Phase 4 最关键的区分是：**最大 GPU kernel 不等于最大 gap source**
 | SGLang FlashInfer vs vLLM FlashAttention v3 | attention-kernel 相关结论 confidence ceiling M |
 | Case B 双框架 bimodal | Case B cross-framework 结论 ceiling M |
 | Case B SGLang EXTEND unavailable | prefill-stage SGLang 侧不能给强结论 |
+| graph-off mapping trace 不能证明真实 serving eager | H1 必须依赖 graph-on formal + Phase 5 CPU-gap 验证 |
 | H1 尚未被 Phase 5 直接验证 | dispatch/graph hypothesis 仍是 M confidence |
 
 ---
