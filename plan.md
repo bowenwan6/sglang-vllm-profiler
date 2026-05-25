@@ -65,13 +65,23 @@ S0→S2→S0 bracket + clean vLLM anchor, 0 failures:
 | S0_after | 19.23 ms | 3.8% | bracket drift 0.34% → stable |
 | V0 vLLM clean anchor | 13.11 ms | 3.2% | reference |
 
-**H1 strengthened (clean Case A).** Forcing prefill piecewise CUDA-graph coverage causally cuts Case A
-TTFT ~39% (19.2 → 11.7 ms) and **removes the gap to vLLM** (1.46× → 0.89×, at/just below parity), 0
-errors. The clean effect (~39%) is smaller than the instrumented screen's ~63% (instrumentation
-amplified it), but real. Caveats: `--enforce-piecewise-cuda-graph` is a testing lever bypassing the VLM
-auto-disable (validates locus/direction, **not** a production fix; smoke-checked only); single case A,
-c=1, greedy; S2 CV 10.1%. Detail: `experiments/qwen3vl8b/phase5/caseA_h1_confirmation/summary.md`. Next
-(needs approval): same clean bracket on **Case C** — not started.
+**H1 strengthened (clean Case A) — but does NOT generalize to batched Case C.**
+
+- *Case A (c=1):* forcing prefill piecewise CUDA-graph coverage cut TTFT ~39% (19.2 → 11.7 ms), TPOT
+  unchanged, 0 errors → reached the vLLM TTFT range. **Stability supplement (reps=5):** S2 median
+  13.36 ms (CV **12.3%**) vs vLLM 14.49 ms — S2 substantially beats the ~19 ms S0 baseline, but CV>5%
+  so **stable parity/superiority over vLLM is NOT claimed** (S2 only "reaches the vLLM TTFT range").
+- *Case C (c=16):* **no S2 benefit.** Clean S0→S2→S0 bracket: S0_before 211.5 → S0_after 174.1 ms
+  (**17.7% drift → bracket unstable → formally inconclusive**); S2 205.4 ms (CV 0.3%) sits within/above
+  the S0 band (worse than S0_after). → **H1 does not generalize to batched c=16**; the validated effect
+  is limited to Case-A short-latency (c=1) dispatch-bound behavior. Consistent with Phase 4: batched
+  prefill is compute/GEMM-bound, so per-launch dispatch overhead is a smaller TTFT fraction.
+
+Caveats: `--enforce-piecewise-cuda-graph` is a **testing lever** (validates locus/direction for Case A,
+**not** a production fix; smoke-checked only); Case A S2 CV 10–12%; Case C baseline drifted (warm-up/
+environment sensitivity). Detail: `experiments/qwen3vl8b/phase5/{caseA_h1_confirmation,caseA_s2_stability,caseC_h1_confirmation}/summary.md`.
+Instrumented GPU-3 screen remains exploratory-only (KAPI confound). Next (needs approval): production-safe
+design discussion for the Case-A short-latency path; H2 (PR #22392) as a separate absolute-speed track.
 
 **Phase 4 results (completed 2026-05-23, offline triage, no GPU).** All 4 cases triaged.
 A/C/D EXTEND+DECODE two-trace triage successful; B DECODE two-trace successful but **EXTEND

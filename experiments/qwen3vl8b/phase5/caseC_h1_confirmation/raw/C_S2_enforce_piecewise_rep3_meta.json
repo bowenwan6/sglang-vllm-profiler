@@ -1,0 +1,31 @@
+{
+  "variant": "C_S2_enforce_piecewise",
+  "framework": "sglang",
+  "rep": 3,
+  "status": "OK",
+  "elapsed_s": 133.3,
+  "failures": 0,
+  "gpu": "6",
+  "snapshot_sha": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+  "dataset_sha256": "265bde3e4879307702814e6e12faa1ef1543735575108c4abeb7d1fb3b750921",
+  "version": "0.0.0.dev1+g0c8049d9b",
+  "warmup": 500,
+  "reps": 5,
+  "num_prompts": 2000,
+  "concurrency": 16,
+  "extra_request_body": "{\"temperature\": 0, \"top_p\": 1}",
+  "kapi_logging": false,
+  "profiler": false,
+  "timestamp_utc": "2026-05-25T19:10:05.781095+00:00",
+  "metrics": {
+    "completed": 2000,
+    "failures": 0,
+    "ttft_p50": 205.936,
+    "ttft_p95": 237.335,
+    "ttft_p99": 451.868,
+    "tpot_p50": 6.0011748816656665,
+    "tpot_p99": 7.375018120418837,
+    "out_tok_s": 2103.1391731367607,
+    "req_s": 16.430774790130943
+  }
+}
