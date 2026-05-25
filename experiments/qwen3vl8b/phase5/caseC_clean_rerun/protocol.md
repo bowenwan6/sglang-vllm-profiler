@@ -1,6 +1,6 @@
 # Case C — Clean Rerun Protocol (resolve baseline drift)
 
-Main experiment `qwen3vl8b` · Case C (512→128, **c=16**) · **GPU 6** · no KAPI, no profiler.
+Main experiment `qwen3vl8b` · Case C (512→128, **c=16**) · **GPU 0** (GPU 6 was occupied by an external tenant) · no KAPI, no profiler.
 
 ## Why this rerun
 
@@ -23,13 +23,13 @@ Instead of one `S0 → S2 → S0`, run **five fresh-server blocks**:
 
 ## Locked protocol (Phase-2 Case C values; identical across SGLang blocks)
 
-- `CUDA_VISIBLE_DEVICES=6`; model `0c351dd…`; bf16; TP=1; SGLang flashinfer.
+- `CUDA_VISIBLE_DEVICES=0`; model `0c351dd…`; bf16; TP=1; SGLang flashinfer.
 - Dataset `datasets/qwen3vl8b/caseC_batched.jsonl` (sha `265bde3e48793077`).
 - `--max-concurrency 16 --num-prompts 2000 --warmup-requests 500`; **reps 3 per block**; greedy
   `{"temperature":0,"top_p":1}`; `--output-details`.
 - C_S0_* = SGLang **default** flags; C_S2_* = `--enforce-piecewise-cuda-graph`.
 - vLLM anchor: default, same Case-C protocol, reps 5.
-- Fresh server per block; GPU 6 < 2000 MiB after each shutdown; one server at a time.
+- Fresh server per block; GPU 0 < 2000 MiB after each shutdown; one server at a time.
 - **No** `SGLANG_KERNEL_API_LOGLEVEL` / `SGLANG_KERNEL_API_LOGDEST`; **no** profiler; no source changes.
 
 ## Decision rules
@@ -50,5 +50,5 @@ Instead of one `S0 → S2 → S0`, run **five fresh-server blocks**:
 
 ## Stop conditions
 
-GPU 6 not idle / not freed < 2000 MiB · crash / OOM / CUDA error · smoke fail · failed requests > 0 ·
+GPU 0 not idle / not freed < 2000 MiB · crash / OOM / CUDA error · smoke fail · failed requests > 0 ·
 flag unsupported · need for source change · conflicting uncommitted change.
