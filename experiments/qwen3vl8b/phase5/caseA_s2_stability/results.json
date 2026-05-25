@@ -1,0 +1,169 @@
+[
+  {
+    "id": "S2_stability",
+    "framework": "sglang",
+    "flags": [
+      "--disable-overlap-schedule",
+      "--enforce-piecewise-cuda-graph"
+    ],
+    "version": "0.0.0.dev1+g0c8049d9b",
+    "kapi_logging": false,
+    "profiler": false,
+    "reps": [
+      {
+        "completed": 400,
+        "failures": 0,
+        "ttft_p50": 13.701,
+        "ttft_p95": 20.228,
+        "ttft_p99": 24.805,
+        "tpot_p50": 5.543382559017476,
+        "tpot_p99": 9.17097983054549,
+        "out_tok_s": 170.63712597877128,
+        "req_s": 1.3331025467091506
+      },
+      {
+        "completed": 400,
+        "failures": 0,
+        "ttft_p50": 16.907,
+        "ttft_p95": 26.322,
+        "ttft_p99": 27.294,
+        "tpot_p50": 8.391163189066793,
+        "tpot_p99": 9.214242021649468,
+        "out_tok_s": 132.80797066994901,
+        "req_s": 1.0375622708589767
+      },
+      {
+        "completed": 400,
+        "failures": 0,
+        "ttft_p50": 13.358,
+        "ttft_p95": 23.949,
+        "ttft_p99": 27.417,
+        "tpot_p50": 5.56034614551101,
+        "tpot_p99": 9.177839041556467,
+        "out_tok_s": 153.0064089077756,
+        "req_s": 1.195362569591997
+      },
+      {
+        "completed": 400,
+        "failures": 0,
+        "ttft_p50": 13.215,
+        "ttft_p95": 25.606,
+        "ttft_p99": 33.192,
+        "tpot_p50": 5.562123921369826,
+        "tpot_p99": 9.14648693090664,
+        "out_tok_s": 154.43871395161636,
+        "req_s": 1.2065524527470028
+      },
+      {
+        "completed": 400,
+        "failures": 0,
+        "ttft_p50": 11.774,
+        "ttft_p95": 17.908,
+        "ttft_p99": 21.798,
+        "tpot_p50": 5.552289751724993,
+        "tpot_p99": 5.675504315643586,
+        "out_tok_s": 177.91742487732856,
+        "req_s": 1.3899798818541294
+      }
+    ],
+    "smoke_ok": true,
+    "smoke_detail": " Paris. The capital of Germany is Berlin",
+    "status": "OK",
+    "ttft_p50_reps": [
+      13.701,
+      16.907,
+      13.358,
+      13.215,
+      11.774
+    ],
+    "ttft_p50_median": 13.358,
+    "ttft_p50_cv_pct": 12.3,
+    "ttft_p95_median": 23.949,
+    "ttft_p99_median": 27.294,
+    "tpot_p50_median": 5.56,
+    "tpot_p99_median": 9.171,
+    "out_tok_s_median": 154.439
+  },
+  {
+    "id": "V0_stability_anchor",
+    "framework": "vllm",
+    "flags": [],
+    "version": "0.21.0",
+    "kapi_logging": false,
+    "profiler": false,
+    "reps": [
+      {
+        "completed": 400,
+        "failures": 0,
+        "ttft_p50": 14.489,
+        "ttft_p95": 21.775,
+        "ttft_p99": 26.786,
+        "tpot_p50": 5.318085098360467,
+        "tpot_p99": 5.343876150780446,
+        "out_tok_s": 185.22760605201643,
+        "req_s": 1.4470906722813783
+      },
+      {
+        "completed": 400,
+        "failures": 0,
+        "ttft_p50": 13.206,
+        "ttft_p95": 20.206,
+        "ttft_p99": 25.225,
+        "tpot_p50": 5.309139445055584,
+        "tpot_p99": 5.334729334833577,
+        "out_tok_s": 188.18714096981938,
+        "req_s": 1.470212038826714
+      },
+      {
+        "completed": 400,
+        "failures": 0,
+        "ttft_p50": 14.778,
+        "ttft_p95": 22.986,
+        "ttft_p99": 28.294,
+        "tpot_p50": 5.110151594363549,
+        "tpot_p99": 5.154667703813403,
+        "out_tok_s": 192.42413644325262,
+        "req_s": 1.503313565962911
+      },
+      {
+        "completed": 400,
+        "failures": 0,
+        "ttft_p50": 13.902,
+        "ttft_p95": 21.928,
+        "ttft_p99": 29.263,
+        "tpot_p50": 5.111193822927802,
+        "tpot_p99": 5.148310627307977,
+        "out_tok_s": 192.68723472498428,
+        "req_s": 1.5053690212889397
+      },
+      {
+        "completed": 400,
+        "failures": 0,
+        "ttft_p50": 15.417,
+        "ttft_p95": 24.382,
+        "ttft_p99": 29.273,
+        "tpot_p50": 5.109075724292092,
+        "tpot_p99": 5.153427499655349,
+        "out_tok_s": 192.30312111284533,
+        "req_s": 1.5023681336941042
+      }
+    ],
+    "smoke_ok": true,
+    "smoke_detail": " Paris. The capital of Germany is Berlin",
+    "status": "OK",
+    "ttft_p50_reps": [
+      14.489,
+      13.206,
+      14.778,
+      13.902,
+      15.417
+    ],
+    "ttft_p50_median": 14.489,
+    "ttft_p50_cv_pct": 5.3,
+    "ttft_p95_median": 21.928,
+    "ttft_p99_median": 28.294,
+    "tpot_p50_median": 5.111,
+    "tpot_p99_median": 5.155,
+    "out_tok_s_median": 192.303
+  }
+]

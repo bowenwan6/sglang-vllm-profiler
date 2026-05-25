@@ -1,0 +1,31 @@
+{
+  "variant": "V0_stability_anchor",
+  "framework": "vllm",
+  "rep": 4,
+  "status": "OK",
+  "elapsed_s": 275.1,
+  "failures": 0,
+  "gpu": "6",
+  "snapshot_sha": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+  "dataset_sha256": "fab4917772e087447d7c33d53ada63340b126088c1f195f118b9488d5f5b619e",
+  "version": "0.21.0",
+  "warmup": 30,
+  "reps": 5,
+  "num_prompts": 400,
+  "concurrency": 1,
+  "extra_request_body": "{\"temperature\": 0, \"top_p\": 1}",
+  "kapi_logging": false,
+  "profiler": false,
+  "timestamp_utc": "2026-05-25T18:44:12.246876+00:00",
+  "metrics": {
+    "completed": 400,
+    "failures": 0,
+    "ttft_p50": 13.902,
+    "ttft_p95": 21.928,
+    "ttft_p99": 29.263,
+    "tpot_p50": 5.111193822927802,
+    "tpot_p99": 5.148310627307977,
+    "out_tok_s": 192.68723472498428,
+    "req_s": 1.5053690212889397
+  }
+}
