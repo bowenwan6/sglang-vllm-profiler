@@ -149,7 +149,7 @@ TPOT parity + Case D 小 gap 双重佐证）。
 
 - **Case B SGLang EXTEND 不可用**：所有 Case B 结论 **≤ ceiling M**；prefill-stage 仅 vLLM 侧证据。
 - **Attention backend mismatch**：FlashInfer 0.6.11 vs FlashAttention v3 → 任何 attention 级结论 ceiling M。
-- **Phase 5 未验证**：H1/H2 仍是 **hypothesis，不是最终结论**；`scheduler/CPU gap` 未实测。
+- **Phase 5 进展**：**H1 已在 clean Case A 中被 strengthened** —— 强制 prefill piecewise CUDA-graph coverage(`--enforce-piecewise-cuda-graph`,绕过 VLM auto-disable)使 Case A TTFT 降低约 39%(19.2→11.7ms)、TPOT 不变、0 errors,达到 vLLM TTFT 区间。**边界:** testing-lever(非 production fix)、单 case(A,c=1)、S2 CV 10.1%(稳定 parity 未确认);**generalization to Case C pending**;H2 仍未验证。第一轮 GPU-3 intervention 因 KAPI logging 污染降级为 exploratory。详见 `experiments/qwen3vl8b/phase5/caseA_h1_confirmation/summary.md`。
 - **每个 (framework, stage, case) 单一代表性 trace**（非多 reps）：share 稳定，但绝对时间是单窗口快照。
 
 ---

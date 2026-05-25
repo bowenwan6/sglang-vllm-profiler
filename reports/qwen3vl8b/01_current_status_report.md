@@ -7,7 +7,8 @@
 
 1. **主要差距是 TTFT，而不是 TPOT。** 在四个 workload 中，SGLang 与 vLLM 的 TPOT / decode throughput 基本 parity；但 SGLang 的 TTFT p50 明显更慢：Case A **4.89x**、Case B **3.20x**、Case C **1.32x**、Case D **1.33x**。
 2. **最大 GPU 开销是跨框架共享的 GEMM。** Trace 显示两边在各 workload 中都主要消耗在同一类 `nvjet_sm90_*` FP8 GEMM kernel 上；因此 GEMM 是本实验中跨 workload、跨框架普遍存在的 absolute-cost，而不是解释 SGLang-vLLM gap 的主要差异源。
-3. **最强待验证假设是 dispatch / graph coverage 差异。** 在 graph-on formal traces 中，SGLang 仍有部分关键 GEMM 路径没有像 vLLM 那样稳定落入 CUDA graph / compile region；这可能导致额外 CPU launch / dispatch overhead，但必须在 Phase 5 中直接测量验证。
+3. **核心待验证假设 H1 = graph / compile coverage 差异。** 对当前 Qwen3-VL 配置，SGLang 的 prefill piecewise CUDA graph 因 VLM auto-disable 而默认关闭(decode graph 名义开启、torch.compile 关闭),可能留下额外 CPU launch / dispatch overhead。
+4. **Phase 5 clean Case A 干预已验证 H1 的主要贡献。** 无 instrumentation 的干净 benchmark 中,强制开启 prefill piecewise CUDA-graph coverage(`--enforce-piecewise-cuda-graph`)使 SGLang Case A TTFT 降低约 **39%**(19.2 → 11.7 ms),TPOT 基本不变。这验证了 Case-A gap 的一个主要贡献因素,**不是通用 production fix**:`--enforce-piecewise-cuda-graph` 是 testing lever,且仅在 Case A text-only c=1 下验证。S2 达到了 vLLM 的 TTFT 区间,但因 S2 CV=10.1%,**尚不声称稳定优于 vLLM**。第一轮 GPU-3 intervention 因 KAPI logging 污染,仅作 exploratory screen。
 
 </aside>
 
@@ -24,7 +25,7 @@
 
 当前主实验已完成 Phase 0–4：功能等价性验证、baseline benchmark、shaping / variance gate、trace collection 和 trace triage。核心事实比较稳定：TPOT 与 decode throughput 基本 parity，而 TTFT 上 SGLang 全部慢于 vLLM。Phase 1 显示四个 workload 的 TTFT ratio 分别为 4.89x、3.20x、1.32x、1.33x；Phase 2 进一步将 A/C/D 收敛为可分析 case，并把 Case C 的 noisy reversal 修正为稳定的 1.32x SGLang-slower gap。
 
-Phase 4 的主要贡献是把“哪个 GPU kernel 贡献最多绝对时间”与“什么导致跨框架 gap”区分开。trace 显示两边 GPU time 都主要消耗在同一类 `nvjet_sm90_*` FP8 GEMM kernel 上，因此 GEMM 是共享的 absolute-cost，不是解释 SGLang-vLLM gap 的首要差异源。当前最强但尚未验证的 hypothesis 是：SGLang 在 graph-on formal traces 中仍有部分关键 GEMM 路径没有像 vLLM 那样稳定落入 CUDA graph / compile region，可能留下额外 CPU launch / dispatch overhead。该判断仍需 Phase 5 直接测量 CPU launch gap 后才能升级为 root cause。
+Phase 4 的主要贡献是把“哪个 GPU kernel 贡献最多绝对时间”与“什么导致跨框架 gap”区分开。trace 显示两边 GPU time 都主要消耗在同一类 `nvjet_sm90_*` FP8 GEMM kernel 上，因此 GEMM 是共享的 absolute-cost，不是解释 SGLang-vLLM gap 的首要差异源。主要 hypothesis(H1)是:SGLang 的 prefill 路径因 VLM auto-disable 而未落入 piecewise CUDA graph,留下额外 CPU launch / dispatch overhead。**Phase 5 clean Case A 干预已验证该方向**:强制开启 prefill piecewise graph 使 Case A TTFT 降低约 39%、TPOT 不变,达到 vLLM TTFT 区间。该结论目前限于 Case A(testing-lever、单 case、S2 CV 10.1%),泛化到 Case C 待验证。
 
 ---
 
@@ -56,7 +57,7 @@ Phase 4 的主要贡献是把“哪个 GPU kernel 贡献最多绝对时间”与
 | Phase 2 | Shaping / variance gate；锁定可 profile protocol | Complete | selected cases + warmup/reps |
 | Phase 3 | 收集 SGLang/vLLM traces，不解释 | Complete | mapping/formal + vLLM windows |
 | Phase 4 | Trace triage；生成 hypotheses | Complete | per-case triage + ranked hypotheses |
-| Phase 5 | 验证 top hypotheses | Pending | launch-gap / graph coverage validation |
+| Phase 5 | 验证 top hypotheses | In progress | Case A clean confirmation done (H1 strengthened); Case C pending |
 
 ---
 
@@ -123,8 +124,8 @@ Phase 4 的目标不是直接给优化结论，而是把 Phase 3 traces 转化�
 
 | Case | Triage status | Main observation | Interpretation strength |
 | --- | --- | --- | --- |
-| A | EXTEND/DECODE + vLLM complete | graph-on formal 中 SGLang coverage 不如 vLLM graph/compile 路径充分；residual gap 1.56x | strongest H1 evidence, pending validation |
-| C | EXTEND/DECODE + vLLM complete | c=16 batched path 仍观察到类似 graph/compile coverage 差异；gap 1.32x | strong H1 evidence, pending validation |
+| A | EXTEND/DECODE + vLLM complete | graph-on formal 中 SGLang coverage 不如 vLLM graph/compile 路径充分；residual gap 1.56x | strongest H1 evidence; clean Case A confirmation done (−39% TTFT) |
+| C | EXTEND/DECODE + vLLM complete | c=16 batched path 仍观察到类似 graph/compile coverage 差异；gap 1.32x | strong H1 evidence; Case C clean validation pending |
 | B | DECODE + vLLM complete；EXTEND unavailable | 双框架 bimodal；长 prefill 结论受限 | ceiling M；deprioritize |
 | D | EXTEND/DECODE + vLLM complete | decode-heavy sanity；gap 仅 1.09x | corroborating evidence |
 
@@ -132,7 +133,7 @@ Phase 4 的目标不是直接给优化结论，而是把 Phase 3 traces 转化�
 
 | ID | Hypothesis | Gap relevance | Impact | Confidence | Phase 5 action |
 | --- | --- | --- | --- | --- | --- |
-| H1 | SGLang graph / compile coverage 相比 vLLM 不充分，导致额外 CPU launch / dispatch gap | primary gap candidate | High | Medium | 测 SGLang prefill CPU launch gap；测试 CUDA graph / piecewise graph / torch.compile 覆盖是否收窄 TTFT |
+| H1 | SGLang prefill graph / compile coverage 相比 vLLM 不充分（VLM auto-disable piecewise graph），导致额外 CPU launch / dispatch overhead | primary gap candidate | High | **Strengthened (clean Case A)**；Case C pending | ✅ Case A: `--enforce-piecewise-cuda-graph` 降 TTFT ~39%（19.2→11.7ms），TPOT 不变。Next: Case A stability (reps=5) + Case C 泛化验证 |
 | H2 | `nvjet_sm90_*` FP8 GEMM 是最大 GPU cost；PR #22392 CUTLASS FP8 可能加速 | absolute speed, not gap closer | Medium absolute / Low gap | High for attribution | 可并行 A/B PR #22392，但不要当成 vLLM gap fix |
 | H3 | FlashInfer vs FlashAttention v3 attention backend 差异 | not primary driver | Low | Medium ceiling | 仅作为 confidence ceiling 记录 |
 | H4 | Case B gap 来自 bimodality + c=1 fixed overhead | deprioritize Case B | Low | Medium | 先解决 bimodality / trace availability，再谈 kernel claim |
@@ -146,7 +147,7 @@ Phase 4 最重要的结构性判断是：**最大 GPU kernel 不等于最大 gap
 当前报告可以支持以下中间结论：
 
 1. **SGLang 的主要问题在 TTFT，不在 TPOT。**
-2. **H1 是当前最值得验证的方向。** Case A/C/D 的 graph-on traces 支持 “SGLang graph/compile coverage 不如 vLLM 充分” 这一方向，但仍需要 Phase 5 直接测 CPU launch gap。
+2. **H1 已在 clean Case A 中被验证(strengthened)。** 强制 prefill piecewise CUDA-graph coverage 使 Case A TTFT 降低约 39%(19.2→11.7ms)、TPOT 不变、0 errors,达到 vLLM TTFT 区间。这验证了 Case-A gap 的一个主要贡献因素。**边界:** `--enforce-piecewise-cuda-graph` 是 testing lever(非 production fix);仅 Case A text-only c=1;S2 CV=10.1%,稳定优于 vLLM 尚未确认;泛化到 Case C 待验证。
 3. **GEMM 是最大 GPU 成本，但不是主要 gap 解释。** PR #22392 可能提高 SGLang 绝对性能，但由于 vLLM 也使用同一类 GEMM kernel，它不应被描述为主要 gap-closer。
 4. **Case B 是 noisy long-prefill 辅助证据。** EXTEND trace unavailable 且双框架 bimodal，所有 cross-framework claim 都要带 confidence ceiling M。
 5. **Case D 是 decode-heavy sanity check。** residual gap 小，说明 steady-state decode path 不是主要问题。
@@ -179,13 +180,24 @@ Phase 4 最重要的结构性判断是：**最大 GPU kernel 不等于最大 gap
 
 ---
 
-## 11. 下一步：Phase 5 Validation
+## 11. Phase 5 Validation（进行中）
 
-Phase 5 应优先验证 H1，而不是继续扩大 benchmark 数量。
+**Case A clean confirmation 已完成(GPU 6,无 KAPI、无 profiler,0 failures)。** S0→S2→S0 bracket 稳定且复现 Phase 2 baseline:
 
-1. **测 CPU launch / dispatch gap。** 在 Case A 和 Case C 的 prefill window 中测 SGLang inter-kernel CPU gap，确认 GPU kernels 之间是否存在足够解释 TTFT residual gap 的 launch / dispatch 空洞。
-2. **测试 graph / compile coverage 是否收窄 gap。** 调整 SGLang CUDA graph、piecewise graph 或 torch.compile 覆盖范围，观察 Case A 1.56x 与 Case C 1.32x residual gap 是否下降。
-3. **并行评估 H2，但单独叙述。** 若 PR #22392 可用，可以 A/B CUTLASS FP8 替代 nvjet FP8，对绝对 latency 可能有帮助；但它不是当前主要 gap hypothesis。
-4. **暂不投入 Case B kernel-level 结论。** 先解决 bimodality 与 EXTEND trace availability，否则只保留 caveat。
+| Variant | TTFT p50 median | CV | TPOT p50 |
+|---|---:|---:|---:|
+| S0_before (`--disable-overlap-schedule`) | 19.17 ms | 1.5% | ~5.5 ms |
+| S2 (`+ --enforce-piecewise-cuda-graph`) | **11.68 ms** | 10.1% | ~5.5 ms |
+| S0_after | 19.23 ms | 3.8% | ~5.5 ms |
+| vLLM clean anchor | 13.11 ms | 3.2% | ~5.3 ms |
 
-> Placeholder: Phase 5 validation pending.
+- S2 相对 S0 降低 TTFT 约 **39%**,TPOT 基本不变,0 errors → **H1 strengthened for clean Case A**。
+- S2(11.68ms)**reached the vLLM TTFT range** in Case A,但因 S2 CV=10.1%,**relative advantage requires stability confirmation**,不声称稳定 parity/superiority。
+- 第一轮 GPU-3 intervention 因 KAPI logging 污染(S1 产生 14.7GB log),**降级为 instrumented exploratory screen**,不作确认性证据。
+
+**剩余 Phase 5 步骤:**
+1. **Case A S2 stability supplement**(reps=5,GPU 6)—— 判断 S2 与 vLLM 的相对位置是否稳定(能否声称 parity)。
+2. **Case C clean bracket validation**(c=16 batched)—— 验证 H1 是否从 short-latency 泛化到 batched serving。
+3. **H2 并行、单独叙述。** PR #22392 / CUTLASS FP8 针对 absolute latency,不作 gap-closer。
+4. **Case B 暂不投入 kernel-level 结论**(bimodality + EXTEND trace 不可用)。
+5. **Production-safe 改进讨论仅在 A/C 验证后进行;本阶段不修改 SGLang 源码。**

@@ -26,7 +26,7 @@
 | 2 — Shaping / Variance gate | ✅ **complete** (0 failures; `experiments/qwen3vl8b/phase2/{summary.md,selected_cases.md}`) |
 | 3 — Profiling / Trace collection | ✅ **complete** (GPU 1; `experiments/qwen3vl8b/phase3/{summary.md,extend_supplement_summary.md}`) |
 | 4 — Triage | ✅ **complete** (all 4 cases; `analysis/qwen3vl8b/` + `reports/qwen3vl8b/03_profiling_analysis.md`) |
-| 5 — Validation | 🔄 **in progress (exploratory)** — H1 instrumented screen done + clean confirmation pending |
+| 5 — Validation | 🔄 **in progress** — Case A clean confirmation completed (H1 strengthened); Case C pending validation |
 
 **Phase 5 status (in progress — NOT complete).**
 
@@ -1004,8 +1004,10 @@ Offline triage (no GPU) of Phase 3 traces; all 4 cases. Commits `871565f` (A) ·
 | 3 (low) | H3 / H4 | No kernel-level effort unless later evidence changes — H3 fairness-ceilinged M; H4 bimodal + no SGLang EXTEND trace |
 
 **Caveats:** Case B SGLang EXTEND unavailable → all Case B conclusions ceiling M; attention findings
-ceiling M (FlashInfer vs FA3); **Phase 5 has NOT validated anything — H1/H2 remain hypotheses, not final
-conclusions.**
+ceiling M (FlashInfer vs FA3). **Phase 5 update:** H1 is now **strengthened by a clean (uninstrumented)
+Case A confirmation** (forcing prefill piecewise CUDA-graph coverage cut Case A TTFT ~39%, TPOT
+unchanged) — see §0 Phase 5 status block. H1 generalization to Case C and H2 remain **not yet
+validated**; the `--enforce-piecewise-cuda-graph` lever is a testing flag, not a production fix.
 
 ---
 
@@ -1047,5 +1049,5 @@ gap; TPOT parity; vLLM Case B bimodal); magnitudes are not interchangeable.
    - ✅ Step 2.5 — selected_cases.md updated; Phase-3 protocol locked; all 5 exit criteria verified.
 6. ✅ Phase 3  — SGLang mapping+formal (DECODE) + EXTEND supplement (mapping all 4, formal A/C/D) + vLLM prefill_like+decode_like, all 4 cases. Case B graph-on EXTEND-formal missing (caveat). See §15  + `experiments/qwen3vl8b/phase3/`.
 7. ✅ Phase 4  — triage + breakdown + vLLM cross-check for all 4 cases; `analysis/qwen3vl8b/hypotheses.md` + `ranked_recommendations.md` + `reports/qwen3vl8b/03_profiling_analysis.md`. Case B EXTEND unavailable (≤ M). See §15 (Phase 4).
-8. **Phase 5 (next)** — validate **H1 first** (SGLang prefill CPU launch-gap + CUDA-graph/torch.compile coverage on Case A/C); **H2** as a parallel absolute-speed track (PR #22392 CUTLASS-FP8); **H3/H4** low priority. H1/H2 remain hypotheses until validated.
+8. **Phase 5 (in progress)** — ✅ **Case A clean confirmation done: H1 strengthened** (`--enforce-piecewise-cuda-graph` cut Case A TTFT ~39%, TPOT unchanged, reaches vLLM TTFT range; testing-lever, not production fix). Next: Case A S2 stability supplement (reps=5) + **Case C** clean bracket validation (generalization to c=16). H2 (PR #22392) parallel absolute-speed track; H3/H4 low priority. Production-design discussion only after A/C validation.
 9. Promote `analysis/**` into `reports/**` deliverables. *(03_profiling_analysis.md done; PR-ready writeup pending Phase 5.)*
