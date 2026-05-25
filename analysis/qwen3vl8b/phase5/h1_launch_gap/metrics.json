@@ -1,0 +1,198 @@
+{
+  "caseA_short": {
+    "sglang_formal_DECODE": {
+      "trace": "traces/qwen3vl8b/caseA_short/sglang_formal/1779464282.6070118/1779464282.616904-TP-0-DECODE.trace.json.gz",
+      "kernel_count": 580,
+      "kernel_launch_count": 566,
+      "total_kernel_gpu_us": 6337.2,
+      "graph_covered_share_pct": 0.0,
+      "eager_dispatch_share_pct": 99.7,
+      "unclassified_share_pct": 0.3,
+      "graph_kernel_count": 0,
+      "eager_kernel_count": 566,
+      "unclassified_kernel_count": 14,
+      "gemm_share_pct": 74.6,
+      "dominant_stream_span_us": 135428.9,
+      "dominant_stream_busy_us": 6331.8,
+      "dominant_stream_idle_gap_us": 129097.2,
+      "dominant_stream_idle_pct": 95.3,
+      "launch_op_total_cpu_us": 4702.0,
+      "_notes": [
+        "graph/eager classified by the kernel's correlated CPU launch op (cudaGraphLaunch=graph, cudaLaunchKernel*=eager, no correlation=unclassified).",
+        "idle gap is on the dominant GPU stream (union-of-intervals); cross-stream overlap not modeled.",
+        "per-forward-step critical-path segmentation NOT computed (num_steps>1 windows are not cleanly separable from the trace alone) -> reported as window-level span/busy/idle, and per-step critical path is AMBIGUOUS/unavailable.",
+        "launch_op_total_cpu_us is the summed CPU duration of launch runtime ops (a proxy); true critical-path CPU launch-gap across threads is AMBIGUOUS and not asserted."
+      ]
+    },
+    "sglang_formal_EXTEND": {
+      "trace": "traces/qwen3vl8b/caseA_short/sglang_extend_formal/1779467497.3124661/1779467497.3574681-TP-0-EXTEND.trace.json.gz",
+      "kernel_count": 5870,
+      "kernel_launch_count": 5630,
+      "total_kernel_gpu_us": 49345.8,
+      "graph_covered_share_pct": 0.0,
+      "eager_dispatch_share_pct": 99.4,
+      "unclassified_share_pct": 0.6,
+      "graph_kernel_count": 0,
+      "eager_kernel_count": 5630,
+      "unclassified_kernel_count": 240,
+      "gemm_share_pct": 83.5,
+      "dominant_stream_span_us": 1285423.4,
+      "dominant_stream_busy_us": 49245.8,
+      "dominant_stream_idle_gap_us": 1236177.6,
+      "dominant_stream_idle_pct": 96.2,
+      "launch_op_total_cpu_us": 44156.5,
+      "_notes": [
+        "graph/eager classified by the kernel's correlated CPU launch op (cudaGraphLaunch=graph, cudaLaunchKernel*=eager, no correlation=unclassified).",
+        "idle gap is on the dominant GPU stream (union-of-intervals); cross-stream overlap not modeled.",
+        "per-forward-step critical-path segmentation NOT computed (num_steps>1 windows are not cleanly separable from the trace alone) -> reported as window-level span/busy/idle, and per-step critical path is AMBIGUOUS/unavailable.",
+        "launch_op_total_cpu_us is the summed CPU duration of launch runtime ops (a proxy); true critical-path CPU launch-gap across threads is AMBIGUOUS and not asserted."
+      ]
+    },
+    "vllm_prefill_like": {
+      "trace": "traces/qwen3vl8b/caseA_short/vllm/prefill_like/rank0.1779464350378276584.pt.trace.json.gz",
+      "kernel_count": 4328,
+      "kernel_launch_count": 1320,
+      "total_kernel_gpu_us": 49137.7,
+      "graph_covered_share_pct": 81.7,
+      "eager_dispatch_share_pct": 18.0,
+      "unclassified_share_pct": 0.3,
+      "graph_kernel_count": 3176,
+      "eager_kernel_count": 1024,
+      "unclassified_kernel_count": 128,
+      "gemm_share_pct": 77.3,
+      "dominant_stream_span_us": 138380.3,
+      "dominant_stream_busy_us": 48431.5,
+      "dominant_stream_idle_gap_us": 89948.8,
+      "dominant_stream_idle_pct": 65.0,
+      "launch_op_total_cpu_us": 11848.4,
+      "_notes": [
+        "graph/eager classified by the kernel's correlated CPU launch op (cudaGraphLaunch=graph, cudaLaunchKernel*=eager, no correlation=unclassified).",
+        "idle gap is on the dominant GPU stream (union-of-intervals); cross-stream overlap not modeled.",
+        "per-forward-step critical-path segmentation NOT computed (num_steps>1 windows are not cleanly separable from the trace alone) -> reported as window-level span/busy/idle, and per-step critical path is AMBIGUOUS/unavailable.",
+        "launch_op_total_cpu_us is the summed CPU duration of launch runtime ops (a proxy); true critical-path CPU launch-gap across threads is AMBIGUOUS and not asserted."
+      ]
+    },
+    "vllm_decode_like": {
+      "trace": "traces/qwen3vl8b/caseA_short/vllm/decode_like/rank0.1779464450847056388.pt.trace.json.gz",
+      "kernel_count": 640230,
+      "kernel_launch_count": 23398,
+      "total_kernel_gpu_us": 5697403.4,
+      "graph_covered_share_pct": 93.1,
+      "eager_dispatch_share_pct": 6.5,
+      "unclassified_share_pct": 0.4,
+      "graph_kernel_count": 600440,
+      "eager_kernel_count": 21998,
+      "unclassified_kernel_count": 17792,
+      "gemm_share_pct": 81.1,
+      "dominant_stream_span_us": 6173305.4,
+      "dominant_stream_busy_us": 5692963.5,
+      "dominant_stream_idle_gap_us": 480341.9,
+      "dominant_stream_idle_pct": 7.8,
+      "launch_op_total_cpu_us": 648496.1,
+      "_notes": [
+        "graph/eager classified by the kernel's correlated CPU launch op (cudaGraphLaunch=graph, cudaLaunchKernel*=eager, no correlation=unclassified).",
+        "idle gap is on the dominant GPU stream (union-of-intervals); cross-stream overlap not modeled.",
+        "per-forward-step critical-path segmentation NOT computed (num_steps>1 windows are not cleanly separable from the trace alone) -> reported as window-level span/busy/idle, and per-step critical path is AMBIGUOUS/unavailable.",
+        "launch_op_total_cpu_us is the summed CPU duration of launch runtime ops (a proxy); true critical-path CPU launch-gap across threads is AMBIGUOUS and not asserted."
+      ]
+    }
+  },
+  "caseC_batched": {
+    "sglang_formal_DECODE": {
+      "trace": "traces/qwen3vl8b/caseC_batched/sglang_formal/1779464674.712891/1779464674.8374457-TP-0-DECODE.trace.json.gz",
+      "kernel_count": 1216,
+      "kernel_launch_count": 997,
+      "total_kernel_gpu_us": 186589.3,
+      "graph_covered_share_pct": 0.0,
+      "eager_dispatch_share_pct": 99.9,
+      "unclassified_share_pct": 0.1,
+      "graph_kernel_count": 0,
+      "eager_kernel_count": 997,
+      "unclassified_kernel_count": 219,
+      "gemm_share_pct": 85.6,
+      "dominant_stream_span_us": 313716.4,
+      "dominant_stream_busy_us": 186498.0,
+      "dominant_stream_idle_gap_us": 127218.5,
+      "dominant_stream_idle_pct": 40.6,
+      "launch_op_total_cpu_us": 8441.7,
+      "_notes": [
+        "graph/eager classified by the kernel's correlated CPU launch op (cudaGraphLaunch=graph, cudaLaunchKernel*=eager, no correlation=unclassified).",
+        "idle gap is on the dominant GPU stream (union-of-intervals); cross-stream overlap not modeled.",
+        "per-forward-step critical-path segmentation NOT computed (num_steps>1 windows are not cleanly separable from the trace alone) -> reported as window-level span/busy/idle, and per-step critical path is AMBIGUOUS/unavailable.",
+        "launch_op_total_cpu_us is the summed CPU duration of launch runtime ops (a proxy); true critical-path CPU launch-gap across threads is AMBIGUOUS and not asserted."
+      ]
+    },
+    "sglang_formal_EXTEND": {
+      "trace": "traces/qwen3vl8b/caseC_batched/sglang_extend_formal/1779467846.5950239/1779467846.663199-TP-0-EXTEND.trace.json.gz",
+      "kernel_count": 8732,
+      "kernel_launch_count": 5578,
+      "total_kernel_gpu_us": 78243.4,
+      "graph_covered_share_pct": 35.7,
+      "eager_dispatch_share_pct": 62.1,
+      "unclassified_share_pct": 2.2,
+      "graph_kernel_count": 2725,
+      "eager_kernel_count": 5573,
+      "unclassified_kernel_count": 434,
+      "gemm_share_pct": 75.0,
+      "dominant_stream_span_us": 1277336.6,
+      "dominant_stream_busy_us": 75002.1,
+      "dominant_stream_idle_gap_us": 1202334.5,
+      "dominant_stream_idle_pct": 94.1,
+      "launch_op_total_cpu_us": 46556.6,
+      "_notes": [
+        "graph/eager classified by the kernel's correlated CPU launch op (cudaGraphLaunch=graph, cudaLaunchKernel*=eager, no correlation=unclassified).",
+        "idle gap is on the dominant GPU stream (union-of-intervals); cross-stream overlap not modeled.",
+        "per-forward-step critical-path segmentation NOT computed (num_steps>1 windows are not cleanly separable from the trace alone) -> reported as window-level span/busy/idle, and per-step critical path is AMBIGUOUS/unavailable.",
+        "launch_op_total_cpu_us is the summed CPU duration of launch runtime ops (a proxy); true critical-path CPU launch-gap across threads is AMBIGUOUS and not asserted."
+      ]
+    },
+    "vllm_prefill_like": {
+      "trace": "traces/qwen3vl8b/caseC_batched/vllm/prefill_like/rank0.1779464742680406876.pt.trace.json.gz",
+      "kernel_count": 4320,
+      "kernel_launch_count": 3904,
+      "total_kernel_gpu_us": 101081.2,
+      "graph_covered_share_pct": 0.0,
+      "eager_dispatch_share_pct": 99.6,
+      "unclassified_share_pct": 0.4,
+      "graph_kernel_count": 0,
+      "eager_kernel_count": 3904,
+      "unclassified_kernel_count": 416,
+      "gemm_share_pct": 83.3,
+      "dominant_stream_span_us": 321762.9,
+      "dominant_stream_busy_us": 101062.1,
+      "dominant_stream_idle_gap_us": 220700.8,
+      "dominant_stream_idle_pct": 68.6,
+      "launch_op_total_cpu_us": 19008.0,
+      "_notes": [
+        "graph/eager classified by the kernel's correlated CPU launch op (cudaGraphLaunch=graph, cudaLaunchKernel*=eager, no correlation=unclassified).",
+        "idle gap is on the dominant GPU stream (union-of-intervals); cross-stream overlap not modeled.",
+        "per-forward-step critical-path segmentation NOT computed (num_steps>1 windows are not cleanly separable from the trace alone) -> reported as window-level span/busy/idle, and per-step critical path is AMBIGUOUS/unavailable.",
+        "launch_op_total_cpu_us is the summed CPU duration of launch runtime ops (a proxy); true critical-path CPU launch-gap across threads is AMBIGUOUS and not asserted."
+      ]
+    },
+    "vllm_decode_like": {
+      "trace": "traces/qwen3vl8b/caseC_batched/vllm/decode_like/rank0.1779464849650540745.pt.trace.json.gz",
+      "kernel_count": 485351,
+      "kernel_launch_count": 26302,
+      "total_kernel_gpu_us": 5854682.4,
+      "graph_covered_share_pct": 72.7,
+      "eager_dispatch_share_pct": 26.7,
+      "unclassified_share_pct": 0.6,
+      "graph_kernel_count": 444702,
+      "eager_kernel_count": 25480,
+      "unclassified_kernel_count": 15169,
+      "gemm_share_pct": 77.9,
+      "dominant_stream_span_us": 6247435.7,
+      "dominant_stream_busy_us": 5851837.7,
+      "dominant_stream_idle_gap_us": 395598.0,
+      "dominant_stream_idle_pct": 6.3,
+      "launch_op_total_cpu_us": 541643.6,
+      "_notes": [
+        "graph/eager classified by the kernel's correlated CPU launch op (cudaGraphLaunch=graph, cudaLaunchKernel*=eager, no correlation=unclassified).",
+        "idle gap is on the dominant GPU stream (union-of-intervals); cross-stream overlap not modeled.",
+        "per-forward-step critical-path segmentation NOT computed (num_steps>1 windows are not cleanly separable from the trace alone) -> reported as window-level span/busy/idle, and per-step critical path is AMBIGUOUS/unavailable.",
+        "launch_op_total_cpu_us is the summed CPU duration of launch runtime ops (a proxy); true critical-path CPU launch-gap across threads is AMBIGUOUS and not asserted."
+      ]
+    }
+  }
+}
