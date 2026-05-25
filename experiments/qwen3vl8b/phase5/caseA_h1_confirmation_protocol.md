@@ -1,6 +1,6 @@
 # Case A — Phase 5.2 H1 Clean (Uninstrumented) Confirmation Protocol
 
-Main experiment `qwen3vl8b` · Workload Case A (128→128, c=1) · GPU **3**.
+Main experiment `qwen3vl8b` · Workload Case A (128→128, c=1) · GPU **6** (GPU 3 was occupied by an external tenant at run time).
 
 ## Why this run
 
@@ -19,10 +19,10 @@ an `S0 → S2 → S0` bracket to (a) check baseline stability/drift and (b) isol
 
 ## Fixed protocol (identical across variants)
 
-- `CUDA_VISIBLE_DEVICES=3`; model `0c351dd…`; dtype bf16; TP=1; SGLang attention backend flashinfer.
+- `CUDA_VISIBLE_DEVICES=6`; model `0c351dd…`; dtype bf16; TP=1; SGLang attention backend flashinfer.
 - Dataset `datasets/qwen3vl8b/caseA_short.jsonl`; `--num-prompts 400 --max-concurrency 1
   --warmup-requests 30`; reps 3; greedy `{"temperature":0,"top_p":1}`; `--output-details`.
-- Fresh server per variant; confirm GPU 3 < 2000 MiB after each shutdown; one server at a time.
+- Fresh server per variant; confirm GPU 6 < 2000 MiB after each shutdown; one server at a time.
 - S2 runs a minimal greedy correctness smoke check before benchmarking.
 
 ## Execution order (bracket)
@@ -49,7 +49,7 @@ Not re-run this round: **S1 graph-off** (expensive, not the prefill-TTFT lever) 
 
 ## Stop conditions
 
-GPU 3 unavailable / not freed < 2000 MiB · server crash / OOM / CUDA error · smoke fail · failed
+GPU 6 unavailable / not freed < 2000 MiB · server crash / OOM / CUDA error · smoke fail · failed
 requests > 0 · flag unsupported · need for source change · conflicting uncommitted change.
 
 ## Outputs
