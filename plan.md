@@ -51,11 +51,27 @@ instrumentation**.
 | S2 enforce piecewise graph | 19.74 ms | 3.1% | 5.55 ms | **promising candidate**, instrumentation-confounded |
 | S3 torch.compile | 54.05 ms | 1.3% | 5.15 ms | no observed TTFT benefit in the instrumented screen |
 
-Strongest current finding: **"S2 is a promising candidate requiring an uninstrumented confirmation
-run"** — *not* "H1 proven". Suspected confound: KAPI logging enabled only for the Phase-5 SGLang runs
-(14.7 GB log for S1). **No confirmed root-cause claim is made.** Audit:
-`experiments/qwen3vl8b/phase5/caseA_h1_intervention/baseline_anomaly_audit.md`. Next: uninstrumented
-S0→S2→S0 bracket + clean vLLM anchor on Case A (Case C blocked until confirmation passes).
+Strongest finding from the *instrumented screen*: "S2 is a promising candidate requiring an
+uninstrumented confirmation" (the 14.7 GB S1 KAPI log evidenced the confound). Audit:
+`experiments/qwen3vl8b/phase5/caseA_h1_intervention/baseline_anomaly_audit.md`.
+
+*Phase 5.2 CLEAN confirmation (Case A, GPU 6 — GPU 3 was externally occupied; no KAPI, no profiler).*
+S0→S2→S0 bracket + clean vLLM anchor, 0 failures:
+
+| Variant | TTFT p50 median | CV | note |
+|---|---:|---:|---|
+| S0_before | 19.17 ms | 1.5% | **reproduces Phase 2's 19.6 ms** (instrumented 53 ms was a KAPI artifact) |
+| S2 enforce piecewise | **11.68 ms** | 10.1% | **−39% vs S0**; 0 errors, smoke OK |
+| S0_after | 19.23 ms | 3.8% | bracket drift 0.34% → stable |
+| V0 vLLM clean anchor | 13.11 ms | 3.2% | reference |
+
+**H1 strengthened (clean Case A).** Forcing prefill piecewise CUDA-graph coverage causally cuts Case A
+TTFT ~39% (19.2 → 11.7 ms) and **removes the gap to vLLM** (1.46× → 0.89×, at/just below parity), 0
+errors. The clean effect (~39%) is smaller than the instrumented screen's ~63% (instrumentation
+amplified it), but real. Caveats: `--enforce-piecewise-cuda-graph` is a testing lever bypassing the VLM
+auto-disable (validates locus/direction, **not** a production fix; smoke-checked only); single case A,
+c=1, greedy; S2 CV 10.1%. Detail: `experiments/qwen3vl8b/phase5/caseA_h1_confirmation/summary.md`. Next
+(needs approval): same clean bracket on **Case C** — not started.
 
 **Phase 4 results (completed 2026-05-23, offline triage, no GPU).** All 4 cases triaged.
 A/C/D EXTEND+DECODE two-trace triage successful; B DECODE two-trace successful but **EXTEND
