@@ -71,11 +71,15 @@ S0→S2→S0 bracket + clean vLLM anchor, 0 failures:
   unchanged, 0 errors → reached the vLLM TTFT range. **Stability supplement (reps=5):** S2 median
   13.36 ms (CV **12.3%**) vs vLLM 14.49 ms — S2 substantially beats the ~19 ms S0 baseline, but CV>5%
   so **stable parity/superiority over vLLM is NOT claimed** (S2 only "reaches the vLLM TTFT range").
-- *Case C (c=16):* **no S2 benefit.** Clean S0→S2→S0 bracket: S0_before 211.5 → S0_after 174.1 ms
-  (**17.7% drift → bracket unstable → formally inconclusive**); S2 205.4 ms (CV 0.3%) sits within/above
-  the S0 band (worse than S0_after). → **H1 does not generalize to batched c=16**; the validated effect
-  is limited to Case-A short-latency (c=1) dispatch-bound behavior. Consistent with Phase 4: batched
-  prefill is compute/GEMM-bound, so per-launch dispatch overhead is a smaller TTFT fraction.
+- *Case C (c=16):* **no S2 benefit (confirmed by an interleaved rerun).** First S0→S2→S0 bracket drifted
+  17.7% (inconclusive). An **interleaved rerun** (`S0_a→S2_a→S0_b→S2_b→S0_c` + vLLM, GPU 0) better-samples
+  the noise: three S0 medians still span **17.3%** (Case-C c=16 TTFT has intrinsic ~17% session variance
+  even at w500 — unresolved, a workload property), **but the comparison is now robust**: pooled S2
+  (193.6 ms) ≈ pooled S0 (192.2 ms) = **+0.7%**, both ≈ vLLM (189.8 ms). → **H1 does NOT generalize to
+  batched c=16**; validated effect limited to Case-A short-latency (c=1) dispatch-bound behavior.
+  Consistent with Phase 4 (batched prefill is compute/GEMM-bound). Secondary: enforce-piecewise *reduces*
+  batched run-to-run variance (S2 CV 3–4% vs S0 5–9%) without changing median TTFT — a stability note,
+  not a latency win.
 
 Caveats: `--enforce-piecewise-cuda-graph` is a **testing lever** (validates locus/direction for Case A,
 **not** a production fix; smoke-checked only); Case A S2 CV 10–12%; Case C baseline drifted (warm-up/
