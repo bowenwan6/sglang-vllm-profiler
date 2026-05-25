@@ -1,0 +1,30 @@
+{
+  "variant": "S2_enforce_piecewise",
+  "framework": "sglang",
+  "rep": 1,
+  "status": "OK",
+  "elapsed_s": 299.3,
+  "failures": 0,
+  "gpu": "3",
+  "port": 30000,
+  "snapshot_sha": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+  "dataset_sha256": "fab4917772e087447d7c33d53ada63340b126088c1f195f118b9488d5f5b619e",
+  "version": "0.0.0.dev1+g0c8049d9b",
+  "warmup": 30,
+  "reps": 3,
+  "num_prompts": 400,
+  "concurrency": 1,
+  "extra_request_body": "{\"temperature\": 0, \"top_p\": 1}",
+  "timestamp_utc": "2026-05-25T13:55:47.474702+00:00",
+  "metrics": {
+    "completed": 400,
+    "failures": 0,
+    "ttft_p50": 21.006,
+    "ttft_p95": 26.284,
+    "ttft_p99": 26.963,
+    "tpot_p50": 5.5498147793994175,
+    "tpot_p99": 5.564051981480044,
+    "out_tok_s": 176.18543993336868,
+    "req_s": 1.3764487494794428
+  }
+}

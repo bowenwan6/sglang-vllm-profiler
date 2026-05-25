@@ -26,7 +26,36 @@
 | 2 — Shaping / Variance gate | ✅ **complete** (0 failures; `experiments/qwen3vl8b/phase2/{summary.md,selected_cases.md}`) |
 | 3 — Profiling / Trace collection | ✅ **complete** (GPU 1; `experiments/qwen3vl8b/phase3/{summary.md,extend_supplement_summary.md}`) |
 | 4 — Triage | ✅ **complete** (all 4 cases; `analysis/qwen3vl8b/` + `reports/qwen3vl8b/03_profiling_analysis.md`) |
-| 5 — Validation | ⬜ not started |
+| 5 — Validation | 🔄 **in progress (exploratory)** — H1 instrumented screen done + clean confirmation pending |
+
+**Phase 5 status (in progress — NOT complete).**
+
+*Phase 5.1 (offline, done).* **Mechanism confirmed:** for the current Qwen3-VL config SGLang decode
+CUDA graph is nominally ON, but VLM auto-disable turns the **prefill piecewise CUDA graph OFF**
+(`server_args.py:1308`), and `enable_torch_compile=False`. **But** existing profiler traces **cannot**
+reliably establish serving-path graph coverage or CPU-launch-gap causality (captured-window / profiling
+confound — formal DECODE trace shows 0 graph-replay despite `disable_cuda_graph=False`). **H1 remains a
+hypothesis, not a root cause.** See `analysis/qwen3vl8b/phase5/h1_launch_gap/`.
+
+*Phase 5.2 initial intervention (Case A, GPU 3) — **EXPLORATORY ONLY, instrumentation-confounded.***
+All SGLang variants were run with `SGLANG_KERNEL_API_LOGLEVEL=1` (KAPI logging) while the vLLM anchor
+was not; S1 graph-off emitted a **14.7 GB** KAPI log. KAPI per-launch logging plausibly slows the
+eager/direct-launch path more than the graph path, so the S0→S2 improvement is likely **amplified by
+instrumentation**.
+
+| Variant | TTFT p50 median | CV | TPOT p50 | Interpretation |
+|---|---:|---:|---:|---|
+| V0 vLLM anchor | 12.85 ms | 7.5% | 5.32 ms | contemporaneous reference; **not** KAPI-instrumented |
+| S0 SGLang baseline | 53.28 ms | 1.0% | 5.56 ms | instrumented; does **not** reproduce Phase 2's 19.6 ms |
+| S1 graph-off | 53.63 ms | 0.4% | 47.67 ms | instrumented negative control; produced 14.7 GB KAPI log |
+| S2 enforce piecewise graph | 19.74 ms | 3.1% | 5.55 ms | **promising candidate**, instrumentation-confounded |
+| S3 torch.compile | 54.05 ms | 1.3% | 5.15 ms | no observed TTFT benefit in the instrumented screen |
+
+Strongest current finding: **"S2 is a promising candidate requiring an uninstrumented confirmation
+run"** — *not* "H1 proven". Suspected confound: KAPI logging enabled only for the Phase-5 SGLang runs
+(14.7 GB log for S1). **No confirmed root-cause claim is made.** Audit:
+`experiments/qwen3vl8b/phase5/caseA_h1_intervention/baseline_anomaly_audit.md`. Next: uninstrumented
+S0→S2→S0 bracket + clean vLLM anchor on Case A (Case C blocked until confirmation passes).
 
 **Phase 4 results (completed 2026-05-23, offline triage, no GPU).** All 4 cases triaged.
 A/C/D EXTEND+DECODE two-trace triage successful; B DECODE two-trace successful but **EXTEND

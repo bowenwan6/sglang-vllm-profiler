@@ -1,0 +1,30 @@
+{
+  "variant": "S1_graph_off",
+  "framework": "sglang",
+  "rep": 3,
+  "status": "OK",
+  "elapsed_s": 2455.0,
+  "failures": 0,
+  "gpu": "3",
+  "port": 30000,
+  "snapshot_sha": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+  "dataset_sha256": "fab4917772e087447d7c33d53ada63340b126088c1f195f118b9488d5f5b619e",
+  "version": "0.0.0.dev1+g0c8049d9b",
+  "warmup": 30,
+  "reps": 3,
+  "num_prompts": 400,
+  "concurrency": 1,
+  "extra_request_body": "{\"temperature\": 0, \"top_p\": 1}",
+  "timestamp_utc": "2026-05-25T13:49:30.140639+00:00",
+  "metrics": {
+    "completed": 400,
+    "failures": 0,
+    "ttft_p50": 53.628,
+    "ttft_p95": 101.047,
+    "ttft_p99": 101.929,
+    "tpot_p50": 47.66758721652734,
+    "tpot_p99": 48.196457959826134,
+    "out_tok_s": 20.94045573946565,
+    "req_s": 0.1635973104645754
+  }
+}
