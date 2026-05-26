@@ -74,7 +74,7 @@ the validated outcome above.)
 | 2 — Shaping / Variance gate | ✅ **complete** (0 failures; `experiments/qwen3vl8b/phase2/{summary.md,selected_cases.md}`) |
 | 3 — Profiling / Trace collection | ✅ **complete** (GPU 1; `experiments/qwen3vl8b/phase3/{summary.md,extend_supplement_summary.md}`) |
 | 4 — Triage | ✅ **complete** (all 4 cases; `analysis/qwen3vl8b/` + `reports/qwen3vl8b/03_profiling_analysis.md`) |
-| 5 — Validation | 🔄 **in progress** — Case A clean intervention complete (H1 clean-supported for Case A); Case C clean boundary test complete (no Case-A-like benefit); B/D clean baseline pending; production-safe scope next |
+| 5 — Validation | ✅ **complete for scoped A/C clean validation** — H1 clean-validated for Case A (−39% TTFT, TPOT unchanged, reaches vLLM range; testing lever, not a production fix); Case C boundary: no Case-A-like benefit; B/D clean baseline and production-safe design are future work |
 
 **Phase 5 — exploratory screen + clean-validation detail (provenance; the validated outcome is in §0 above).**
 
@@ -148,7 +148,7 @@ available. Commits `871565f` (A) · `440fe0e` (C) · `051e812` (B) · `947fd35` 
 
 - **H1** (impact H / conf M, fairness-independent): SGLang eager `aten::mm` dispatch vs vLLM
   torch.compile/CUDA-graph is the primary TTFT-gap candidate (A, C; not Case B prefill).
-- **H2** (abs M / gap L): nvjet FP8 GEMM dominant; PR #22392 CUTLASS-FP8 is an absolute-speed lead, not a gap-closer.
+- **H2** (abs M / gap L): nvjet FP8 GEMM dominant; PR #22392 (closed upstream) CUTLASS-FP8 is an optional absolute-speed lead, not a gap-closer; not validated in this experiment.
 - **H3** (L, ceiling M, fairness-dependent): FlashInfer vs FA3 — not the driver.
 - **H4** (L, ceiling M): Case B gap = bimodality + c=1 fixed overhead, not graph coverage.
 - **Phase 5 outcome:** H1 **clean-validated for Case A** (piecewise-graph coverage cut TTFT, TPOT
@@ -1089,10 +1089,12 @@ Offline triage (no GPU) of Phase 3 traces; all 4 cases. Commits `871565f` (A) ·
 | 3 (low) | H3 / H4 | No kernel-level effort unless later evidence changes — H3 fairness-ceilinged M; H4 bimodal + no SGLang EXTEND trace |
 
 **Caveats:** Case B SGLang EXTEND unavailable → all Case B conclusions ceiling M; attention findings
-ceiling M (FlashInfer vs FA3). **Phase 5 update:** H1 is now **strengthened by a clean (uninstrumented)
-Case A confirmation** (forcing prefill piecewise CUDA-graph coverage cut Case A TTFT ~39%, TPOT
-unchanged) — see §0 Phase 5 status block. H1 generalization to Case C and H2 remain **not yet
-validated**; the `--enforce-piecewise-cuda-graph` lever is a testing flag, not a production fix.
+ceiling M (FlashInfer vs FA3). **Phase 5 outcome:** H1 is **clean-validated for Case A** (forcing
+prefill piecewise CUDA-graph coverage cut Case A TTFT ~39%, TPOT unchanged) — see §0 Phase 5 status
+block. H1 was tested on Case C in a clean interleaved rerun: **no Case-A-like TTFT benefit observed**
+(pooled S2 ≈ S0 ≈ vLLM ≈ 190 ms); the `--enforce-piecewise-cuda-graph` lever is a testing flag, not
+a production fix. H2 (PR #22392, closed upstream) is an optional absolute-speed lead; not validated
+in this experiment.
 
 ---
 
@@ -1117,10 +1119,12 @@ gap; TPOT parity; vLLM Case B bimodal); magnitudes are not interchangeable.
 > (all 4); Case B graph-on EXTEND-formal missing (caveat accepted). Commits `c6ec1df` / `8f41bd3` / `d822bf3`. ·
 > ✅ **Phase 4 triage (offline, all 4 cases)** — A/C/D EXTEND+DECODE + vLLM; B DECODE+vLLM (EXTEND
 > unavailable, ≤ M). Hypotheses H1–H4 + ranked recommendations. Commits `871565f` / `440fe0e` /
-> `051e812` / `947fd35` / `55232b3`.
-> **Next: Phase 5 validation.** Validate H1 first (SGLang prefill CPU launch-gap +
-> graph/compile coverage on Case A/C); H2 as a parallel absolute-speed track (PR #22392); H3/H4 low
-> priority. Items 1–5 are project setup (done).
+> `051e812` / `947fd35` / `55232b3`. ·
+> ✅ **Phase 5 — complete for scoped A/C clean validation** (GPU 6: Case A; GPU 0: Case C). H1
+> clean-validated for Case A (−39% TTFT, TPOT unchanged, reaches vLLM range; testing lever). No
+> Case-A-like benefit at Case C (boundary). **Future work (optional):** production-safe selective
+> enablement; B/D clean baseline; H2 absolute-speed track (PR #22392, closed upstream, not a
+> gap-closer). Items 1–5 are project setup (done).
 
 1. ✅ Create the filesystem layout from §8.1 (placeholder READMEs in each directory).
 2. ✅ Phase 0 — servers up, equivalence matrix run. All Tier-A/B pass; outputs EXACT match. *(Phase 0 also ✅ PASS — see §15.)*

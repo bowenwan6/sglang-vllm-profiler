@@ -89,7 +89,7 @@
 
 clean(无 instrumentation)benchmark 是本报告的结论依据。完整 clean 表见 §11;此处给出主线汇总。
 
-**Case A — baseline + intervention(clean, GPU 6/0, 0 failures):**
+**Case A — baseline + intervention(clean, GPU 6, 0 failures):**
 
 | Variant | TTFT p50 median | TPOT p50 |
 |---|---:|---:|
@@ -143,18 +143,18 @@ Phase 4 的目标不是直接给优化结论，而是把 Phase 3 traces 转化�
 | A | EXTEND/DECODE + vLLM complete | graph-on formal 中 SGLang coverage 不如 vLLM graph/compile 路径充分；residual gap 1.56x | strongest H1 evidence; clean Case A confirmation done (−39% TTFT) |
 | C | EXTEND/DECODE + vLLM complete | c=16；早期 1.32x gap **SUPERSEDED**（KAPI-confounded） | clean rerun: 无 material gap、无 Case-A-like S2 收益 |
 | B | DECODE + vLLM complete；EXTEND unavailable | 双框架 bimodal；长 prefill 结论受限 | ceiling M；deprioritize |
-| D | EXTEND/DECODE + vLLM complete | decode-heavy sanity；gap 仅 1.09x | corroborating evidence |
+| D | EXTEND/DECODE + vLLM complete | decode-heavy sanity；smallest gap (Phase 2 KAPI-confounded; no clean cross-framework baseline) | corroborating evidence |
 
 ### Phase 4 hypotheses
 
 | ID | Hypothesis | Gap relevance | Impact | Confidence | Phase 5 action |
 | --- | --- | --- | --- | --- | --- |
 | H1 | SGLang prefill graph coverage 不足（VLM auto-disable piecewise graph）→ 额外 CPU launch / dispatch overhead（Case A） | Case-A TTFT contributor | High | **Clean-supported for Case A only** | ✅ Case A clean: `--enforce-piecewise-cuda-graph` 降 TTFT ~39%（19.2→~12ms），TPOT 不变（reps=5 stability 已完成）。Case C clean rerun **无 Case-A-like 收益**。Next: production-safe selective-enablement scope（非全局 fix） |
-| H2 | `nvjet_sm90_*` FP8 GEMM 是最大 GPU cost；PR #22392 CUTLASS FP8 可能加速 | absolute speed, not gap closer | Medium absolute / Low gap | High for attribution | 可并行 A/B PR #22392，但不要当成 vLLM gap fix |
+| H2 | `nvjet_sm90_*` FP8 GEMM 是最大 GPU cost；PR #22392（closed upstream）CUTLASS FP8 可能提高 SGLang 绝对性能 | absolute speed, not gap closer | Medium absolute / Low gap | High for attribution | 可选 absolute-speed track；PR #22392 closed，本实验未验证；不是 Case A TTFT gap 的直接修复 |
 | H3 | FlashInfer vs FlashAttention v3 attention backend 差异 | not primary driver | Low | Medium ceiling | 仅作为 confidence ceiling 记录 |
 | H4 | Case B gap 来自 bimodality + c=1 fixed overhead | deprioritize Case B | Low | Medium | 先解决 bimodality / trace availability，再谈 kernel claim |
 
-Phase 4 最重要的结构性判断是：**最大 GPU kernel 不等于最大 gap source**。SGLang 与 vLLM 都被同一类 FP8 GEMM kernel 主导，这解释了绝对 GPU time，但不能解释为什么 SGLang TTFT 更慢。当前更值得验证的是 CPU-side launch / dispatch / graph coverage：在 graph-on formal traces 中，SGLang 的 graph coverage 看起来不如 vLLM 的 CUDA graph / compile region 充分；但 GPU-time kernel table 不能直接量化 CPU launch gap，因此 H1 只能保持 Medium confidence。
+Phase 4 最重要的结构性判断是：**最大 GPU kernel 不等于最大 gap source**。SGLang 与 vLLM 都被同一类 FP8 GEMM kernel 主导，这解释了绝对 GPU time，但不能解释为什么 SGLang TTFT 更慢。在 graph-on formal traces 中，SGLang 的 graph coverage 看起来不如 vLLM 的 CUDA graph / compile region 充分；Phase 5 clean intervention 已在 Case A 验证了 H1 的方向（piecewise graph coverage → −39% TTFT，TPOT 不变），并将 Case C 界定为无同类收益的边界结论。
 
 ---
 
@@ -164,11 +164,10 @@ Phase 4 最重要的结构性判断是：**最大 GPU kernel 不等于最大 gap
 
 1. **SGLang 的主要问题在 TTFT，不在 TPOT。**
 2. **H1 在 clean Case A 被验证(strengthened),但不延伸到 Case C。** Case A:强开 prefill piecewise graph 使 TTFT 降 ~39%、TPOT 不变、0 errors,达 vLLM 区间。**边界:** testing lever(非 production fix);仅 Case A c=1;S2 CV 10–12%,稳定优于 vLLM 未确认。Case C clean rerun **未见 Case-A-like 收益**,旧 1.32× gap 已撤回。
-3. **GEMM 是最大 GPU 成本，但不是主要 gap 解释。** PR #22392 可能提高 SGLang 绝对性能，但由于 vLLM 也使用同一类 GEMM kernel，它不应被描述为主要 gap-closer。
+3. **GEMM 是最大 GPU 成本，但不是主要 gap 解释。** PR #22392（upstream closed，CUTLASS FP8）可能提高 SGLang 绝对性能，但由于 vLLM 也使用同一类 GEMM kernel，它不应被描述为 Case A TTFT gap 的主要修复来源，本实验亦未验证。
 4. **Case B 是 noisy long-prefill 辅助证据。** EXTEND trace unavailable 且双框架 bimodal，所有 cross-framework claim 都要带 confidence ceiling M。
 5. **Case D 是 decode-heavy sanity check。** residual gap 小，说明 steady-state decode path 不是主要问题。
 
-这些仍是 Phase 4 hypotheses，不是最终 root cause。Phase 5 前，报告中不应把 H1 写成“已证明 SGLang 因 eager dispatch 慢”，只能写成“最强待验证方向”。
 
 ---
 
@@ -267,4 +266,4 @@ Qwen3-VL 默认关闭的 prefill piecewise CUDA graph;强开后 Case A TTFT 进�
 **Future work(均为可选、非阻塞):**
 - Production-safe **selective graph enablement** 设计(低并发 / text-only / shape-stable),不用 testing lever。
 - 可选的更广 clean benchmarking(如需 four-workload cross-framework headline,则补 Case B/D clean baseline)。
-- 可选 H2 absolute-speed track(PR #22392 / CUTLASS FP8),与 gap 分开。
+- 可选 H2 absolute-speed track（PR #22392，upstream closed，CUTLASS FP8 absolute-speed lead），与 TTFT gap 分开；本实验未验证。
