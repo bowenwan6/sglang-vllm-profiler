@@ -13,6 +13,22 @@
 > `experiments/qwen3vl8b/methodology_correction.md`. Numbers retained below are **provenance**; their
 > interpretation is corrected. Raw JSON/traces/logs/scripts are unchanged.
 
+### Instrumentation Policy
+
+- **Performance measurement / clean validation runs:** do **not** set `SGLANG_KERNEL_API_LOGLEVEL` or
+  `SGLANG_KERNEL_API_LOGDEST`; no profiler or KAPI instrumentation — unless the run's sole purpose is
+  trace collection **and** its result is not used for clean latency comparison.
+- **Trace collection runs:** traces are for **mechanism localization only**; if collected with
+  instrumentation, their absolute latency must **not** be compared directly to an uninstrumented
+  opposite framework.
+- **Debug-only reruns:** KAPI logging is enabled **only** in targeted reproducers for crash / CUDA
+  error / correctness failure, and must be explicitly labeled **non-performance evidence**.
+
+> Rationale: Phase 5 Case A showed SGLang-only KAPI logging inflates SGLang TTFT (clean 19.2 ms vs
+> instrumented 53 ms). KAPI is therefore never a default benchmark setting and never enters a
+> cross-framework performance comparison. (This supersedes any earlier "L1 passive on every run /
+> negligible cost" guidance elsewhere in this plan.)
+
 > **The active run is `qwen3vl8b`.** It reuses the methodology, fairness model, and artifact
 > spec below. The original exploratory round ("run1") is historical reference only (removed).
 
@@ -34,7 +50,7 @@
 | 2 — Shaping / Variance gate | ✅ **complete** (0 failures; `experiments/qwen3vl8b/phase2/{summary.md,selected_cases.md}`) |
 | 3 — Profiling / Trace collection | ✅ **complete** (GPU 1; `experiments/qwen3vl8b/phase3/{summary.md,extend_supplement_summary.md}`) |
 | 4 — Triage | ✅ **complete** (all 4 cases; `analysis/qwen3vl8b/` + `reports/qwen3vl8b/03_profiling_analysis.md`) |
-| 5 — Validation | 🔄 **in progress** — Case A clean confirmation completed (H1 strengthened); Case C pending validation |
+| 5 — Validation | 🔄 **in progress** — Case A clean intervention complete (H1 clean-supported for Case A); Case C clean boundary test complete (no Case-A-like benefit); B/D clean baseline pending; production-safe scope next |
 
 **Phase 5 status (in progress — NOT complete).**
 
@@ -73,7 +89,7 @@ S0→S2→S0 bracket + clean vLLM anchor, 0 failures:
 | S0_after | 19.23 ms | 3.8% | bracket drift 0.34% → stable |
 | V0 vLLM clean anchor | 13.11 ms | 3.2% | reference |
 
-**H1 strengthened (clean Case A) — but does NOT generalize to batched Case C.**
+**H1 clean-supported for Case A — no Case-A-like benefit observed for batched Case C.**
 
 - *Case A (c=1):* forcing prefill piecewise CUDA-graph coverage cut TTFT ~39% (19.2 → 11.7 ms), TPOT
   unchanged, 0 errors → reached the vLLM TTFT range. **Stability supplement (reps=5):** S2 median
@@ -111,8 +127,11 @@ available. Commits `871565f` (A) · `440fe0e` (C) · `051e812` (B) · `947fd35` 
 - **H2** (abs M / gap L): nvjet FP8 GEMM dominant; PR #22392 CUTLASS-FP8 is an absolute-speed lead, not a gap-closer.
 - **H3** (L, ceiling M, fairness-dependent): FlashInfer vs FA3 — not the driver.
 - **H4** (L, ceiling M): Case B gap = bimodality + c=1 fixed overhead, not graph coverage.
-- **Phase 5 next:** validate H1 first (CPU launch-gap + graph/compile coverage); H2 as a parallel
-  absolute-speed track; H3/H4 deprioritized. See §15 + `reports/qwen3vl8b/03_profiling_analysis.md`.
+- **Phase 5 outcome:** H1 **clean-validated for Case A** (piecewise-graph coverage cut TTFT, TPOT
+  unchanged); **clean Case C showed no Case-A-like benefit** → not a batched optimization. **Next is
+  production-safe selective-enablement scope (not further generalization of the Case A result)** + a
+  clean B/D baseline if a four-workload headline is needed; H2 as a separate absolute-speed track.
+  See §15 + `reports/qwen3vl8b/03_profiling_analysis.md`.
 
 **Phase 3 results (completed 2026-05-22/23, GPU 1).** All 4 cases traced; commits `c6ec1df`
 (main collection), `8f41bd3` (EXTEND supplement), `d822bf3` (Case B EXTEND-formal retry). ~517 MB
@@ -310,7 +329,7 @@ the right-hand column when invoking:
 |---|---|---|---|
 | `sglang-auto-benchmark` | **`llm-serving-auto-benchmark`** | PR #21736 **merged** into current repo | ✅ `python3 -m sglang.auto_benchmark {convert,validate,run}` works; skill has scripts/configs/references |
 | `sglang-torch-profiler-analysis` | **`llm-torch-profiler-analysis`** | upstreamed (unified sglang/vllm/trtllm); BBuf standalone is the older fork | ✅ `analyze_llm_torch_profile.py --help` OK (shim `analyze_sglang_torch_profile.py` kept); catalogs present |
-| `debug-cuda-crash` | `debug-cuda-crash` (unchanged) | in current repo; `SGLANG_KERNEL_API_LOGLEVEL/LOGDEST` supported in source | ✅ L1 already in use on every server launch |
+| `debug-cuda-crash` | `debug-cuda-crash` (unchanged) | in current repo; `SGLANG_KERNEL_API_LOGLEVEL/LOGDEST` supported in source | ⚠️ **crash/debug reruns only** — KAPI is forbidden on latency/validation runs (Phase 5 finding) |
 
 Notes: skills load at **session start**, so newly symlinked skills become Skill-tool-invokable only
 after a session reload — but their scripts are runnable now via direct path. The optional `b200` /
@@ -371,7 +390,7 @@ reorganized); no extra install needed.
 
 | Situation | Setting |
 |---|---|
-| All Phase 1, Phase 2, Phase 3, Phase 5 SGLang runs | `LOGLEVEL=1`, `LOGDEST=logs/{phase}/sglang_%i.log` |
+| **Crash/debug targeted reruns only** (NOT latency benchmarks) | `LOGLEVEL=1`, `LOGDEST=logs/{phase}/sglang_%i.log` — non-performance evidence; never compared to an uninstrumented framework |
 | Crash occurs | Re-run failing case at `LOGLEVEL=3` |
 | NaN/Inf suspected in a trace or output divergence appeared in Phase 0 | Targeted `LOGLEVEL=5` reproducer |
 | Need offline reproducer | `LOGLEVEL=10` + `DUMP_DIR` + `DUMP_INCLUDE='sglang.custom_op.*'` + `--disable-cuda-graph` |
@@ -492,9 +511,9 @@ A human reviewer validating the project should inspect artifacts in this sequenc
 
 1. Launch SGLang (background, log to `logs/phase0/sglang_server.log`):
    ```
+   # ⚠️ Per Instrumentation Policy (§0): latency runs OMIT KAPI. The historical template set
+   #    SGLANG_KERNEL_API_LOGLEVEL=1 (confounded the early baseline) — do NOT set it for clean runs.
    CUDA_VISIBLE_DEVICES=6 HF_HUB_OFFLINE=1 \
-   SGLANG_KERNEL_API_LOGLEVEL=1 \
-   SGLANG_KERNEL_API_LOGDEST=logs/phase0/sglang_%i.log \
    python3 -m sglang.launch_server \
      --model-path <snapshot_path> \
      --dtype bfloat16 --port 30000 --tp 1 --attention-backend flashinfer
@@ -570,9 +589,9 @@ A human reviewer validating the project should inspect artifacts in this sequenc
 
    SGLang:
    ```
+   # ⚠️ Per Instrumentation Policy (§0): latency runs OMIT KAPI. The historical template set
+   #    SGLANG_KERNEL_API_LOGLEVEL=1 (confounded the early Phase-1 baseline) — do NOT set it for clean runs.
    CUDA_VISIBLE_DEVICES=6 HF_HUB_OFFLINE=1 \
-   SGLANG_KERNEL_API_LOGLEVEL=1 \
-   SGLANG_KERNEL_API_LOGDEST=logs/phase1/sglang_%i.log \
    python3 -m sglang.launch_server \
      --model-path /root/.cache/huggingface/hub/models--Qwen--Qwen3-VL-8B-Instruct/snapshots/0c351dd01ed87e9c1b53cbc748cba10e6187ff3b \
      --dtype bfloat16 --port 30000 --tp 1 --attention-backend flashinfer \
@@ -676,7 +695,7 @@ GPU 7, serial servers, GPU freed (<2000 MiB) between every server.
 #### Skill usage
 
 - Custom orchestration scripts (not `llm-serving-auto-benchmark run`) — direct `bench_serving` calls for full control over server flags and vLLM compatibility.
-- `debug-cuda-crash` → L1 passive (`SGLANG_KERNEL_API_LOGLEVEL=1`) on all SGLang server launches.
+- `debug-cuda-crash` → **per Instrumentation Policy (§0), KAPI is NOT enabled on latency/validation runs**; use it only for crash/debug targeted reproducers (non-performance evidence).
 - `llm-torch-profiler-analysis` → **not used.** No interpretation in Phase 2.
 
 #### Exit criteria
@@ -738,7 +757,7 @@ vLLM's profiling does not emit a clean mapping/formal pair, but it does not need
 
 #### 3.3 Crash safety
 
-All SGLang runs in Phase 3: `SGLANG_KERNEL_API_LOGLEVEL=1`, `LOGDEST=logs/phase3/sglang_%i.log`. On any crash, re-run only the affected step at L3 (or L10 with `--disable-cuda-graph` if offline repro needed). Do not abandon the case — isolate the trigger.
+Phase 3 is **trace collection for mechanism localization** (not a clean latency benchmark); KAPI logs from these runs are **non-performance evidence** and must not be compared to uninstrumented vLLM (Instrumentation Policy §0). On any crash, re-run only the affected step (escalate KAPI only in a targeted reproducer). Do not abandon the case — isolate the trigger.
 
 **Skill usage.**
 
@@ -843,7 +862,8 @@ A hypothesis missing any field is inadmissible. The `Fairness dependence` field 
 
 | Situation | Setting | Rationale |
 |---|---|---|
-| Normal runs (Phase 1 / 2 / 3 / 5) | `LOGLEVEL=1`, `LOGDEST=logs/{phase}/sglang_%i.log` | Negligible cost; free crash trail |
+| **Latency / clean-validation runs** | **No KAPI, no profiler** | KAPI inflates SGLang TTFT (Phase 5 finding) → forbidden for any cross-framework latency measurement |
+| Crash/debug targeted rerun only | `LOGLEVEL=1`, `LOGDEST=...` | non-performance evidence; not comparable to an uninstrumented framework |
 | Crash observed | Re-run crashing case with `LOGLEVEL=3` | Shapes/dtypes/device at crash boundary |
 | NaN/Inf in trace or Phase-0 divergence | `LOGLEVEL=5` on targeted reproducer | Tensor stats at boundary |
 | Offline reproducer needed | `LOGLEVEL=10` + `DUMP_DIR` + `DUMP_INCLUDE='sglang.custom_op.*'` + `--disable-cuda-graph` | Crash-safe input dump |
@@ -896,11 +916,11 @@ debug-cuda-crash = `debug-cuda-crash`.
 | Phase | auto-benchmark | profiler-analysis | debug-cuda-crash |
 |---|---|---|---|
 | 0 | — | — | L1 during server smoke |
-| 1 | `convert` + `validate` | — | L1 passive |
-| 2 | `run` tier 1, ≤4 candidates, 1 case | — | L1 passive |
-| 3 | — | collection driver (`--profile-by-stage`); no triage | L1 passive |
+| 1 | `convert` + `validate` | — | no KAPI on latency runs (debug-only; §0 policy) |
+| 2 | `run` tier 1, ≤4 candidates, 1 case | — | no KAPI on latency runs (debug-only; §0 policy) |
+| 3 | — | collection driver (`--profile-by-stage`); no triage | no KAPI on latency runs (debug-only; §0 policy) |
 | 4 | — | `triage` 2-trace (SGLang) + 1-trace (vLLM) + **catalog lookup** | L5 only if NaN/Inf suspected |
-| 5 | `run` tier 2, resumable, hypothesis-scoped | optional re-triage on winner | L1 passive |
+| 5 | `run` tier 2, resumable, hypothesis-scoped | optional re-triage on winner | no KAPI on latency runs (debug-only; §0 policy) |
 
 Never invert a row. Auto-benchmark does not read kernels; profiler-analysis does not choose flags; debug-cuda-crash does not explain slowdowns.
 

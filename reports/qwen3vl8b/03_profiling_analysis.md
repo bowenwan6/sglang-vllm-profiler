@@ -15,11 +15,14 @@
 | 工具 | `llm-torch-profiler-analysis` 的 `triage`（三表：kernel / overlap / fuse）+ catalog lookup |
 | GPU 使用 | Phase 4 triage **离线**（不占 GPU）；仅 Case B EXTEND 重采尝试用过 GPU 1 |
 
-**一句话结论**：四个 case、两个 stage（EXTEND/DECODE）的 GPU 时间都被**同一个 `nvjet_sm90_*` FP8 GEMM
-家族**主导（72–86%），而 vLLM 跑的是**同一批 GEMM** —— 所以 GEMM 是最大开销类，但**不是跨框架差异源**。
-真正的差异在 **dispatch / 编译方式**：SGLang eager `aten::mm`，vLLM 走 torch.compile/inductor（prefill）
-+ CUDA graph（decode）。TTFT gap 是 **first-token 固定开销**效应，不是 per-token decode 落后（Phase-1
-TPOT parity + Case D 小 gap 双重佐证）。
+**一句话结论(scope 已限定)**：Phase 4 trace triage 显示两框架 GPU 时间都被**同一个 `nvjet_sm90_*` FP8
+GEMM 家族**主导（72–86%），所以 GEMM 是最大开销类但**不是跨框架差异源**;由此提出机制假设 **H1 —
+SGLang 与 vLLM 在 dispatch / graph / compile 覆盖上的结构差异**(SGLang eager `aten::mm` vs vLLM
+torch.compile/inductor + CUDA graph)。**这是 Phase-4 假设,不是已证明的一般 TTFT 结论。** Phase 5 的
+clean intervention **仅在 Case A(低并发短请求)支持 H1**(强开 prefill piecewise graph 显著降 TTFT、TPOT
+不变);**clean Case C(c=16)未见同类 material gap 或收益**;Case B/D 无 clean cross-framework baseline。
+下文 per-case 分析的旧绝对 ratio(尤其 Case C 1.32×)为 KAPI-confounded,已撤回 —— 见 §0 banner 与
+`methodology_correction.md`。
 
 ---
 
@@ -107,10 +110,10 @@ TPOT parity + Case D 小 gap 双重佐证）。
 - **gap 小意味着什么**：512-token 长 decode 把 **first-token 固定开销摊薄**到很多 decode step 上 →
   相对 gap 收缩。这正是 OBS-D1：**佐证 gap 是 first-token/dispatch 固定开销效应，而非 per-token decode
   落后**（TPOT parity）。
-- **对 H1/H2/H3 的支持/反证**：
-  - **支持 H1**：dispatch 差异（eager vs graph/compiled）依旧存在；gap 随 decode 拉长而收缩，符合
-    "固定开销"模型。
-  - **支持 H2**：GEMM 仍主导且两框架共担。
+- **对 H1/H2/H3 的关系(注意:Case D 数字也是 KAPI-confounded,非 clean 验证)**：
+  - **与 H1 的 first-token-overhead picture 一致(不是独立验证)**:gap 随 decode 拉长而收缩,符合"固定
+    开销"模型;但 Case D 旧 residual 是 instrumented,**不作为 H1 的强佐证**。H1 的 clean 验证只来自 Case A。
+  - **与 H2 一致**:GEMM 仍主导且两框架共担。
   - **对 H3 中性**：attention 占比小，非主因（ceiling M）。
 - **结论**：Case D 不引入新瓶颈，sanity check 通过。
 
@@ -138,17 +141,19 @@ TPOT parity + Case D 小 gap 双重佐证）。
 
 ---
 
-## 3. Phase 5 建议
+## 3. Phase 5 outcome（已执行）+ next
 
-| 优先级 | 假设 | Phase 5 动作 |
-|---|---|---|
-| 1 | **H1** | 在 Case A、C 上测 SGLang prefill 的 **CPU launch-gap**（GPU-time 表看不到的 `scheduler/CPU gap`），再测开启/扩展 SGLang CUDA-graph / piecewise-graph / torch.compile 覆盖能否收窄实测 TTFT gap |
-| 2 | **H2** | 若 PR #22392 可合入，A/B CUTLASS-FP8 路径做**绝对加速**，与 gap 问题分开追踪 |
-| 3（低）| **H3 / H4** | 暂不投入 kernel 级精力 —— H3 是 fairness-ceilinged（M）backend 差异，H4 是 bimodal + 无 SGLang EXTEND trace。除非后续证据改变 |
+| 假设 | Phase 5 outcome |
+|---|---|
+| **H1** | ✅ **clean-supported for Case A** —— 强开 prefill piecewise graph 使 Case A TTFT ~19.2→~12 ms、TPOT 不变(reps=5 stability 已完成)。**Case C(c=16)clean rerun 无 Case-A-like 收益** → H1 不延伸到 batched。Production generalization **未验证**。 |
+| **H2** | 未执行 —— PR #22392 / CUTLASS-FP8 作为独立 absolute-speed 线,需先确认可应用于当前 commit;与 gap 分开。 |
+| **H3 / H4** | 未投入 —— H3 fairness-ceilinged(M);H4 bimodal + 无 SGLang EXTEND trace。 |
 
-- **先验 H1**（最高杠杆、fairness-independent）。
-- **H2 作并行绝对性能优化线**（不期待它关 gap）。
-- **H3/H4 暂缓**。
+**Next(非验证、production-scope):**
+- 为 Case A locus 设计 **production-safe selective enablement**(低并发 / text-only / 稳定 shape),
+  不用 `--enforce-piecewise-cuda-graph` testing lever、不宣称 global VLM fix。
+- 若需 four-workload cross-framework headline,先补 **Case B / Case D clean(无 KAPI/profiler)baseline**。
+- H2 作为独立 absolute-speed track 评估。
 
 ---
 
@@ -181,5 +186,7 @@ TPOT parity + Case D 小 gap 双重佐证）。
 
 ---
 
-> 下一步：Phase 5 验证 H1（最高优先）。在此之前，H1/H2/H3/H4 均为 evidence-backed **hypotheses**，
-> 未经验证，不作为最终优化结论。
+> **Phase 5 已部分执行(更新):** H1 在 **clean Case A** 中被验证(支持低并发短请求的 graph-coverage
+> 机制);**clean Case C 未见同类收益**(H1 不延伸到 batched);H2/H3/H4 仍未验证。下一步是 production-safe
+> selective-enablement scope 与 B/D clean baseline,而非进一步把 Case A 结论一般化。Case B/D 在补 clean
+> baseline 前不进入任何 cross-framework headline。

@@ -5,10 +5,15 @@
 
 **Key findings**
 
-1. **早期 TTFT gap 观察受 instrumentation 污染,不是 clean 结论。** Phase 1 baseline 与 Phase 2 Case C W500 中,SGLang 侧开启了 KAPI logging(`SGLANG_KERNEL_API_LOGLEVEL=1`),vLLM 无对应 instrumentation;Phase 5 已证明该 logging 显著抬高 SGLang TTFT。因此早期"四 workload SGLang TTFT 全面更慢"(4.89×/3.20×/1.32×/1.33×)是 **instrumentation-confounded exploratory discovery signal**,不是 clean cross-framework final result。
-2. **Clean Case A 验证了一个真实、可操作的 TTFT 贡献因素。** 无 KAPI / 无 profiler 的干净 benchmark 中,强制开启 prefill piecewise CUDA-graph coverage(`--enforce-piecewise-cuda-graph`)使 Case A(c=1)TTFT 显著降低(~19.2 → ~11.7 ms),**TPOT 基本不变**,0 failures,达到 vLLM TTFT 区间。`--enforce-piecewise-cuda-graph` 是 **testing lever,不是 production fix**;S2 CV ~10–12%,**不声称稳定优于/等于 vLLM**。
-3. **Clean Case C 未显示 material gap,也无 Case-A-like 收益。** 旧的"稳定 1.32× batched gap"依赖 KAPI-污染的 SGLang 测量,已**撤回**。clean interleaved rerun:pooled S0 ~192.2 / S2 ~193.6 / vLLM ~189.8 ms —— 无 material median gap、无 Case-A-like S2 收益;S0/vLLM 有 ~17% session variance,故小幅效应未能解析(既非 strict parity,也非已证明的 gap)。
-4. **Phase 4 trace 仍显示 shared GEMM absolute cost;机制与 production scope 需 clean follow-up。** 两框架 GPU time 主要由同类 FP8 GEMM 主导(shared absolute-cost,非已证明的 gap source);dispatch/graph/compile 机制有结构差异,值得 clean 验证。Case B/D 暂无 clean cross-framework baseline,不纳入 headline。
+1. **可操作的 TTFT 问题集中在低并发短请求 Case A。** 在 clean benchmark 中,SGLang default Case A TTFT 约为 **19.2 ms**,而 vLLM 处于 **13–14 ms** 区间;相比之下,clean Case C 中两者 median TTFT 均约为 **190 ms**,未观察到 material gap。
+
+2. **Case A 的关键瓶颈是 VLM prefill 路径的 graph coverage 不足。** GPU profiling 显示两框架主要消耗在同类 FP8 GEMM kernels 上,说明差异并非来自 SGLang 特有的慢 GEMM。配置与源码审计进一步发现,SGLang 对 Qwen3-VL 默认关闭 prefill piecewise CUDA graph(VLM auto-disable)。
+
+3. **受控干预验证了 Case A 的问题来源。** 强制启用 prefill piecewise CUDA graph 后,SGLang Case A TTFT 从约 **19.2 ms** 降至 **11.7–13.4 ms**,TPOT 基本不变,进入 vLLM TTFT 区间。该结果证明 graph coverage 是 Case A TTFT 的重要可干预因素。
+
+4. **该优化不应直接推广到 batched workload。** 在 clean Case C(`c=16`)中,强制启用 piecewise graph 未产生 Case-A-like median TTFT 改善;当前证据支持面向低并发、text-only、shape 稳定请求的选择性策略,而不是对全部 VLM 全局强制开启。
+
+*(方法学说明:早期 Phase 1/2 SGLang 测量带 SGLang-only KAPI logging,为 instrumentation-confounded exploratory provenance,不作为 clean 结论 —— 见文末 Methodological Note 与 `experiments/qwen3vl8b/methodology_correction.md`。)*
 
 </aside>
 
@@ -21,13 +26,19 @@
 
 ## 摘要
 
-本报告总结 SGLang 与 vLLM 在 `Qwen/Qwen3-VL-8B-Instruct` text-only serving 路径上的阶段性 profiling 结果。研究目标不是给出泛化 benchmark 排名，而是回答一个更工程化的问题：**SGLang 相对 vLLM 的 first-token 延迟差距来自哪个阶段、哪类系统路径，以及下一步应验证哪些优化假设**。
+本报告研究 SGLang 与 vLLM 在 `Qwen/Qwen3-VL-8B-Instruct` text-only serving 上的 first-token latency:目标是**定位 first-token latency 的工程瓶颈并验证可干预的优化点**,而非给出泛化 benchmark 排名。结论以 clean(无 instrumentation)benchmark 为准,叙事按"现象 → 分析 → 机制 → 因果验证 → 边界"展开。
 
-> ⚠️ **Methodology correction (2026-05-26):** 早期 SGLang 测量(Phase 1 baseline、Phase 2 Case C W500)开启了 SGLang-only KAPI logging,vLLM 无对应 instrumentation,显著抬高 SGLang TTFT。下文保留的早期 ratio 仅作 **provenance / exploratory**,不是 clean 结论。详见 `experiments/qwen3vl8b/methodology_correction.md`。
+**1. Clean 现象。** 在干净 benchmark 中,**Case A(128→128, c=1)有明确 TTFT gap**:SGLang default ≈ 19.2 ms vs vLLM 13–14 ms;而 **Case C(512→128, c=16)无 material gap**:两者 median TTFT 均 ≈ 190 ms。
 
-当前主实验已完成 Phase 0–4 并进入 Phase 5。早期 Phase 1/2 的"四 workload SGLang TTFT 全面更慢"(4.89×/3.20×/1.32×/1.33×)及 Case C"稳定 1.32× gap",**因 SGLang-only KAPI instrumentation 污染而降级为 exploratory discovery signal**,不能作为 clean cross-framework 结论。Phase 5 的 clean(无 KAPI/无 profiler)证据显示:**Case A** 强开 prefill piecewise CUDA-graph coverage 显著降 TTFT(TPOT 不变);**Case C** clean rerun 无 material gap、无 Case-A-like 收益。TPOT/throughput 近 parity 这一定性观察仍成立。
+**2. 分析。** GPU traces 显示两框架的 GPU 时间都主要消耗在**同一类 `nvjet_sm90_*` FP8 GEMM kernel**(72–86%)。因此差异**不是** SGLang 特有的慢 GEMM —— GEMM 是 shared absolute-cost,不是跨框架差异源。
 
-Phase 4 的主要贡献是把“哪个 GPU kernel 贡献最多绝对时间”与“什么导致跨框架 gap”区分开。trace 显示两边 GPU time 都主要消耗在同一类 `nvjet_sm90_*` FP8 GEMM kernel 上，因此 GEMM 是共享的 absolute-cost，不是解释 SGLang-vLLM gap 的首要差异源。主要 hypothesis(H1)是:SGLang 的 prefill 路径因 VLM auto-disable 而未落入 piecewise CUDA graph,留下额外 CPU launch / dispatch overhead。**Phase 5 clean Case A 干预已验证该方向**:强制开启 prefill piecewise graph 使 Case A TTFT 降低约 39%、TPOT 不变,达到 vLLM TTFT 区间。该结论限于 Case A(testing-lever、单 case、S2 CV 10–12%);Case C clean rerun **未见 Case-A-like 收益**,旧 1.32× gap 已撤回(见 methodology_correction.md)。
+**3. 机制发现。** 配置与 SGLang 源码审计显示:对 Qwen3-VL(multimodal)**SGLang 默认关闭 prefill piecewise CUDA graph**(VLM auto-disable;decode graph 名义开启、torch.compile 关闭),使 prefill 走 eager dispatch。
+
+**4. 因果验证。** 在 clean benchmark 中强制开启 prefill piecewise CUDA graph(`--enforce-piecewise-cuda-graph`)后,**Case A TTFT 从 ≈19.2 ms 降至 11.7–13.4 ms,TPOT 基本不变**,进入 vLLM TTFT 区间。这证明 graph coverage 是 Case A first-token latency 的重要可干预因素。
+
+**5. 边界与方向。** clean **Case C 未出现 Case-A-like 收益**,说明该优化随 batch / shape 变化而不普适;production 方向应是**面向低并发、text-only、shape 稳定请求的 selective enablement**,而非对全部 VLM 全局强开。`--enforce-piecewise-cuda-graph` 是 testing lever,production-safe 策略待设计;Case B/D 暂无 clean cross-framework baseline。
+
+**方法学说明(置于后文):** 早期 Phase 1/2 SGLang 测量带 SGLang-only KAPI logging,会抬高 SGLang TTFT,故旧的"四 workload ratio"与 Case C"1.32× gap"仅作 instrumentation-confounded exploratory provenance,不作为 clean 结论。详见 §Methodological Note 与 `experiments/qwen3vl8b/methodology_correction.md`。
 
 ---
 
@@ -103,7 +114,7 @@ Phase 1 的**定性** discovery signal(confounded):TTFT 看似主要 gap、TPOT 
 | C | default, W500 | 249.1 ms, CV 2.9% | 189.0 ms, CV 1.9% | ~~1.32x~~ **SUPERSEDED** | warmup 500, 5 reps |
 | D | default, W30 | 206.2 ms, CV 3.3% | 189.7 ms | ~~1.09x~~ confounded | warmup 30, 3 reps |
 
-**Case A.** `--disable-overlap-schedule` 将 SGLang TTFT 从 default 约 21.8 ms 降到 19.6 ms，说明 overlap scheduler 在 c=1 short-latency 场景确实有固定成本。但即使关闭该路径，仍有 1.56x residual gap，因此 Case A 是最干净的 Phase 4 / Phase 5 对象。
+**Case A.** Phase-2 screening(instrumented)选择 `--disable-overlap-schedule` 作为 Case A baseline 配置;screening 中 default→no-overlap 约 21.8→19.6 ms 的差异属 **historical screening result**(KAPI-instrumented),除非另有 clean default-vs-no-overlap 验证,**不作为 clean root cause**。clean-validated 的发现是:在该 baseline 之上,**prefill piecewise graph coverage** 是 Case A TTFT 的可干预因素(§11)。
 
 **Case C. ⚠️ 1.32× 已撤回(SUPERSEDED)。** W500 probe(CV 2.9%, 249.1 ms)是有效的 SGLang-internal 方差门(并纠正了 W100/W300 的 "SGLang faster / 0.79×" under-warmup artifact),但 249.1 ms 是 **KAPI-confounded**,**不构成** cross-framework gap。clean interleaved rerun 显示 SGLang ≈ vLLM ≈ 190 ms、无 material median gap(见 §11 Phase 5)。
 
@@ -142,7 +153,7 @@ Phase 4 的目标不是直接给优化结论，而是把 Phase 3 traces 转化�
 
 | ID | Hypothesis | Gap relevance | Impact | Confidence | Phase 5 action |
 | --- | --- | --- | --- | --- | --- |
-| H1 | SGLang prefill graph / compile coverage 相比 vLLM 不充分（VLM auto-disable piecewise graph），导致额外 CPU launch / dispatch overhead | primary gap candidate | High | **Strengthened (clean Case A)**；Case C pending | ✅ Case A: `--enforce-piecewise-cuda-graph` 降 TTFT ~39%（19.2→11.7ms），TPOT 不变。Next: Case A stability (reps=5) + Case C 泛化验证 |
+| H1 | SGLang prefill graph coverage 不足（VLM auto-disable piecewise graph）→ 额外 CPU launch / dispatch overhead（Case A） | Case-A TTFT contributor | High | **Clean-supported for Case A only** | ✅ Case A clean: `--enforce-piecewise-cuda-graph` 降 TTFT ~39%（19.2→~12ms），TPOT 不变（reps=5 stability 已完成）。Case C clean rerun **无 Case-A-like 收益**。Next: production-safe selective-enablement scope（非全局 fix） |
 | H2 | `nvjet_sm90_*` FP8 GEMM 是最大 GPU cost；PR #22392 CUTLASS FP8 可能加速 | absolute speed, not gap closer | Medium absolute / Low gap | High for attribution | 可并行 A/B PR #22392，但不要当成 vLLM gap fix |
 | H3 | FlashInfer vs FlashAttention v3 attention backend 差异 | not primary driver | Low | Medium ceiling | 仅作为 confidence ceiling 记录 |
 | H4 | Case B gap 来自 bimodality + c=1 fixed overhead | deprioritize Case B | Low | Medium | 先解决 bimodality / trace availability，再谈 kernel claim |
@@ -178,6 +189,17 @@ Phase 4 最重要的结构性判断是：**最大 GPU kernel 不等于最大 gap
 ---
 
 ## 10. 建议图表
+
+主图应展示 **clean** 结果:
+
+| Figure | Content | Purpose |
+| --- | --- | --- |
+| Figure 1 (main) | **Clean Case A**: S0 vs S2(`--enforce-piecewise-cuda-graph`)vs vLLM,TTFT p50 | 核心 clean finding:graph coverage 降 Case-A TTFT |
+| Figure 2 (main) | **Clean Case C**: S0 vs S2 vs vLLM,TTFT p50(c=16) | boundary result:无 material gap、无 Case-A-like 收益 |
+| Figure 3 (main) | **Mechanism diagram**: VLM auto-disable → prefill piecewise graph OFF → Case A eager-launch overhead | 机制定位 |
+| Figure 4 (note) | (Methodological note 附图)confounded historical baseline | 仅作方法学说明,**不作主图** |
+
+附:旧表(provenance only)
 
 | Figure | Content | Purpose |
 | --- | --- | --- |
@@ -220,3 +242,24 @@ Phase 4 最重要的结构性判断是：**最大 GPU kernel 不等于最大 gap
 1. **Case B / Case D clean(无 KAPI/profiler)cross-framework baseline** —— 若要 four-workload headline 必须先补。
 2. **Production-safe 设计讨论**:针对低并发 / text-only VLM 的 prefill graph enablement(Case-A locus),不用 testing lever、不宣称 global VLM fix(纯文档,本轮不改源码)。
 3. **H2 并行、单独叙述。** PR #22392 / CUTLASS FP8 针对 absolute latency,不作 gap-closer。
+
+---
+
+## 12. Methodological Note（早期 instrumentation confound）
+
+早期 Phase 1 baseline 与 Phase 2 Case C W500 的 SGLang 测量在 server 端开启了 KAPI logging
+(`SGLANG_KERNEL_API_LOGLEVEL=1`),而 vLLM 无对应 instrumentation。Phase 5 Case A 证明该 logging 会显著
+抬高 SGLang 的 eager-dispatch TTFT(clean Case A baseline 19.2 ms vs instrumented 53 ms)。因此:
+
+- 旧的"四 workload SGLang TTFT 全面更慢"ratio(4.89× / 3.20× / 1.32× / 1.33×)与 Case C"稳定 1.32× gap"
+  **是 instrumentation-confounded exploratory measurements**,仅作 provenance,**不是 clean 结论**。
+- 本报告所有 clean 结论(§Key findings、§摘要、§11)均来自**无 KAPI、无 profiler** 的 benchmark。
+- 原始 JSON / trace / log / scripts 全部保留不变;此 note 只修正 **conclusion strength**。
+- 详细 correction 表:`experiments/qwen3vl8b/methodology_correction.md`。
+- **Instrumentation policy(已写入 `plan.md`):** 任何 latency benchmark / clean validation **禁止** KAPI;
+  KAPI 仅用于 crash/debug 的 targeted reproducer,且不得用于跨框架性能比较。
+
+## 13. Historical / Exploratory Measurements
+
+§4(Phase 1 baseline)与 §5(Phase 2 shaping)的表为 **historical / instrumentation-confounded /
+provenance only**,保留以记录走过的路径;不应被读作 clean baseline。clean 数据见 §11。

@@ -32,26 +32,25 @@ establish a baseline, shape/​de-noise the workloads, collect torch-profiler tr
 
 ## Main Findings
 
-> ⚠️ **Methodology correction (2026-05-26):** the early four-workload TTFT ratios below were collected
-> with **SGLang-only KAPI logging** (vLLM uninstrumented), which Phase 5 proved inflates SGLang TTFT.
-> They are **instrumentation-confounded exploratory measurements**, not clean conclusions. See
-> [`experiments/qwen3vl8b/methodology_correction.md`](experiments/qwen3vl8b/methodology_correction.md).
-
-1. **Early baseline confound identified.** The early observation "SGLang TTFT slower across four
-   workloads" (ratios A 4.89× / B 3.20× / C 1.32× / D 1.33×) is a **discovery signal, not a clean
-   cross-framework result** — SGLang-only KAPI instrumentation skewed it.
-2. **Case A — clean validated contributor.** With no instrumentation, forcing SGLang prefill
-   **piecewise CUDA-graph coverage** (`--enforce-piecewise-cuda-graph`) materially reduces Case A (c=1)
-   TTFT (~19.2 → ~11.7 ms) with **TPOT unchanged**, 0 failures, reaching the vLLM TTFT range. (Stable
-   superiority not claimed — S2 CV ~10–12%; it is a **testing lever, not a production fix**.)
-3. **Case C — clean correction.** The old "stable 1.32× batched gap" is **superseded**: a clean
-   interleaved rerun shows **no material median TTFT gap** (SGLang ≈ vLLM ≈ 190 ms) and **no
-   Case-A-like graph benefit** under the observed ~17% session variance.
-4. **Shared GEMM (Phase 4, still valid).** Both frameworks spend 72–86% of GPU time in the same
-   `nvjet_sm90_*` FP8 GEMM family — shared absolute cost, **not** a proven cross-framework gap source.
-   Dispatch/graph/compile mechanisms differ structurally and warrant clean follow-up.
-5. **Clean B/D baseline pending.** Case B and Case D have **no** clean (no-KAPI) cross-framework
-   baseline yet → excluded from any four-workload headline.
+1. **Clean Case A exposes an actionable TTFT gap.** In an uninstrumented benchmark, SGLang's default
+   Case A (128→128, c=1) TTFT is ~**19.2 ms** vs vLLM's **13–14 ms**.
+2. **Profiling points away from GEMM speed and toward prefill graph coverage.** Both frameworks spend
+   72–86% of GPU time in the *same* `nvjet_sm90_*` FP8 GEMM family (so it isn't a slow-SGLang-GEMM
+   problem); config + source audit shows SGLang **disables prefill piecewise CUDA graph by default for
+   this VLM** (Qwen3-VL multimodal auto-disable), leaving prefill on an eager dispatch path.
+3. **A clean controlled intervention materially reduces Case A TTFT.** Forcing prefill piecewise CUDA
+   graph (`--enforce-piecewise-cuda-graph`) drops Case A TTFT to **11.7–13.4 ms** with **TPOT
+   unchanged**, 0 failures, into the vLLM TTFT range — validating graph coverage as a real, actionable
+   Case-A contributor. (Testing lever, not a production fix; S2 CV ~10–12%, so stable superiority over
+   vLLM is not claimed.)
+4. **Clean Case C is a boundary result.** At c=16 batched, the same intervention yields **no material
+   median TTFT gap and no Case-A-like benefit** (SGLang ≈ vLLM ≈ 190 ms). The optimization is
+   workload-shape-dependent → favor **selective enablement** (low-concurrency, text-only, stable
+   shapes), not a global VLM force-on.
+5. **Methodological note (provenance).** Early Phase 1/2 four-workload ratios (A 4.89× / B 3.20× /
+   C 1.32× / D 1.33×) were collected with **SGLang-only KAPI logging** and are retained only as
+   instrumentation-confounded exploratory provenance; Case B/D clean re-baselining is pending. See
+   [`experiments/qwen3vl8b/methodology_correction.md`](experiments/qwen3vl8b/methodology_correction.md).
 
 ## Experiment Setup
 
