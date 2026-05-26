@@ -4,14 +4,26 @@
 
 ## 0. Active Run Status — `qwen3vl8b`
 
-> ⚠️ **METHODOLOGY CORRECTION (2026-05-26) — read first:** Phase 1 baseline and Phase 2 Case C W500 were
-> collected with **SGLang-only KAPI logging** (`SGLANG_KERNEL_API_LOGLEVEL=1`); vLLM had no equivalent
-> instrumentation. Phase 5 Case A proved this materially inflates SGLang TTFT. Consequently the early
-> **four-workload TTFT ratios (4.89× / 3.20× / 1.32× / 1.33×) and the Case C "stable 1.32× gap" are
-> downgraded to instrumentation-confounded exploratory measurements — NOT clean conclusions.** The clean
-> validated finding is Case A only; clean Case C shows no material gap. Full detail:
-> `experiments/qwen3vl8b/methodology_correction.md`. Numbers retained below are **provenance**; their
-> interpretation is corrected. Raw JSON/traces/logs/scripts are unchanged.
+### Current Validated Outcome
+
+- **Case A (clean validated finding).** On `128→128, c=1` (SGLang selected baseline
+  `--disable-overlap-schedule`), clean (no-KAPI, no-profiler) TTFT is ~**19.2 ms** vs vLLM **13–14 ms**,
+  TPOT unchanged. GPU profiling shows both frameworks are dominated by the same FP8 GEMM (shared cost,
+  not the differentiator); config+source audit found SGLang disables **prefill piecewise CUDA graph**
+  for this VLM. A clean controlled intervention (`--enforce-piecewise-cuda-graph`) drops Case A TTFT to
+  **11.7–13.4 ms**, TPOT unchanged, 0 failures → **prefill piecewise graph coverage is a validated
+  contributor to Case A TTFT** (reaches the vLLM TTFT range; testing lever, not a production fix; S2 CV
+  ~10–12% → no claim of stable superiority).
+- **Case C (boundary result).** On `512→128, c=16` (clean), the same intervention shows **no material
+  TTFT gap and no Case-A-like median improvement** (pooled S0 ≈ 192.2, S2 ≈ 193.6, vLLM ≈ 189.8 ms) →
+  the optimization is workload-shape-dependent; production direction is **selective enablement**, not a
+  global VLM force-on.
+- **Phase 5 status: complete for scoped A/C clean validation; production-safe design and optional
+  additional benchmarks are future work.**
+
+(Side quests / methodological corrections — KAPI confound, Case C W500 variance, Case B trace gap — are
+recorded in §0.1 below and in `experiments/qwen3vl8b/methodology_correction.md`; they are not part of
+the validated outcome above.)
 
 ### Instrumentation Policy
 
@@ -28,6 +40,18 @@
 > instrumented 53 ms). KAPI is therefore never a default benchmark setting and never enters a
 > cross-framework performance comparison. (This supersedes any earlier "L1 passive on every run /
 > negligible cost" guidance elsewhere in this plan.)
+
+### 0.1 Side Quests / Methodological Corrections (not headline)
+
+- **KAPI confound (corrected).** Phase 1 baseline and Phase 2 Case C W500 were collected with
+  SGLang-only KAPI logging. The early four-workload ratios (4.89× / 3.20× / 1.32× / 1.33×) and the Case
+  C "stable 1.32× gap" are **instrumentation-confounded exploratory provenance — NOT clean conclusions**
+  (superseded by the clean validated outcome above). Detail: `experiments/qwen3vl8b/methodology_correction.md`.
+- **Case C W500 variance.** A side investigation into batched warmup/variance; its old cross-framework
+  number is not the final result (clean Case C boundary result stands).
+- **Case B trace gap.** SGLang EXTEND trace unavailable → Case B excluded from clean headline; does not
+  affect Case A / Case C conclusions.
+- Numbers in the historical sections below are **provenance**; raw JSON/traces/logs/scripts are unchanged.
 
 > **The active run is `qwen3vl8b`.** It reuses the methodology, fairness model, and artifact
 > spec below. The original exploratory round ("run1") is historical reference only (removed).
@@ -52,7 +76,7 @@
 | 4 — Triage | ✅ **complete** (all 4 cases; `analysis/qwen3vl8b/` + `reports/qwen3vl8b/03_profiling_analysis.md`) |
 | 5 — Validation | 🔄 **in progress** — Case A clean intervention complete (H1 clean-supported for Case A); Case C clean boundary test complete (no Case-A-like benefit); B/D clean baseline pending; production-safe scope next |
 
-**Phase 5 status (in progress — NOT complete).**
+**Phase 5 — exploratory screen + clean-validation detail (provenance; the validated outcome is in §0 above).**
 
 *Phase 5.1 (offline, done).* **Mechanism confirmed:** for the current Qwen3-VL config SGLang decode
 CUDA graph is nominally ON, but VLM auto-disable turns the **prefill piecewise CUDA graph OFF**
@@ -1110,5 +1134,5 @@ gap; TPOT parity; vLLM Case B bimodal); magnitudes are not interchangeable.
    - ✅ Step 2.5 — selected_cases.md updated; Phase-3 protocol locked; all 5 exit criteria verified.
 6. ✅ Phase 3  — SGLang mapping+formal (DECODE) + EXTEND supplement (mapping all 4, formal A/C/D) + vLLM prefill_like+decode_like, all 4 cases. Case B graph-on EXTEND-formal missing (caveat). See §15  + `experiments/qwen3vl8b/phase3/`.
 7. ✅ Phase 4  — triage + breakdown + vLLM cross-check for all 4 cases; `analysis/qwen3vl8b/hypotheses.md` + `ranked_recommendations.md` + `reports/qwen3vl8b/03_profiling_analysis.md`. Case B EXTEND unavailable (≤ M). See §15 (Phase 4).
-8. **Phase 5 (in progress)** — ✅ **Case A clean confirmation done: H1 strengthened** (`--enforce-piecewise-cuda-graph` cut Case A TTFT ~39%, TPOT unchanged, reaches vLLM TTFT range; testing-lever, not production fix). Next: Case A S2 stability supplement (reps=5) + **Case C** clean bracket validation (generalization to c=16). H2 (PR #22392) parallel absolute-speed track; H3/H4 low priority. Production-design discussion only after A/C validation.
+8. ✅ **Phase 5 — complete for scoped A/C clean validation.** Case A clean intervention validated graph coverage as a Case-A TTFT contributor (`--enforce-piecewise-cuda-graph` → ~12 ms, TPOT unchanged, reaches vLLM range; testing-lever, not production fix); Case A stability (reps=5) done; Case C clean interleaved rerun shows no Case-A-like benefit (boundary). **Future work:** production-safe selective enablement; optional B/D clean baseline; optional H2 absolute-speed track.
 9. Promote `analysis/**` into `reports/**` deliverables. *(03_profiling_analysis.md done; PR-ready writeup pending Phase 5.)*

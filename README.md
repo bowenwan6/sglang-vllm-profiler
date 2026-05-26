@@ -32,25 +32,21 @@ establish a baseline, shape/​de-noise the workloads, collect torch-profiler tr
 
 ## Main Findings
 
-1. **Clean Case A exposes an actionable TTFT gap.** In an uninstrumented benchmark, SGLang's default
-   Case A (128→128, c=1) TTFT is ~**19.2 ms** vs vLLM's **13–14 ms**.
-2. **Profiling points away from GEMM speed and toward prefill graph coverage.** Both frameworks spend
-   72–86% of GPU time in the *same* `nvjet_sm90_*` FP8 GEMM family (so it isn't a slow-SGLang-GEMM
-   problem); config + source audit shows SGLang **disables prefill piecewise CUDA graph by default for
-   this VLM** (Qwen3-VL multimodal auto-disable), leaving prefill on an eager dispatch path.
-3. **A clean controlled intervention materially reduces Case A TTFT.** Forcing prefill piecewise CUDA
-   graph (`--enforce-piecewise-cuda-graph`) drops Case A TTFT to **11.7–13.4 ms** with **TPOT
-   unchanged**, 0 failures, into the vLLM TTFT range — validating graph coverage as a real, actionable
-   Case-A contributor. (Testing lever, not a production fix; S2 CV ~10–12%, so stable superiority over
-   vLLM is not claimed.)
-4. **Clean Case C is a boundary result.** At c=16 batched, the same intervention yields **no material
-   median TTFT gap and no Case-A-like benefit** (SGLang ≈ vLLM ≈ 190 ms). The optimization is
+1. **Clean Case A exposes an actionable TTFT gap.** In an uninstrumented benchmark, SGLang's Case A
+   (128→128, c=1; selected baseline `--disable-overlap-schedule`) TTFT is ~**19.2 ms** vs vLLM's
+   **13–14 ms**, while TPOT is unchanged — i.e. the issue is on the first-token / prefill side.
+2. **GPU kernel speed is not the differentiator.** Both frameworks spend 72–86% of GPU time in the
+   *same* `nvjet_sm90_*` FP8 GEMM family — GEMM is a **shared absolute cost**, not what explains the
+   Case A TTFT gap.
+3. **The cause is SGLang's VLM prefill graph coverage; a clean intervention validates it.** For
+   Qwen3-VL, SGLang disables prefill piecewise CUDA graph (VLM auto-disable). Forcing it on
+   (`--enforce-piecewise-cuda-graph`) drops Case A TTFT to **11.7–13.4 ms**, TPOT unchanged, 0 failures
+   — **reaching the vLLM TTFT range**. Prefill piecewise graph coverage is a **validated contributor**
+   to Case A TTFT. (Testing lever, not a production fix; S2 CV ~10–12% → no claim of stable superiority.)
+4. **Case C defines the boundary.** At c=16 batched (clean), the same intervention yields **no material
+   TTFT gap and no Case-A-like median improvement** (SGLang ≈ vLLM ≈ 190 ms). The fix is
    workload-shape-dependent → favor **selective enablement** (low-concurrency, text-only, stable
    shapes), not a global VLM force-on.
-5. **Methodological note (provenance).** Early Phase 1/2 four-workload ratios (A 4.89× / B 3.20× /
-   C 1.32× / D 1.33×) were collected with **SGLang-only KAPI logging** and are retained only as
-   instrumentation-confounded exploratory provenance; Case B/D clean re-baselining is pending. See
-   [`experiments/qwen3vl8b/methodology_correction.md`](experiments/qwen3vl8b/methodology_correction.md).
 
 ## Experiment Setup
 
@@ -76,20 +72,18 @@ establish a baseline, shape/​de-noise the workloads, collect torch-profiler tr
 | **C** `caseC_batched` | 512 → 128 | 16 | batched serving; concurrency path |
 | **D** `caseD_decode` | 512 → 512 | 16 | decode-heavy sanity check |
 
-Early Phase-1 SGLang/vLLM TTFT p50 ratios (A 4.89× · B 3.20× · C 1.32× · D 1.33×) are
-**instrumentation-confounded exploratory measurements** (SGLang-only KAPI logging), not clean results —
-see the Main Findings banner and `methodology_correction.md`.
+Clean validation focuses on **Case A** (the actionable gap) and **Case C** (the batched boundary).
 
 ## Phase Status
 
 | Phase | Purpose | Status |
 |---|---|---|
-| 0 — Equivalence | weights/tokenizer/greedy-output parity | ✅ PASS |
-| 1 — Baseline | establish gap; isolate TTFT vs TPOT | ✅ complete — ⚠️ **KAPI-confounded** (provenance only) |
-| 2 — Shaping / Variance gate | lock profilable cases (incl. Case C W500 probe) | ✅ complete — ⚠️ Case C W500 **KAPI-confounded** |
-| 3 — Profiling / Trace collection | SGLang DECODE+EXTEND, vLLM prefill/decode | ✅ complete (Case B SGLang EXTEND unavailable — caveat) |
-| 4 — Triage | per-case kernel/overlap/fuse + hypotheses | ✅ complete |
-| 5 — Validation | clean H1 validation | 🔄 in progress — Case A clean H1 supported; Case C clean correction done; B/D clean baseline pending |
+| 0 — Equivalence | weights/tokenizer/greedy-output parity | ✅ Complete |
+| 1 — Baseline | establish gap; isolate TTFT vs TPOT | ✅ Complete |
+| 2 — Shaping / Variance gate | lock profilable cases | ✅ Complete |
+| 3 — Profiling / Trace collection | SGLang + vLLM stage traces | ✅ Complete |
+| 4 — Triage | per-case kernel/overlap/fuse + hypotheses | ✅ Complete |
+| 5 — Validation | clean Case A/C validation | ✅ Complete for scoped A/C clean validation |
 
 ## Directory Layout
 
@@ -126,25 +120,24 @@ Every data directory has one `qwen3vl8b/` subtree (the single experiment):
 - **Processed/deliverable docs** (summaries, `analysis/**` markdown, reports, `plan.md`, this README)
   are hand-edited and reviewed.
 
-## Current Caveats
+## Side Quests / Methodological Notes
 
-- **Attention backend mismatch** (FlashInfer vs FA3) → all attention-kernel-level findings carry **ceiling M**.
-- **Case B** is bimodal in both frameworks, and its **SGLang EXTEND trace is unavailable** (corrupt +
-  un-recapturable under the profiler's long-prefill stage mechanism — see
-  `experiments/qwen3vl8b/phase3/caseB_trace_issue.md`). All Case B conclusions carry **ceiling M**.
-- **Early four-workload ratios are instrumentation-confounded** (SGLang-only KAPI logging) — exploratory
-  discovery signals, not clean conclusions. See `experiments/qwen3vl8b/methodology_correction.md`.
-- **H1 is validated for clean Case A only** (materially lower TTFT, TPOT unchanged); it is a
-  testing-lever result, **not a production fix**, and **not established for Case C** (no Case-A-like
-  benefit under clean test).
-- **Case B / Case D** have no clean cross-framework baseline yet → not part of any headline.
+1. **Measurement hygiene (KAPI logging).** Early exploratory SGLang runs enabled
+   `SGLANG_KERNEL_API_LOGLEVEL=1`, which inflates latency; the early four-workload ratios are kept only
+   as instrumentation-confounded exploratory provenance, not clean evidence. See
+   [`experiments/qwen3vl8b/methodology_correction.md`](experiments/qwen3vl8b/methodology_correction.md).
+2. **Case C warmup/variance.** A W500 side investigation surfaced batched warmup/variance sensitivity
+   and motivated the clean interleaved rerun; its older cross-framework number is not the final result —
+   the clean Case C conclusion (no material gap / no Case-A-like benefit) stands.
+3. **Case B trace limitation.** Case B's SGLang EXTEND trace is unavailable, so Case B is excluded from
+   the clean headline; this does not affect the Case A finding or the Case C boundary result. (Attention
+   backend FlashInfer vs FA3 also carries a confidence ceiling on attention-kernel claims.)
 
 ## Next Step
 
-1. **Clean (no-KAPI, no-profiler) baseline for Case B and Case D** before any four-workload TTFT-ratio
-   headline.
-2. **Production-safe design discussion** for low-concurrency / text-only VLM prefill graph enablement
-   (the Case-A locus) — without the `--enforce-piecewise-cuda-graph` testing lever and **without
-   claiming a global VLM fix**. (Docs only; no source changes this round.)
-3. H2 (`nvjet → CUTLASS-FP8`, SGLang PR #22392) as a separate **absolute-speed** track. See
-   `analysis/qwen3vl8b/ranked_recommendations.md`.
+1. **Production-safe selective graph enablement** for low-concurrency / text-only / shape-stable VLM
+   requests (the Case-A locus) — design work, no source changes here, and no global VLM force-on.
+2. *(Optional)* broader clean cross-framework benchmarking (e.g. Case B/D) if a four-workload headline
+   is later needed.
+3. *(Optional)* H2 absolute-speed track (`nvjet → CUTLASS-FP8`, SGLang PR #22392), separate from the
+   latency-gap question. See `analysis/qwen3vl8b/ranked_recommendations.md`.

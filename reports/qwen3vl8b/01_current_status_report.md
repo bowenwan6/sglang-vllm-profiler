@@ -5,7 +5,7 @@
 
 **Key findings**
 
-1. **可操作的 TTFT 问题集中在低并发短请求 Case A。** 在 clean benchmark 中,SGLang default Case A TTFT 约为 **19.2 ms**,而 vLLM 处于 **13–14 ms** 区间;相比之下,clean Case C 中两者 median TTFT 均约为 **190 ms**,未观察到 material gap。
+1. **可操作的 TTFT 问题集中在低并发短请求 Case A。** 在 clean benchmark 中,SGLang Case A(selected baseline `--disable-overlap-schedule`)TTFT 约为 **19.2 ms**,而 vLLM 处于 **13–14 ms** 区间;相比之下,clean Case C 中两者 median TTFT 均约为 **190 ms**,未观察到 material gap。
 
 2. **Case A 的关键瓶颈是 VLM prefill 路径的 graph coverage 不足。** GPU profiling 显示两框架主要消耗在同类 FP8 GEMM kernels 上,说明差异并非来自 SGLang 特有的慢 GEMM。配置与源码审计进一步发现,SGLang 对 Qwen3-VL 默认关闭 prefill piecewise CUDA graph(VLM auto-disable)。
 
@@ -28,7 +28,7 @@
 
 本报告研究 SGLang 与 vLLM 在 `Qwen/Qwen3-VL-8B-Instruct` text-only serving 上的 first-token latency:目标是**定位 first-token latency 的工程瓶颈并验证可干预的优化点**,而非给出泛化 benchmark 排名。结论以 clean(无 instrumentation)benchmark 为准,叙事按"现象 → 分析 → 机制 → 因果验证 → 边界"展开。
 
-**1. Clean 现象。** 在干净 benchmark 中,**Case A(128→128, c=1)有明确 TTFT gap**:SGLang default ≈ 19.2 ms vs vLLM 13–14 ms;而 **Case C(512→128, c=16)无 material gap**:两者 median TTFT 均 ≈ 190 ms。
+**1. Clean 现象。** 在干净 benchmark 中,**Case A(128→128, c=1)有明确 TTFT gap**:SGLang selected baseline(`--disable-overlap-schedule`)≈ 19.2 ms vs vLLM 13–14 ms;而 **Case C(512→128, c=16)无 material gap**:两者 median TTFT 均 ≈ 190 ms。
 
 **2. 分析。** GPU traces 显示两框架的 GPU 时间都主要消耗在**同一类 `nvjet_sm90_*` FP8 GEMM kernel**(72–86%)。因此差异**不是** SGLang 特有的慢 GEMM —— GEMM 是 shared absolute-cost,不是跨框架差异源。
 
@@ -70,7 +70,7 @@
 | Phase 2 | Shaping / variance gate；锁定可 profile protocol | Complete | selected cases + warmup/reps |
 | Phase 3 | 收集 SGLang/vLLM traces，不解释 | Complete | mapping/formal + vLLM windows |
 | Phase 4 | Trace triage；生成 hypotheses | Complete | per-case triage + ranked hypotheses |
-| Phase 5 | clean H1 validation | In progress | Case A clean H1 supported; Case C clean correction (no Case-A-like benefit); B/D clean baseline pending |
+| Phase 5 | clean H1 validation | Complete (scoped A/C) | Case A clean validated; Case C boundary (no Case-A-like benefit); production impl = future work |
 
 ---
 
@@ -85,40 +85,36 @@
 
 ---
 
-## 4. Phase 1 Baseline (Exploratory / instrumented historical measurements)
+## 4. Clean Results
 
-> ⚠️ **KAPI-confounded — provenance only.** SGLang TTFT below was measured with SGLang-only KAPI
-> logging; the ratios are **exploratory discovery signals**, not clean cross-framework results. See
-> `methodology_correction.md`.
+clean(无 instrumentation)benchmark 是本报告的结论依据。完整 clean 表见 §11;此处给出主线汇总。
 
-| Case | Workload | SGLang TTFT p50 | vLLM TTFT p50 | SGLang/vLLM (confounded) | TPOT | Note |
-| --- | --- | ---: | ---: | ---: | --- | --- |
-| A | 128 -> 128, c=1 | 61.8 ms | 12.6 ms | **4.89x** | parity | cleanest short-latency case |
-| B | 2048 -> 128, c=1 | 66.7 ms | 20.8 ms | **3.20x** | parity | vLLM bimodal |
-| C | 512 -> 128, c=16 | 247.5 ms | 187.9 ms | **1.32x** | parity | variance gate needed |
-| D | 512 -> 512, c=16 | 253.0 ms | 189.7 ms | **1.33x** | parity | p99 tail / bimodal |
+**Case A — baseline + intervention(clean, GPU 6/0, 0 failures):**
 
-Phase 1 的**定性** discovery signal(confounded):TTFT 看似主要 gap、TPOT 近 parity;A→B prompt 16× 但 SGLang TTFT 仅 +4.9 ms,提示 first-token 前固定 dispatch overhead。这些**方向性观察**促成了 Phase 5,但其绝对 ratio 因 KAPI 污染**不能**作为 clean 结论。
+| Variant | TTFT p50 median | TPOT p50 |
+|---|---:|---:|
+| SGLang selected baseline (`--disable-overlap-schedule`) | **19.2 ms** | ~5.5 ms |
+| SGLang + `--enforce-piecewise-cuda-graph` | **11.7–13.4 ms** | ~5.5 ms |
+| vLLM (clean anchor) | 13–14 ms | ~5.3 ms |
+
+→ 强制 prefill piecewise graph 使 Case A TTFT 进入 vLLM 区间,TPOT 不变 → graph coverage 是 Case A first-token latency 的 **validated contributor**。(S2 stability reps=5:median 13.36 ms,CV 12.3% → 只写 "reaches the vLLM TTFT range",不声称稳定优于 vLLM。)
+
+**Case C — boundary test(clean, c=16, 0 failures):** pooled S0 ≈ **192.2 ms**、pooled S2 ≈ **193.6 ms**、vLLM ≈ **189.8 ms** → **无 material TTFT gap、无 Case-A-like median improvement**。
+
+> 早期 Phase 1/2 的 instrumented baseline 表(及其旧 ratio)见 §Side Quests / Methodological Notes,仅作 exploratory provenance。
 
 ---
 
-## 5. Phase 2 Shaping / Variance Gate (Exploratory / instrumented historical measurements)
+## 5. Workloads & Clean Validation Scope
 
-> ⚠️ **KAPI-confounded — provenance only.** SGLang TTFT below (incl. Case C W500) was measured with
-> SGLang-only KAPI logging. The Case C **1.32× gap is SUPERSEDED** by the clean rerun (§ below / `methodology_correction.md`).
+| Case | Workload | clean validation 状态 |
+|---|---|---|
+| A | 128→128, c=1 | ✅ clean baseline + intervention + stability(主结论) |
+| C | 512→128, c=16 | ✅ clean interleaved boundary test |
+| B | 2048→128, c=1 | 仅 Phase-4 结构观察;无 clean cross-framework headline(见 Side Quests) |
+| D | 512→512, c=16 | 仅 Phase-4 sanity;无独立 clean baseline |
 
-| Case | Winner Config | SGLang TTFT p50 (confounded) | vLLM Ref | Residual Gap | Phase 3 Protocol |
-| --- | --- | ---: | ---: | ---: | --- |
-| A | `--disable-overlap-schedule` | 19.6 ms, CV 3.2% | 12.6 ms | ~~1.56x~~ confounded | warmup 30, 3 reps |
-| B | default | 30.3 ms, CV 68.4% | 21.5 ms, CV 85.9% | 1.41x (ceiling M) | warmup 300, 5 reps |
-| C | default, W500 | 249.1 ms, CV 2.9% | 189.0 ms, CV 1.9% | ~~1.32x~~ **SUPERSEDED** | warmup 500, 5 reps |
-| D | default, W30 | 206.2 ms, CV 3.3% | 189.7 ms | ~~1.09x~~ confounded | warmup 30, 3 reps |
-
-**Case A.** Phase-2 screening(instrumented)选择 `--disable-overlap-schedule` 作为 Case A baseline 配置;screening 中 default→no-overlap 约 21.8→19.6 ms 的差异属 **historical screening result**(KAPI-instrumented),除非另有 clean default-vs-no-overlap 验证,**不作为 clean root cause**。clean-validated 的发现是:在该 baseline 之上,**prefill piecewise graph coverage** 是 Case A TTFT 的可干预因素(§11)。
-
-**Case C. ⚠️ 1.32× 已撤回(SUPERSEDED)。** W500 probe(CV 2.9%, 249.1 ms)是有效的 SGLang-internal 方差门(并纠正了 W100/W300 的 "SGLang faster / 0.79×" under-warmup artifact),但 249.1 ms 是 **KAPI-confounded**,**不构成** cross-framework gap。clean interleaved rerun 显示 SGLang ≈ vLLM ≈ 190 ms、无 material median gap(见 §11 Phase 5)。
-
-**Case B / D.** Case B 双框架 bimodal，所有 cross-framework claim 必须带 confidence ceiling M。Case D residual gap 仅 1.09x，更适合作为 decode-heavy sanity check。
+SGLang Case A baseline 是 **selected baseline `--disable-overlap-schedule`**(Phase-2 screening 选定),不是 `default`。
 
 ---
 
@@ -183,8 +179,8 @@ Phase 4 最重要的结构性判断是：**最大 GPU kernel 不等于最大 gap
 | SGLang FlashInfer vs vLLM FlashAttention v3 | attention-kernel 相关结论 confidence ceiling M |
 | Case B 双框架 bimodal | Case B cross-framework 结论 ceiling M |
 | Case B SGLang EXTEND unavailable | prefill-stage SGLang 侧不能给强结论 |
-| graph-off mapping trace 不能证明真实 serving eager | H1 必须依赖 graph-on formal + Phase 5 CPU-gap 验证 |
-| H1 尚未被 Phase 5 直接验证 | dispatch/graph hypothesis 仍是 Medium confidence |
+| graph-off mapping trace 不能证明 serving eager | 机制定位依赖 graph-on formal + 配置/源码审计(已完成) |
+| H1 clean-validated for Case A only | production generalization 未验证;Case C 无同类收益 |
 
 ---
 
@@ -211,7 +207,7 @@ Phase 4 最重要的结构性判断是：**最大 GPU kernel 不等于最大 gap
 
 ---
 
-## 11. Phase 5 Validation（进行中）
+## 11. Phase 5 — Clean Validation Results (complete for scoped A/C)
 
 **Case A clean confirmation 已完成(GPU 6,无 KAPI、无 profiler,0 failures)。** S0→S2→S0 bracket 稳定且复现 Phase 2 baseline:
 
@@ -238,28 +234,37 @@ Phase 4 最重要的结构性判断是：**最大 GPU kernel 不等于最大 gap
 
 → **clean Case C 无 material median gap、无 Case-A-like S2 收益**(pooled S2 ≈ pooled S0 ≈ vLLM)。S0/vLLM 有 ~17% session variance,小幅效应未解析。次要:S2 降低批量 run-to-run 方差但不改 median。**这撤回了旧的 Case C 1.32× gap。**
 
-**剩余步骤:**
-1. **Case B / Case D clean(无 KAPI/profiler)cross-framework baseline** —— 若要 four-workload headline 必须先补。
-2. **Production-safe 设计讨论**:针对低并发 / text-only VLM 的 prefill graph enablement(Case-A locus),不用 testing lever、不宣称 global VLM fix(纯文档,本轮不改源码)。
-3. **H2 并行、单独叙述。** PR #22392 / CUTLASS FP8 针对 absolute latency,不作 gap-closer。
+**Phase 5 状态: complete for scoped A/C clean validation; production implementation is future work**(见 §13)。
 
 ---
 
-## 12. Methodological Note（早期 instrumentation confound）
+## 12. Side Quests / Methodological Notes
 
-早期 Phase 1 baseline 与 Phase 2 Case C W500 的 SGLang 测量在 server 端开启了 KAPI logging
-(`SGLANG_KERNEL_API_LOGLEVEL=1`),而 vLLM 无对应 instrumentation。Phase 5 Case A 证明该 logging 会显著
-抬高 SGLang 的 eager-dispatch TTFT(clean Case A baseline 19.2 ms vs instrumented 53 ms)。因此:
+主线之外的三个研究过程注记(不影响上面的 clean 结论):
 
-- 旧的"四 workload SGLang TTFT 全面更慢"ratio(4.89× / 3.20× / 1.32× / 1.33×)与 Case C"稳定 1.32× gap"
-  **是 instrumentation-confounded exploratory measurements**,仅作 provenance,**不是 clean 结论**。
-- 本报告所有 clean 结论(§Key findings、§摘要、§11)均来自**无 KAPI、无 profiler** 的 benchmark。
-- 原始 JSON / trace / log / scripts 全部保留不变;此 note 只修正 **conclusion strength**。
-- 详细 correction 表:`experiments/qwen3vl8b/methodology_correction.md`。
-- **Instrumentation policy(已写入 `plan.md`):** 任何 latency benchmark / clean validation **禁止** KAPI;
-  KAPI 仅用于 crash/debug 的 targeted reproducer,且不得用于跨框架性能比较。
+1. **Measurement hygiene: KAPI logging.** 早期探索阶段曾在 SGLang 侧启用 `SGLANG_KERNEL_API_LOGLEVEL=1`,
+   会抬高 latency。因此旧的四-case ratios(`4.89× / 3.20× / 1.32× / 1.33×`)仅作 exploratory provenance,
+   不作为 final clean evidence。Instrumentation policy 写在 `plan.md`(latency/validation 禁 KAPI;
+   KAPI 仅 crash/debug)。详细 correction:`experiments/qwen3vl8b/methodology_correction.md`。
 
-## 13. Historical / Exploratory Measurements
+2. **Case C warmup / variance investigation.** W500 是一个重要 side quest:它识别了 batched workload 的
+   warmup 敏感性与方差,并推动了后续 clean interleaved rerun。但 W500 的旧 cross-framework gap 数字不是
+   最终结论;最终 clean 结论是 §11 的 Case C boundary result(无 material gap / 无 Case-A-like benefit;
+   observed session variance,cause not isolated)。
 
-§4(Phase 1 baseline)与 §5(Phase 2 shaping)的表为 **historical / instrumentation-confounded /
-provenance only**,保留以记录走过的路径;不应被读作 clean baseline。clean 数据见 §11。
+3. **Case B trace limitation.** Case B 的 SGLang EXTEND trace 不可用,故未进入最终 clean headline。该缺口
+   不影响 Case A 的 validated finding,也不影响 Case C 作为 boundary test 的结论。
+
+*(历史 instrumented Phase 1/2 baseline 表保留在 `experiments/qwen3vl8b/phase{1,2}/summary.md`,带
+provenance/confounded 标注,记录研究路径;不应读作 clean baseline。)*
+
+## 13. Conclusion / Future Work
+
+**结论:** clean 实验在 Case A 验证了一个真实、可操作的 first-token-latency 贡献因素 —— SGLang 对
+Qwen3-VL 默认关闭的 prefill piecewise CUDA graph;强开后 Case A TTFT 进入 vLLM 区间且 TPOT 不变。Case C
+(c=16)未见同类收益,界定了适用范围。
+
+**Future work(均为可选、非阻塞):**
+- Production-safe **selective graph enablement** 设计(低并发 / text-only / shape-stable),不用 testing lever。
+- 可选的更广 clean benchmarking(如需 four-workload cross-framework headline,则补 Case B/D clean baseline)。
+- 可选 H2 absolute-speed track(PR #22392 / CUTLASS FP8),与 gap 分开。
