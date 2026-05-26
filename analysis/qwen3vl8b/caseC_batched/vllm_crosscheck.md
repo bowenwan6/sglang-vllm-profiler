@@ -1,5 +1,8 @@
 # Case C — vLLM Cross-check (corroboration / falsification only)
 
+> ⚠️ **Methodology correction (2026-05-26):** SGLang TTFT figures from Phase 1 / Phase 2 Case C were collected with **SGLang-only KAPI logging** and are **instrumentation-confounded (provenance only)**. The Case C **“1.32× SGLang-slower” gap is SUPERSEDED** by the clean rerun (no material median gap; SGLang ≈ vLLM ≈ 190 ms). Data retained unchanged. See `experiments/qwen3vl8b/methodology_correction.md`.
+
+
 Run: `qwen3vl8b` · Case C `caseC_batched` (512→128, c=16). Framework: **vLLM 0.21.0** (reference).
 Mode: single-trace per window. Raw: `vllm_prefill_raw.txt`, `vllm_decode_raw.txt`.
 
@@ -39,7 +42,7 @@ nvjet 25.7% + 13.9% + 8.2% + 5.7% + … ; FA3 10.2%; lm_head 4.4%; fused_add_rms
    via `aten::mm` at `unquant.py:138` (only a few `_forward_raw` rows are graph-captured). At c=16 the
    GEMMs are large, so raw compute is similar — but vLLM's compiled/graphed dispatch removes per-op
    launch + epilogue overhead and enables inductor fusions (silu/rmsnorm folded into the compiled
-   region). → **Corroborates** that the 1.32× batched gap is dispatch/fusion-side, not kernel-speed.
+   region). → Documents a **structural** dispatch/compile difference. ⚠️ Note: the 1.32× batched gap it was cited to explain is **SUPERSEDED** (KAPI-confounded; clean Case C shows no material gap), so this is a structural observation only, not a gap explanation.
 3. **Batched memory management is SGLang-only but hidden.** SGLang's radix-cache/allocator copies
    (`allocator.py:159 free`, `radix_cache.py` match/cache) appear at ~3.3% but are 86–96% overlapped
    (low-roi); vLLM shows no equivalent above cutoff. Not a gap driver.

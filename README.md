@@ -32,15 +32,26 @@ establish a baseline, shape/​de-noise the workloads, collect torch-profiler tr
 
 ## Main Findings
 
-1. **TTFT is the gap; TPOT is at parity.** Across all four workloads SGLang and vLLM match on
-   per-token decode throughput; the difference lives in the first-token (prefill / dispatch) path.
-2. **The biggest GPU cost is shared GEMM, not the gap source.** Both frameworks spend 72–86% of GPU
-   time in the *same* `nvjet_sm90_*` FP8 GEMM family — so GEMM cost is shared and does not by itself
-   explain the cross-framework gap.
-3. **The strongest hypothesis is a dispatch / graph-coverage difference.** SGLang dispatches those
-   GEMMs eagerly (`aten::mm`), while vLLM runs them under torch.compile/inductor (prefill) and CUDA
-   graph (decode). This **dispatch-overhead hypothesis (H1)** is the leading TTFT-gap candidate and
-   still needs Phase 5 validation.
+> ⚠️ **Methodology correction (2026-05-26):** the early four-workload TTFT ratios below were collected
+> with **SGLang-only KAPI logging** (vLLM uninstrumented), which Phase 5 proved inflates SGLang TTFT.
+> They are **instrumentation-confounded exploratory measurements**, not clean conclusions. See
+> [`experiments/qwen3vl8b/methodology_correction.md`](experiments/qwen3vl8b/methodology_correction.md).
+
+1. **Early baseline confound identified.** The early observation "SGLang TTFT slower across four
+   workloads" (ratios A 4.89× / B 3.20× / C 1.32× / D 1.33×) is a **discovery signal, not a clean
+   cross-framework result** — SGLang-only KAPI instrumentation skewed it.
+2. **Case A — clean validated contributor.** With no instrumentation, forcing SGLang prefill
+   **piecewise CUDA-graph coverage** (`--enforce-piecewise-cuda-graph`) materially reduces Case A (c=1)
+   TTFT (~19.2 → ~11.7 ms) with **TPOT unchanged**, 0 failures, reaching the vLLM TTFT range. (Stable
+   superiority not claimed — S2 CV ~10–12%; it is a **testing lever, not a production fix**.)
+3. **Case C — clean correction.** The old "stable 1.32× batched gap" is **superseded**: a clean
+   interleaved rerun shows **no material median TTFT gap** (SGLang ≈ vLLM ≈ 190 ms) and **no
+   Case-A-like graph benefit** under the observed ~17% session variance.
+4. **Shared GEMM (Phase 4, still valid).** Both frameworks spend 72–86% of GPU time in the same
+   `nvjet_sm90_*` FP8 GEMM family — shared absolute cost, **not** a proven cross-framework gap source.
+   Dispatch/graph/compile mechanisms differ structurally and warrant clean follow-up.
+5. **Clean B/D baseline pending.** Case B and Case D have **no** clean (no-KAPI) cross-framework
+   baseline yet → excluded from any four-workload headline.
 
 ## Experiment Setup
 
@@ -66,19 +77,20 @@ establish a baseline, shape/​de-noise the workloads, collect torch-profiler tr
 | **C** `caseC_batched` | 512 → 128 | 16 | batched serving; concurrency path |
 | **D** `caseD_decode` | 512 → 512 | 16 | decode-heavy sanity check |
 
-Phase-1 baseline SGLang/vLLM TTFT p50 ratios: **A 4.89× · B 3.20× · C 1.32× · D 1.33×** (TPOT at
-parity throughout).
+Early Phase-1 SGLang/vLLM TTFT p50 ratios (A 4.89× · B 3.20× · C 1.32× · D 1.33×) are
+**instrumentation-confounded exploratory measurements** (SGLang-only KAPI logging), not clean results —
+see the Main Findings banner and `methodology_correction.md`.
 
 ## Phase Status
 
 | Phase | Purpose | Status |
 |---|---|---|
 | 0 — Equivalence | weights/tokenizer/greedy-output parity | ✅ PASS |
-| 1 — Baseline | establish gap; isolate TTFT vs TPOT | ✅ complete (24 runs, 0 failures) |
-| 2 — Shaping / Variance gate | lock profilable cases (incl. Case C W500 probe) | ✅ complete |
+| 1 — Baseline | establish gap; isolate TTFT vs TPOT | ✅ complete — ⚠️ **KAPI-confounded** (provenance only) |
+| 2 — Shaping / Variance gate | lock profilable cases (incl. Case C W500 probe) | ✅ complete — ⚠️ Case C W500 **KAPI-confounded** |
 | 3 — Profiling / Trace collection | SGLang DECODE+EXTEND, vLLM prefill/decode | ✅ complete (Case B SGLang EXTEND unavailable — caveat) |
 | 4 — Triage | per-case kernel/overlap/fuse + hypotheses | ✅ complete |
-| 5 — Validation | validate top hypothesis (H1) | ⬜ not started (next) |
+| 5 — Validation | clean H1 validation | 🔄 in progress — Case A clean H1 supported; Case C clean correction done; B/D clean baseline pending |
 
 ## Directory Layout
 
@@ -121,13 +133,19 @@ Every data directory has one `qwen3vl8b/` subtree (the single experiment):
 - **Case B** is bimodal in both frameworks, and its **SGLang EXTEND trace is unavailable** (corrupt +
   un-recapturable under the profiler's long-prefill stage mechanism — see
   `experiments/qwen3vl8b/phase3/caseB_trace_issue.md`). All Case B conclusions carry **ceiling M**.
-- **H1 is a hypothesis, not a conclusion** — kernel-share tables show the dispatch *path* but not the
-  launch-gap *time*; Phase 5 must measure it before any optimization claim graduates.
+- **Early four-workload ratios are instrumentation-confounded** (SGLang-only KAPI logging) — exploratory
+  discovery signals, not clean conclusions. See `experiments/qwen3vl8b/methodology_correction.md`.
+- **H1 is validated for clean Case A only** (materially lower TTFT, TPOT unchanged); it is a
+  testing-lever result, **not a production fix**, and **not established for Case C** (no Case-A-like
+  benefit under clean test).
+- **Case B / Case D** have no clean cross-framework baseline yet → not part of any headline.
 
 ## Next Step
 
-**Phase 5 — validate H1.** Measure SGLang's prefill-stage CPU launch / dispatch gap on Cases A and C,
-and test whether enabling/extending CUDA-graph / piecewise-graph / torch.compile coverage narrows the
-measured TTFT gap. Run H2 (the `nvjet → CUTLASS-FP8` GEMM swap, SGLang PR #22392) as a parallel
-*absolute-speed* track, kept separate from the gap question. See
-`analysis/qwen3vl8b/ranked_recommendations.md`.
+1. **Clean (no-KAPI, no-profiler) baseline for Case B and Case D** before any four-workload TTFT-ratio
+   headline.
+2. **Production-safe design discussion** for low-concurrency / text-only VLM prefill graph enablement
+   (the Case-A locus) — without the `--enforce-piecewise-cuda-graph` testing lever and **without
+   claiming a global VLM fix**. (Docs only; no source changes this round.)
+3. H2 (`nvjet → CUTLASS-FP8`, SGLang PR #22392) as a separate **absolute-speed** track. See
+   `analysis/qwen3vl8b/ranked_recommendations.md`.

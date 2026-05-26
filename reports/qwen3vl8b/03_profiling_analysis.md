@@ -46,7 +46,11 @@ TPOT parity + Case D 小 gap 双重佐证）。
 - **为什么最高优先级**：gap 最干净（1.56×，关掉 overlap scheduler 后的稳定 residual，CV 3.2%），
   且嫌疑（dispatch 开销）**不依赖 attention backend**（无 ceiling M），最 actionable。
 
-### Case C — `caseC_batched`（512→128, c=16, default）· **batched gap 代表**
+### Case C — `caseC_batched`（512→128, c=16, default）
+
+> ⚠️ **The earlier "stable 1.32× batched gap" is SUPERSEDED** (it relied on KAPI-confounded SGLang
+> measurements). The structural trace observations below remain valid, but they do **not** explain a
+> cross-framework latency gap — clean Case C shows no material median gap. See `methodology_correction.md`.
 
 | 维度 | 结果 |
 |---|---|
@@ -60,10 +64,13 @@ TPOT parity + Case D 小 gap 双重佐证）。
   但 overlap 表标 `low-roi-hidden`（86–96% 已被 compute 重叠），**非 gap 源**；(2) vLLM 这里更明确：
   prefill GEMM 在 **torch.compile / inductor AOT 编译区**（`inductor_cache/…call`），decode 经
   `cudaGraphLaunch`。
-- **是否支持 H1**：**强支持**。两框架 GEMM 分类几乎相同，差异在 GEMM 的**派发/编译方式**（SGLang eager
-  vs vLLM compiled/graphed），而非分类构成 → 与 OBS-A1/H1 一致（OBS-C1，impact H / confidence M）。
-- **代表性**：W500 后稳定 1.32×、CV 2.9%（gate PASS），是干净可信的 batched 并发 gap。
-- **caveats**：attention ceiling M（FlashInfer vs FA3）；`scheduler/CPU gap` 不在 GPU-time 表。
+- **结构观察(仍有效)**：两框架 GEMM 分类几乎相同,差异在 GEMM 的**派发/编译方式**(SGLang eager vs
+  vLLM compiled/graphed)。这是一个**结构差异**,值得验证 —— 但 Phase 5 clean Case C 显示该差异在 c=16
+  **不**转化为 TTFT 收益(强开 piecewise graph 无效),所以它**不**解释一个 batched latency gap。
+- **代表性(撤回)**：~~W500 后稳定 1.32× 是干净可信的 batched gap~~ —— **SUPERSEDED**:249.1 ms 是
+  KAPI-confounded;clean rerun 显示 SGLang ≈ vLLM ≈ 190 ms,**无 material median gap**。
+- **caveats**：attention ceiling M（FlashInfer vs FA3）；`scheduler/CPU gap` 不在 GPU-time 表;
+  Case C c=16 有 ~17% session variance。
 
 ### Case B — `caseB_longprefill`（2048→128, c=1, default）· **仅作 ceiling M 辅助证据**
 
@@ -120,7 +127,7 @@ TPOT parity + Case D 小 gap 双重佐证）。
 
 - **H1（最重要）**：相同 nvjet GEMM 在 SGLang 是 eager（`unquant.py:138 apply` → `aten::mm`），在 vLLM
   是 compiled（inductor AOT，prefill）/ graphed（`cudaGraphLaunch`，decode）。短/批 prefill 下 per-op
-  launch + 未融合 epilogue 是 1.56×（A）/ 1.32×（C）residual 的最佳解释。**不依赖 attention backend**。
+  launch + 未融合 epilogue 是 Case A residual 的最佳解释(**clean Case A 已验证**);Case C 的旧 1.32× 已撤回(KAPI-confounded),clean Case C 无 material gap。**不依赖 attention backend**。
   confidence 只给 **M**，因 kernel-share 表只证 dispatch *路径*、未直接测 launch-gap *时间*。
 - **H2**：nvjet FP8 GEMM 占 72–86%，是 SGLang 开放 PR #22392（CUTLASS scaled-MM 替换 nvjet，去 memset
   气泡/拷贝）的 Confirmed catalog 命中。但 **vLLM 也付同样代价** → 它是绝对加速、**不是 gap-closer**。
@@ -149,7 +156,7 @@ TPOT parity + Case D 小 gap 双重佐证）。
 
 - **Case B SGLang EXTEND 不可用**：所有 Case B 结论 **≤ ceiling M**；prefill-stage 仅 vLLM 侧证据。
 - **Attention backend mismatch**：FlashInfer 0.6.11 vs FlashAttention v3 → 任何 attention 级结论 ceiling M。
-- **Phase 5 进展**：**H1 已在 clean Case A 中被 strengthened** —— 强制 prefill piecewise CUDA-graph coverage(`--enforce-piecewise-cuda-graph`,绕过 VLM auto-disable)使 Case A TTFT 降低约 39%(19.2→11.7ms)、TPOT 不变、0 errors,达到 vLLM TTFT 区间。**边界:** testing-lever(非 production fix)、单 case(A,c=1)、S2 CV 10.1%(稳定 parity 未确认);**generalization to Case C pending**;H2 仍未验证。第一轮 GPU-3 intervention 因 KAPI logging 污染降级为 exploratory。详见 `experiments/qwen3vl8b/phase5/caseA_h1_confirmation/summary.md`。
+- **Phase 5 进展**：**H1 已在 clean Case A 中被 strengthened** —— 强制 prefill piecewise CUDA-graph coverage(`--enforce-piecewise-cuda-graph`,绕过 VLM auto-disable)使 Case A TTFT 降低约 39%(19.2→11.7ms)、TPOT 不变、0 errors,达到 vLLM TTFT 区间。**边界:** testing-lever(非 production fix)、单 case(A,c=1)、S2 CV 10.1%(稳定 parity 未确认);**Case C clean rerun 完成:无 Case-A-like 收益、旧 1.32× gap 撤回**(H1 不延伸到 c=16);Case B/D 无 clean baseline;H2 仍未验证。第一轮 GPU-3 intervention 因 KAPI logging 污染降级为 exploratory。详见 `experiments/qwen3vl8b/phase5/caseA_h1_confirmation/summary.md`。
 - **每个 (framework, stage, case) 单一代表性 trace**（非多 reps）：share 稳定，但绝对时间是单窗口快照。
 
 ---

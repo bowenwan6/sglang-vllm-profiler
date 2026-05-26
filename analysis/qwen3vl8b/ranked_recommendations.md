@@ -1,5 +1,8 @@
 # Phase 4 — Ranked Recommendations (hypothesis-driven, for Phase 5)
 
+> ⚠️ **Methodology correction (2026-05-26):** Phase 1 / Phase 2 Case C SGLang TTFT was **KAPI-instrumentation-confounded**. The Case C **1.32× gap is SUPERSEDED** (clean rerun: no material median gap). Phase 5 status: **H1 validated for clean Case A only** (testing-lever; not a production fix); **not established for Case C**. See `experiments/qwen3vl8b/methodology_correction.md`.
+
+
 Run: `qwen3vl8b`. Ranked by (impact × confidence) toward **closing the SGLang→vLLM TTFT gap**.
 **These are ranked *hypotheses* and proposed *validations*, not validated optimizations.** Phase 5 tests
 them. vLLM is the reference baseline — no vLLM changes are recommended. See `hypotheses.md` for evidence.
@@ -17,7 +20,7 @@ them. vLLM is the reference baseline — no vLLM changes are recommended. See `h
    launch gaps in the prefill window (the `scheduler / CPU gap` that the GPU-time kernel table cannot
    show). Then test whether enabling/extending SGLang CUDA-graph / piecewise-graph (and/or torch.compile)
    coverage on the prefill+dispatch path narrows the measured TTFT gap. This directly targets the
-   strongest, fairness-independent hypothesis behind the 1.56× (A) and 1.32× (C) residuals.
+   strongest, fairness-independent hypothesis behind the Case A residual (clean-validated). ⚠️ The Case C 1.32× residual is SUPERSEDED (KAPI-confounded; clean Case C shows no material gap).
 2. **Run H2 as a parallel absolute-speed track.** If PR #22392 (CUTLASS FP8 replacing nvjet) is
    mergeable, A/B it for absolute latency. Keep it **separate** from the gap question — vLLM pays the
    same nvjet cost, so this is not expected to close the gap.

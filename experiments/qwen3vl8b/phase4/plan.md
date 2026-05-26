@@ -1,5 +1,8 @@
 # Phase 4 — Trace Triage / Interpretation Plan
 
+> ⚠️ **Methodology correction (2026-05-26):** SGLang TTFT figures from Phase 1 / Phase 2 Case C were collected with **SGLang-only KAPI logging** and are **instrumentation-confounded (provenance only)**. The Case C **“1.32× SGLang-slower” gap is SUPERSEDED** by the clean rerun (no material median gap; SGLang ≈ vLLM ≈ 190 ms). Data retained unchanged. See `experiments/qwen3vl8b/methodology_correction.md`.
+
+
 Status: **PLAN ONLY — not executed.** Authored 2026-05-22 for active run `qwen3vl8b`.
 Phase 0/1/2/3 complete; this plan converts Phase 3 traces into ranked, evidence-backed hypotheses.
 
@@ -31,7 +34,7 @@ Phase 0/1/2/3 complete; this plan converts Phase 3 traces into ranked, evidence-
 | Order | Case | Workload | Why this priority | Phase 4 focus |
 |---|---|---|---|---|
 | 1 (pilot) | **A** `caseA_short` | 128→128 c1, `--disable-overlap-schedule` | Highest priority; cleanest residual TTFT gap (1.56×) after the overlap-schedule flag | Remaining scheduler/dispatch fixed overhead after overlap disable |
-| 2 | **C** `caseC_batched` | 512→128 c16, default | Stable batched gap (1.32×) after W500; CV 2.9% | Batched prefill/dispatch, CUDA-graph shape, batch formation, prefill→decode transition |
+| 2 | **C** `caseC_batched` | 512→128 c16, default | ~~Stable batched gap (1.32×)~~ SUPERSEDED (KAPI-confounded) | Batched prefill/dispatch, CUDA-graph shape, batch formation, prefill→decode transition |
 | 3 | **B** `caseB_longprefill` | 2048→128 c1, default | Long prefill but noisy; **ceiling M**; graph-on EXTEND-formal missing | Long-prefill EXTEND path; use graph-off mapping only; all hypotheses ≤ M |
 | 4 | **D** `caseD_decode` | 512→512 c16, default | Lowest priority; small gap (1.09×); decode-heavy | Decode-path sanity check; confirm TPOT parity story |
 

@@ -1,5 +1,8 @@
 # Phase 3 Protocol — Locked from Phase 2
 
+> ⚠️ **Methodology correction (2026-05-26):** SGLang TTFT figures from Phase 1 / Phase 2 Case C were collected with **SGLang-only KAPI logging** and are **instrumentation-confounded (provenance only)**. The Case C **“1.32× SGLang-slower” gap is SUPERSEDED** by the clean rerun (no material median gap; SGLang ≈ vLLM ≈ 190 ms). Data retained unchanged. See `experiments/qwen3vl8b/methodology_correction.md`.
+
+
 Generated: 2026-05-22 14:53 UTC
 
 > This file is the authoritative Phase 3 input. Do not modify without re-running Phase 2.
@@ -38,12 +41,12 @@ Generated: 2026-05-22 14:53 UTC
 - **warmup**: 500 · **reps**: 5 · **bench_n**: 2000 · **concurrency**: 16
 - **SGLang TTFT p50 (Phase 2, w=500)**: 249.1 (cv=2.9%)
 - **vLLM TTFT p50 (Phase 2 recheck, w=300)**: 189.0
-- **Residual gap**: 1.32× (SGLang slower)
+- **Residual gap**: ~~1.32× (SGLang slower)~~ ⚠️ **SUPERSEDED** (KAPI-confounded; clean rerun shows no material gap)
 - **Gate**: PASS ✅ (W500 probe, CV<5%)
-- **W500 probe**: 5 reps, CV 2.9% — **cleanly profilable.** The W100/W300 "SGLang faster (0.79×)" reading was an under-warmup artifact; the stable W500 median (249.1 ms) restores the ~1.32× SGLang-slower gap seen in Phase-1 W30.
-- **Warmup-mismatch caveat**: SGLang stabilized at W500 vs vLLM W300. vLLM is warmup-insensitive here (187.9→189.0 ms across W30→W300), so the ~1.32× comparison is sound as a stable reference. A strict same-warmup vLLM W500 is **only needed if a 'SGLang faster' claim is made** (it is not).
+- **W500 probe**: 5 reps, CV 2.9% — passed the SGLang-internal variance gate and corrected the W100/W300 "SGLang faster (0.79×)" under-warmup artifact. ⚠️ But the 249.1 ms is **KAPI-confounded**; the "~1.32× SGLang-slower gap" is **SUPERSEDED** (clean rerun: no material gap).
+- **Warmup-mismatch caveat (now moot)**: SGLang stabilized at W500 vs vLLM W300. ⚠️ The whole ~1.32× comparison is **SUPERSEDED** — the W500 SGLang number is KAPI-confounded; the clean rerun shows no material gap, so this warmup-mismatch reasoning no longer supports any cross-framework gap claim.
 - **vLLM ceiling**: attention backend differs — ceiling M on kernel-level findings
-- **Phase 3 rationale**: Batched decode tests scheduler throughput path; ~1.32× gap warrants profiling
+- **Phase 3 rationale**: Batched decode tests scheduler throughput path. (Note: the ~1.32× gap motivating this is SUPERSEDED — KAPI-confounded; profiling value is the structural dispatch/compile question, not a gap.)
 
 ## Case D — Decode-heavy (512→512, c=16)
 

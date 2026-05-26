@@ -1,5 +1,8 @@
 # Phase 2 — Shaping / Variance Gate Summary
 
+> ⚠️ **Methodology correction (2026-05-26):** SGLang TTFT figures from Phase 1 / Phase 2 Case C were collected with **SGLang-only KAPI logging** and are **instrumentation-confounded (provenance only)**. The Case C **“1.32× SGLang-slower” gap is SUPERSEDED** by the clean rerun (no material median gap; SGLang ≈ vLLM ≈ 190 ms). Data retained unchanged. See `experiments/qwen3vl8b/methodology_correction.md`.
+
+
 Generated: 2026-05-22 14:53 UTC
 
 Active run `qwen3vl8b` · GPU 7 · model Qwen3-VL-8B-Instruct @ 0c351dd · TP=1 · bf16.

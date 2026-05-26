@@ -41,7 +41,7 @@ stability note, **not** a latency improvement.
 
 ## Conclusion
 
-- **H1 does NOT generalize to batched Case C (c=16).** Forcing prefill piecewise CUDA-graph coverage
+- **No Case-A-like TTFT benefit observed for Case C (c=16) under the current clean interleaved test; smaller effects unresolved under the observed ~17% session variance (cause not isolated).** Forcing prefill piecewise CUDA-graph coverage
   gives **no median TTFT benefit** at c=16 (pooled S2 ≈ pooled S0 ≈ vLLM ≈ 190 ms). The validated H1
   effect remains **limited to Case A short-latency (c=1)**.
 - The baseline-drift problem from the first run is now **characterized** (intrinsic ~17% session

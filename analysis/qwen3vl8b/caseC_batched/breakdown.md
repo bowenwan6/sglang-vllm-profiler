@@ -1,5 +1,8 @@
 # Case C — Category Breakdown
 
+> ⚠️ **Methodology correction (2026-05-26):** SGLang TTFT figures from Phase 1 / Phase 2 Case C were collected with **SGLang-only KAPI logging** and are **instrumentation-confounded (provenance only)**. The Case C **“1.32× SGLang-slower” gap is SUPERSEDED** by the clean rerun (no material median gap; SGLang ≈ vLLM ≈ 190 ms). Data retained unchanged. See `experiments/qwen3vl8b/methodology_correction.md`.
+
+
 Run: `qwen3vl8b` · Case C `caseC_batched` (512→128, c=16). Buckets per `analysis/category_regex.md`.
 
 ## SGLang GPU-time share by canonical category

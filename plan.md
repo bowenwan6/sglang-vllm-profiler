@@ -4,9 +4,17 @@
 
 ## 0. Active Run Status — `qwen3vl8b`
 
+> ⚠️ **METHODOLOGY CORRECTION (2026-05-26) — read first:** Phase 1 baseline and Phase 2 Case C W500 were
+> collected with **SGLang-only KAPI logging** (`SGLANG_KERNEL_API_LOGLEVEL=1`); vLLM had no equivalent
+> instrumentation. Phase 5 Case A proved this materially inflates SGLang TTFT. Consequently the early
+> **four-workload TTFT ratios (4.89× / 3.20× / 1.32× / 1.33×) and the Case C "stable 1.32× gap" are
+> downgraded to instrumentation-confounded exploratory measurements — NOT clean conclusions.** The clean
+> validated finding is Case A only; clean Case C shows no material gap. Full detail:
+> `experiments/qwen3vl8b/methodology_correction.md`. Numbers retained below are **provenance**; their
+> interpretation is corrected. Raw JSON/traces/logs/scripts are unchanged.
+
 > **The active run is `qwen3vl8b`.** It reuses the methodology, fairness model, and artifact
-> spec below, but is a *fresh measurement round* on a rebuilt machine. The original run ("run1") is
-> historical reference only.
+> spec below. The original exploratory round ("run1") is historical reference only (removed).
 
 | Item | Value |
 |---|---|
@@ -75,8 +83,11 @@ S0→S2→S0 bracket + clean vLLM anchor, 0 failures:
   17.7% (inconclusive). An **interleaved rerun** (`S0_a→S2_a→S0_b→S2_b→S0_c` + vLLM, GPU 0) better-samples
   the noise: three S0 medians still span **17.3%** (Case-C c=16 TTFT has intrinsic ~17% session variance
   even at w500 — unresolved, a workload property), **but the comparison is now robust**: pooled S2
-  (193.6 ms) ≈ pooled S0 (192.2 ms) = **+0.7%**, both ≈ vLLM (189.8 ms). → **H1 does NOT generalize to
-  batched c=16**; validated effect limited to Case-A short-latency (c=1) dispatch-bound behavior.
+  (193.6 ms) ≈ pooled S0 (192.2 ms) = **+0.7%**, both ≈ vLLM (189.8 ms). → **No Case-A-like TTFT benefit
+  observed for Case C under the clean interleaved test; smaller effects unresolved under the observed
+  ~17% session variance.** The validated S2 effect is established only for Case-A short-latency (c=1)
+  dispatch-bound behavior. **Note:** the earlier "Case C stable 1.32× gap" is **superseded** (it relied
+  on KAPI-confounded SGLang measurements) — clean Case C shows **no material median gap**.
   Consistent with Phase 4 (batched prefill is compute/GEMM-bound). Secondary: enforce-piecewise *reduces*
   batched run-to-run variance (S2 CV 3–4% vs S0 5–9%) without changing median TTFT — a stability note,
   not a latency win.
@@ -126,9 +137,13 @@ default), GPU 0, both frameworks on torch 2.11.0+cu130 / CUDA 13.0.
 | C — 512→128, c=16 | 247.5 ms | 187.9 ms | **1.32×** | parity (0.99×) | SGLang p50 cv 9.4% (variance gate needed) |
 | D — 512→512, c=16 | 253.0 ms | 189.7 ms | **1.33×** | parity (1.00×) | **SGLang p99 390.6 ms, p99 cv 47% (bimodal tail)** |
 
-Key findings: **TTFT is the only gap**; TPOT and throughput are at parity (0.91–1.01×).
-The c=1 dispatch floor persists and **prefill is cheap** — prompt 16× longer (A→B) adds only
-**+4.9 ms** to SGLang TTFT (61.8→66.7). Direction is highly consistent with run1; magnitudes differ
+> ⚠️ **CONFOUNDED / provenance only** — this Phase-1 table was collected with SGLang-only KAPI logging;
+> the four ratios (4.89× / 3.20× / 1.32× / 1.33×) are **instrumentation-confounded exploratory
+> discovery signals**, not clean cross-framework conclusions. See `methodology_correction.md`.
+
+Discovery signal (confounded): TTFT looked like the dominant gap and TPOT/throughput near parity.
+The c=1 dispatch floor and "prefill is cheap" (prompt 16× → only **+4.9 ms** SGLang TTFT, 61.8→66.7) are
+directional observations that motivated Phase 5; they are **not** clean ratios. Direction is highly consistent with run1; magnitudes differ
 (e.g. Case A ratio 4.89× vs run1 3.89×) so **numbers are not interchangeable**. torch/CUDA are now
 aligned across frameworks (removes run1's torch-version confound), but the **attention backend still
 differs (SGLang FlashInfer vs vLLM FlashAttention v3) → any attention-kernel conclusion carries
@@ -141,13 +156,21 @@ confidence ceiling M**. Full table + p95/p99 + CV + error rate: `experiments/qwe
 |---|---|---|---|---|---|
 | A — 128→128 c1 | **`--disable-overlap-schedule`** | 19.6 ms (3.2%) | 12.6 ms (Phase 1) | **1.56×** | warmup 30, 3 reps |
 | B — 2048→128 c1 | default | 30.3 ms (**68.4%** ⚠ bimodal) | 21.5 ms (**85.9%** ⚠ bimodal, ceiling M) | 1.41× | warmup 300, 5 reps |
-| C — 512→128 c16 | default | **249.1 ms (2.9%, W500)** | 189.0 ms (1.9%, stable) | **1.32×** (SGLang slower) | warmup 500, 5 reps — **clean** |
-| D — 512→512 c16 | default | 206.2 ms (3.3%) | 189.7 ms (Phase 1) | 1.09× | warmup 30, 3 reps |
+| C — 512→128 c16 | default | 249.1 ms (2.9%, W500) ⚠ KAPI-confounded | 189.0 ms (1.9%) | ~~1.32×~~ **SUPERSEDED** | warmup 500, 5 reps |
+| D — 512→512 c16 | default | 206.2 ms (3.3%) ⚠ KAPI-confounded | 189.7 ms (Phase 1) | ~~1.09×~~ confounded | warmup 30, 3 reps |
+
+> ⚠️ **Phase 2 SGLang TTFT above is KAPI-confounded (SGLang-only instrumentation).** The Case C
+> "1.32× SGLang-slower" gap is **SUPERSEDED** by the clean interleaved rerun (pooled S0 ~192.2 ms ≈
+> pooled S2 ~193.6 ms ≈ vLLM ~189.8 ms → no material median gap). See `methodology_correction.md`.
 
 Key Phase 2 findings:
 - **Case A — overlap scheduler was a real cost.** `--disable-overlap-schedule` cut TTFT ~10% (21.8→19.6 ms) at clean CV. The Phase-1 4.89× gap is now **1.56×** — a much smaller residual scheduler/dispatch overhead is the Phase-3 target. Other flags (`stream8`, `chunk_off`) were within 5% of default; `chunk_64` was 2.4× worse (eliminated).
 - **Case B — both frameworks bimodal.** `chunk_off` beat default by only 3.2% (< 5% threshold) → default wins. SGLang finalist reps 64.3 / 30.3 / 26.9 ms (CV 68.4%); vLLM recheck at warmup=300 still bimodal (first rep high, rest ~21.5 ms, CV 85.9%). **All Case B cross-framework conclusions carry confidence ceiling M.**
-- **Case C — clean at W500; SGLang ~1.32× slower (no reversal).** SGLang failed the 5% CV gate at W30/W100/W300 (12.5/15.2/14.9%), but a follow-up **W500 probe (5 reps, GPU 1) passed cleanly at CV 2.9%**, stabilizing at **249.1 ms**. The noisy W100/W300 medians (124–149 ms) that suggested "SGLang faster (0.79×)" were an **under-warmup artifact**: at stable warmup SGLang is ~1.32× *slower* than vLLM (189.0 ms), matching the Phase-1 W30 ratio (247.5 vs 187.9). vLLM is warmup-insensitive (187.9→189.0 ms across W30→W300), so the comparison is a sound stable reference (a strict same-warmup vLLM W500 would only be needed for a "SGLang faster" claim, which no longer holds). **Case C is cleanly profilable.**
+- **Case C — ~~SGLang ~1.32× slower~~ SUPERSEDED (KAPI-confounded).** The W500 SGLang median (249.1 ms,
+  CV 2.9%) was collected with SGLang-only KAPI logging and is **not** a clean cross-framework number. The
+  clean interleaved rerun (no KAPI) shows **no material median gap** (pooled S0 ~192.2 / S2 ~193.6 /
+  vLLM ~189.8 ms). The W500 probe remains useful only as a SGLang-internal *variance-gate* check (it
+  passed CV 2.9%); it does **not** establish a batched TTFT gap. See `methodology_correction.md`.
 - **Case D — clean at warmup=30.** CV 3.3% with no extra warmup; residual gap 1.09× (Phase-1 p99 bimodal tail did not reappear). Lowest Phase-3 priority.
 
 **Phase 3 shortlist (all 4 promote; profiling order A → C → B → D).** Full collection protocol:
@@ -156,7 +179,7 @@ Key Phase 2 findings:
 | Case | Decision | SGLang flags | warmup / reps | Phenomenon to profile |
 |---|---|---|---|---|
 | **A** 128→128 c1 | promote — **highest priority** | `--disable-overlap-schedule` | 30 / 3 | Remaining scheduler/dispatch overhead (19.6 ms vs vLLM 12.6 ms, ~1.56×); cleanest + most actionable |
-| **C** 512→128 c16 | promote — **clean** | default | 500 / 5 | Stable batched-c=16 TTFT gap: SGLang ~1.32× slower (249.1 ms vs vLLM 189.0 ms) after W500 |
+| **C** 512→128 c16 | promote | default | 500 / 5 | ~~Stable batched gap SGLang ~1.32× slower~~ **SUPERSEDED** (KAPI-confounded; clean rerun shows no material gap — see methodology_correction.md) |
 | **B** 2048→128 c1 | promote — **ceiling M** | default | 300 / 5 | Long-prefill c=1; both SGLang and vLLM bimodal → all cross-framework Case B conclusions carry ceiling M |
 | **D** 512→512 c16 | promote — **lower priority** | default | 30 / 3 | Small residual gap (~1.09×, 206.2 ms vs vLLM 189.7 ms); lowest expected payoff |
 
@@ -606,7 +629,7 @@ Phase-3 profiling and with what shaping. This was answered as follows:
 
 1. **Case A:** the TTFT floor is **partly configurational** — `--disable-overlap-schedule` removed ~10% (gap 4.89×→1.56×). The residual is the Phase-3 target. *(This differs from run1, where the floor looked fully structural; the current SGLang build responds to the overlap flag.)*
 2. **Case B:** `chunk_off` did not beat default beyond the 5% threshold → default base. Both SGLang and vLLM are bimodal here → all cross-framework Case B conclusions carry ceiling M.
-3. **Case C:** vLLM stabilized at warmup=300 (CV 1.9%). SGLang failed the 5% CV gate at W30/W100/W300 (12.5/15.2/14.9%) but a follow-up **W500 probe passed cleanly (CV 2.9%, 249.1 ms)**. The noisy W100/W300 "SGLang faster / 0.79× reversal" was an under-warmup artifact; clean W500 data shows SGLang **~1.32× slower** (matches Phase-1 W30). **Cleanly profilable at warmup=500.**
+3. **Case C:** the W500 probe passed the SGLang-internal CV gate (2.9%, 249.1 ms) and confirmed the W100/W300 "SGLang faster / 0.79×" reading was an under-warmup artifact. **However the 249.1 ms was KAPI-confounded**; the "~1.32× slower" cross-framework gap is **SUPERSEDED** — the clean rerun shows no material median gap (see methodology_correction.md). W500 stands only as a variance-gate result.
 4. **Case D:** clean at warmup=30 (CV 3.3%); residual gap 1.09×. No bimodal tail this round.
 
 #### Decision rule (reusable methodology — applied per case)
@@ -907,6 +930,8 @@ Never invert a row. Auto-benchmark does not read kernels; profiler-analysis does
 
 ### Phase 1 — Minimal Fair Baseline (completed 2026-05-22)
 
+> ⚠️ **KAPI-confounded — provenance only** (SGLang-only instrumentation). Ratios are exploratory, not clean conclusions. See `experiments/qwen3vl8b/methodology_correction.md`.
+
 - 24 runs (4 cases × 2 frameworks × 3 reps), **error rate 0% on every run**. GPU 0, serial servers;
   greedy (`temperature=0, top_p=1`, `ignore_eos` default); both frameworks torch 2.11.0+cu130 / CUDA 13.0.
 - Datasets: `datasets/qwen3vl8b/case{A,B,C,D}.jsonl` (text-only, special-token-safe, SEED=1; SHA-256 logged). Old root `datasets/case*.jsonl` were removed in the restructure.
@@ -927,6 +952,8 @@ Never invert a row. Auto-benchmark does not read kernels; profiler-analysis does
 
 ### Phase 2 — Shaping / Variance Gate (completed 2026-05-22)
 
+> ⚠️ **KAPI-confounded — provenance only.** Case C **1.32× gap SUPERSEDED** by the clean rerun (no material gap). See `experiments/qwen3vl8b/methodology_correction.md`.
+
 - GPU **7**, serial servers (GPU freed <2000 MiB between every server), greedy
   (`temperature=0, top_p=1`), `--output-details`. **0 failed requests across the entire phase.**
 - Artifacts: `experiments/qwen3vl8b/phase2/summary.md`, `phase2/selected_cases.md`,
@@ -941,7 +968,7 @@ Never invert a row. Auto-benchmark does not read kernels; profiler-analysis does
 
 - **Case A shaping:** screen p50 — `no_overlap` 19.5 / `default` 22.2 / `stream8` 22.2 / `chunk_off` 22.5 / `chunk_64` 53.9 ms. Finalist (3 reps): `no_overlap` median 19.6 ms (CV 3.2%) vs `default` 21.8 ms (CV 1.7%). **The overlap scheduler costs ~10% at c=1; the Phase-1 4.89× gap collapses to 1.56×.** (run1 had called this floor fully structural — the current build responds to the flag.)
 - **Case B shaping:** screen p50 — `chunk_off` 62.8 / `default` 64.9 / `chunk_1024` 80.6 / `chunk_512` 91.6 ms. `chunk_off` < 5% better → default. Finalist reps 64.3 / 30.3 / 26.9 ms (CV 68.4%) — **SGLang itself is bimodal here.** vLLM recheck (w=300, 5 reps): first rep high, rest ~21.5 ms, CV 85.9% — **bimodality not a warmup artifact → ceiling M on all Case B cross-framework claims.**
-- **Case C variance gate + W500 probe:** SGLang W30/W100/W300 CV = 12.5 / 15.2 / 14.9% — failed the 5% gate. A follow-up **W500 probe (5 reps, GPU 1, 0 failures) passed at CV 2.9%**, stable median **249.1 ms**. vLLM recheck stable (CV 1.9%, 189 ms). The W100/W300 "SGLang faster / 0.79× reversal" was an **under-warmup artifact**; at stable warmup SGLang is **~1.32× slower** (matches Phase-1 W30). vLLM is warmup-insensitive (187.9→189.0 across W30→W300), so this is a sound stable reference; a strict same-warmup vLLM W500 is only needed for a "SGLang faster" claim (no longer applicable). **Case C cleanly profilable** at warmup=500. Probe artifacts: `phase2/raw/caseC_sglang_w500_rep*.json`, `phase2/raw/caseC_w500_result.json`.
+- **Case C variance gate + W500 probe:** SGLang W30/W100/W300 CV = 12.5 / 15.2 / 14.9% — failed the 5% gate. A follow-up **W500 probe (5 reps, GPU 1, 0 failures) passed at CV 2.9%**, stable median **249.1 ms**. vLLM recheck stable (CV 1.9%, 189 ms). The W100/W300 "SGLang faster / 0.79× reversal" was an **under-warmup artifact**. ⚠️ **The W500 median (249.1 ms) was KAPI-confounded; the "~1.32× slower" cross-framework gap is SUPERSEDED** by the clean rerun (no material median gap — see methodology_correction.md). W500 stands only as a SGLang-internal variance-gate pass. Probe artifacts: `phase2/raw/caseC_sglang_w500_rep*.json`, `phase2/raw/caseC_w500_result.json`.
 - **Case D variance gate:** passed at W30 (CV 3.3%, 206.2 ms); residual 1.09×. The Phase-1 p99 bimodal tail did not reappear.
 - **Phase-3 shortlist:** A (high priority) · B (ceiling M + extra reps) · C (clean at W500, warmup 500/5 reps) · D (lower priority). Locked protocol: `experiments/qwen3vl8b/phase2/selected_cases.md`.
 

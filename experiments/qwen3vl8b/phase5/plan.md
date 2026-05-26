@@ -1,5 +1,8 @@
 # Phase 5 — Hypothesis Validation Plan (main experiment `qwen3vl8b`)
 
+> ⚠️ **Methodology correction (2026-05-26):** SGLang TTFT figures from Phase 1 / Phase 2 Case C were collected with **SGLang-only KAPI logging** and are **instrumentation-confounded (provenance only)**. The Case C **“1.32× SGLang-slower” gap is SUPERSEDED** by the clean rerun (no material median gap; SGLang ≈ vLLM ≈ 190 ms). Data retained unchanged. See `experiments/qwen3vl8b/methodology_correction.md`.
+
+
 Status: **PLAN ONLY — not executed.** Authored 2026-05-25. No benchmark / profiling / server / GPU /
 source changes were run for this document — research was read-only. `<main>` = `experiments/qwen3vl8b`
 (restructure complete; canonical paths already use `qwen3vl8b`).
@@ -127,7 +130,7 @@ measured; not re-run unless a same-warmup control is explicitly needed).
 **H1 strengthened / supported** if, for **both** Case A and Case C:
 - coverage-expansion measurably **increases** graph-covered prefill kernel share (≈0% → substantial), **and**
 - CPU launch-gap / inter-kernel idle on the prefill critical path **drops materially**, **and**
-- TTFT residual gap vs vLLM **narrows materially** (e.g. Case A 1.56× and Case C 1.32× both move toward 1×
+- TTFT residual gap vs vLLM **narrows materially** (Case A; the Case C 1.32× was later SUPERSEDED — KAPI-confounded — so only Case A applies) (move toward 1×
   by a margin well outside the measured CV ~3%), **and**
 - TPOT, error rate, and functional correctness show **no material regression**.
 
@@ -158,7 +161,7 @@ gap** (vLLM pays the same nvjet cost). Steps (read-only first):
 
 - **Case A (primary):** cleanest residual (1.56×), c=1, lowest variance (CV 3.2%), fairness-independent
   H1 signal. First intervention target.
-- **Case C (primary):** stable batched gap (1.32×, CV 2.9% post-W500); confirms H1 generalizes to c=16.
+- **Case C (primary):** ~~stable batched gap (1.32×)~~ — this pre-run assumption was **falsified**: clean rerun shows no material gap and no Case-A-like benefit (KAPI-confounded 1.32× SUPERSEDED).
 - **Case D (corroboration only):** run **only if** Case A/C support H1; its small gap (1.09×) +
   decode-heavy shape should show the smallest prefill-coverage effect (consistency check), not a primary test.
 - **Case B (excluded this round):** bimodal in both frameworks + **no usable SGLang EXTEND trace**

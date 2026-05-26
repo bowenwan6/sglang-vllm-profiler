@@ -1,5 +1,8 @@
 # qwen3vl8b — Profiling Experiment
 
+> ⚠️ **Methodology correction (2026-05-26):** SGLang TTFT figures from Phase 1 / Phase 2 Case C were collected with **SGLang-only KAPI logging** and are **instrumentation-confounded (provenance only)**. The Case C **“1.32× SGLang-slower” gap is SUPERSEDED** by the clean rerun (no material median gap; SGLang ≈ vLLM ≈ 190 ms). Data retained unchanged. See `experiments/qwen3vl8b/methodology_correction.md`.
+
+
 The single retained experiment in this repo: an SGLang-vs-vLLM latency profiling round on
 `Qwen/Qwen3-VL-8B-Instruct` (text-only serving). Methodology is in `../../plan.md`. An earlier
 exploratory round was removed during the repo restructure (see the Historical note in `../../plan.md`

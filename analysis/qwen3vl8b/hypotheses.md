@@ -1,5 +1,8 @@
 # Phase 4 — Hypotheses (evidence-backed, ranked-input)
 
+> ⚠️ **Methodology correction (2026-05-26):** Phase 1 / Phase 2 Case C SGLang TTFT was **KAPI-instrumentation-confounded**. The Case C **1.32× gap is SUPERSEDED** (clean rerun: no material median gap). Phase 5 status: **H1 validated for clean Case A only** (testing-lever; not a production fix); **not established for Case C**. See `experiments/qwen3vl8b/methodology_correction.md`.
+
+
 Run: `qwen3vl8b` · Qwen3-VL-8B-Instruct @ `0c351dd` · H200 · TP=1 · bf16 · greedy.
 Source: per-case triage of Phase 3 traces (Cases A/C/B/D). **These are hypotheses with confidence
 H/M/L, not validated conclusions.** Phase 5 validates the top ones. vLLM = reference baseline only;
@@ -35,7 +38,7 @@ no vLLM optimization recommendations. Catalog = `llm-torch-profiler-analysis` re
 - **vLLM evidence:** all vLLM GEMM rows compiled/graphed (Cases A/C/D); corroborated by Phase-1
   "prompt ×16 → TTFT +4.9 ms" (compute-insensitive → dispatch-bound).
 - **catalog status:** overlap-catalog (CUDA-graph / torch.compile coverage); `vllm-torch-compile-fusions.md`.
-- **impact:** **H** (best explanation of the 1.56× Case A and 1.32× Case C residual gaps).
+- **impact:** **H** for Case A (clean-validated). ⚠️ The Case C 1.32× residual is **SUPERSEDED** (KAPI-confounded; clean Case C shows no material gap) — H1 impact applies to Case A short-latency only.
 - **confidence:** **M** — kernel-share tables show the dispatch *path* but not the launch-gap *time*;
   needs CPU-gap measurement to confirm.
 - **fairness dependence:** no.

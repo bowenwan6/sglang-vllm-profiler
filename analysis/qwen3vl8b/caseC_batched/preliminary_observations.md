@@ -1,7 +1,10 @@
 # Case C — Preliminary Observations (NOT final recommendations)
 
+> ⚠️ **Methodology correction (2026-05-26):** SGLang TTFT figures from Phase 1 / Phase 2 Case C were collected with **SGLang-only KAPI logging** and are **instrumentation-confounded (provenance only)**. The Case C **“1.32× SGLang-slower” gap is SUPERSEDED** by the clean rerun (no material median gap; SGLang ≈ vLLM ≈ 190 ms). Data retained unchanged. See `experiments/qwen3vl8b/methodology_correction.md`.
+
+
 Run: `qwen3vl8b` · Case C `caseC_batched` (512→128, c=16, default).
-Residual gap (Phase 2, W500 clean): **SGLang 249.1 ms vs vLLM 189.0 ms ≈ 1.32×** (CV 2.9%, gate PASS).
+Residual gap (Phase 2, W500): SGLang 249.1 ms vs vLLM 189.0 ms ≈ 1.32× — ⚠️ **SUPERSEDED / KAPI-confounded** (provenance only; clean rerun shows no material gap).
 
 > Draft observations from triage; not validated, not Phase-5 recommendations.
 
@@ -21,7 +24,7 @@ Residual gap (Phase 2, W500 clean): **SGLang 249.1 ms vs vLLM 189.0 ms ≈ 1.32�
   overhead amortized and silu/rmsnorm folded into the compiled region. Corroborates dispatch/fusion gap.
 - **catalog status:** overlap-catalog (torch.compile / CUDA-graph coverage); vLLM-side compile-fusion
   reference (`vllm-torch-compile-fusions.md`).
-- **impact estimate:** H — most plausible source of the stable 1.32× batched gap (compute is shared).
+- **impact estimate:** ⚠️ **retracted** — the 1.32× batched gap is SUPERSEDED (KAPI-confounded); clean Case C shows no material gap, so this is not a gap-source attribution. Structural dispatch/compile observation retained.
 - **confidence (draft):** M — kernel tables show the dispatch path but not the launch-gap time directly.
 - **fairness dependence:** no (not attention-backend dependent).
 - **caveat:** SGLang vs vLLM differ in graph/compile strategy by design; "gap" here is a config/feature
