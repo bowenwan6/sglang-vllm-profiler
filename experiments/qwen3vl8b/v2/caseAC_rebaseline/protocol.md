@@ -1,8 +1,18 @@
 # Protocol — Issue #2: Rebaseline Qwen3-VL on default overlap schedule
 
-> **Status: DRAFTED — pending approval. No runs executed.** Decision-complete: every value below is
-> chosen; only the GPU id is resolved at preflight. Foundational v2 experiment — #3/#4/#5 rest on it.
-> Clean only: never set `SGLANG_KERNEL_API_LOGLEVEL` / `SGLANG_KERNEL_API_LOGDEST`; no profiler.
+> **Status: APPROVED & EXECUTING.** Decision-complete experiment plan. Foundational v2 experiment —
+> #3/#4/#5 rest on it. Clean only: never set `SGLANG_KERNEL_API_LOGLEVEL` / `SGLANG_KERNEL_API_LOGDEST`;
+> no profiler.
+
+## 0. Execution instance (this run)
+
+- **GPU: 1** (`CUDA_VISIBLE_DEVICES=1`). Verified idle at preflight (util 0%, <2000 MiB; ~1.1 GB foreign
+  baseline held by an out-of-namespace orphan process, 0% util — not heavy compute). Do **not** auto-
+  switch GPUs; if GPU 1 is not idle at run time, stop and report.
+- **Case A** runs the optional `A_S0_abl_no_overlap` ablation (for v1 comparability).
+- **Case C** does **NOT** run `C_S0_abl_no_overlap` unless explicitly approved later (avoid long runtime).
+- **Text-only** runs — `SGLANG_USE_CUDA_IPC_TRANSPORT` is **unset** (image+text/IPC is issue #4, not here).
+- All headline runs forbid KAPI/profiler; servers serialized; env stripped of KAPI + IPC vars before launch.
 
 ## 1. Goal
 
