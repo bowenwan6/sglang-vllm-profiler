@@ -32,21 +32,23 @@ establish a baseline, shape/​de-noise the workloads, collect torch-profiler tr
 
 ## Main Findings
 
-1. **Clean Case A exposes an actionable TTFT gap.** In an uninstrumented benchmark, SGLang's Case A
-   (128→128, c=1; selected baseline `--disable-overlap-schedule`) TTFT is ~**19.2 ms** vs vLLM's
-   **13–14 ms**, while TPOT is unchanged — i.e. the issue is on the first-token / prefill side.
+1. **Clean Case A exposes an actionable TTFT gap — confirmed on the production default (v2 #2).** In an
+   uninstrumented benchmark on **SGLang default (overlap-ON)**, Case A (128→128, c=1) TTFT is **21.94 ms**
+   vs vLLM's **13.12 ms**, while TPOT is unchanged — i.e. the issue is on the first-token / prefill side.
+   (v1 measured this on the `--disable-overlap-schedule` baseline at ~19.2 ms, which *understated* the
+   production gap; that flag is now an ablation only.)
 2. **GPU kernel speed is not the differentiator.** Both frameworks spend 72–86% of GPU time in the
    *same* `nvjet_sm90_*` FP8 GEMM family — GEMM is a **shared absolute cost**, not what explains the
    Case A TTFT gap.
-3. **The cause is SGLang's VLM prefill graph coverage; a clean intervention validates it.** For
-   Qwen3-VL, SGLang disables prefill piecewise CUDA graph (VLM auto-disable). Forcing it on
-   (`--enforce-piecewise-cuda-graph`) drops Case A TTFT to **11.7–13.4 ms**, TPOT unchanged, 0 failures
-   — **reaching the vLLM TTFT range**. Prefill piecewise graph coverage is a **validated contributor**
-   to Case A TTFT. (Testing lever, not a production fix; S2 CV ~10–12% → no claim of stable superiority.)
-4. **Case C defines the boundary.** At c=16 batched (clean), the same intervention yields **no material
-   TTFT gap and no Case-A-like median improvement** (SGLang ≈ vLLM ≈ 190 ms). The fix is
-   workload-shape-dependent → favor **selective enablement** (low-concurrency, text-only, stable
-   shapes), not a global VLM force-on.
+3. **The cause is SGLang's VLM prefill graph coverage; a clean intervention validates it on the
+   production default.** For Qwen3-VL, SGLang disables prefill piecewise CUDA graph (VLM auto-disable).
+   Forcing it on (`--enforce-piecewise-cuda-graph`) drops Case A TTFT **21.94 → 14.04 ms (−36%)**, TPOT
+   unchanged, 0 failures — **reaching the vLLM TTFT range**. The v2 #2 production-default rebaseline shows
+   this is **not** an artifact of the overlap-OFF baseline. (Testing lever, not a production fix.)
+4. **Case C defines the boundary (confirmed on the production default).** At c=16 batched (clean), the
+   same intervention yields **no material TTFT gap and no Case-A-like improvement** (SGLang default
+   204.8 ms, +PCG 230.6 ms, vLLM 215.7 ms; batched CV ~14–15%). The fix is workload-shape-dependent →
+   favor **selective enablement** (low-concurrency, text-only, stable shapes), not a global VLM force-on.
 
 ## Experiment Setup
 
@@ -84,6 +86,7 @@ Clean validation focuses on **Case A** (the actionable gap) and **Case C** (the 
 | 3 — Profiling / Trace collection | SGLang + vLLM stage traces | ✅ Complete |
 | 4 — Triage | per-case kernel/overlap/fuse + hypotheses | ✅ Complete |
 | 5 — Validation | clean Case A/C validation | ✅ Complete for scoped A/C clean validation |
+| v2 #2 — Default-overlap rebaseline | production-default overlap-ON Case A/C baseline + PCG re-test | ✅ Complete / PASS (`experiments/qwen3vl8b/v2/caseAC_rebaseline/results/`) |
 
 ## Directory Layout
 
@@ -137,9 +140,10 @@ Every data directory has one `qwen3vl8b/` subtree (the single experiment):
 
 ## Next Step
 
-1. **Production-safe selective graph enablement** for low-concurrency / text-only / shape-stable VLM
-   requests (the Case-A locus) — design work, no source changes here, and no global VLM force-on.
-2. *(Optional)* broader clean cross-framework benchmarking (e.g. Case B/D) if a four-workload headline
-   is later needed.
-3. *(Optional)* H2 absolute-speed track (`nvjet → CUTLASS-FP8`, SGLang PR #22392), separate from the
-   latency-gap question. See `analysis/qwen3vl8b/ranked_recommendations.md`.
+v2 #2 (default-overlap rebaseline) is **complete**. Next on the v2 roadmap (see `plan.md`):
+
+1. **#4 — Qwen3-VL image+text + `SGLANG_USE_CUDA_IPC_TRANSPORT=1` (priority).** The realistic VLM
+   production path; text-only conclusions don't transfer to image+text automatically.
+2. **#3 — Qwen3.5 transfer check** (parallel/after #4): re-run the clean Case A/C methodology on Qwen3.5.
+3. **#5 — selective/default-on PCG PR** (after #4): minimum safe exception in the VLM auto-disable for the
+   Case-A locus — no global VLM force-on.

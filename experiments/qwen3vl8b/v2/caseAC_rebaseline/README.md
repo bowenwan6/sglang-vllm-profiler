@@ -16,6 +16,16 @@ baseline.
 (into vLLM's 13.1 ms band, TPOT flat). Case C (c=16 batched) shows **no Case-A-like benefit** (boundary
 confirmed). The fix is workload-shape-dependent → selective enablement (Issue #5).
 
+**Results (TTFT p50, clean, GPU 1, 0 failures):**
+
+| | SGLang default (overlap-ON) | SGLang + PCG | vLLM | ablation `--disable-overlap-schedule` |
+|---|---:|---:|---:|---:|
+| **Case A** (128→128, c=1) | 21.94 ms | **14.04 ms** | 13.12 ms | 19.07 ms |
+| **Case C** (512→128, c=16, pooled) | 204.8 ms | 230.6 ms | 215.7 ms | — (not run) |
+
+Case A: PCG −36%, into vLLM band, TPOT flat. Case C: no material gap / no Case-A-like benefit (batched
+CV ~14–15%; not "PCG hurts"). See [`results/summary.md`](results/summary.md).
+
 Key design points (see protocol for detail):
 
 - Headline baseline = SGLang **default (overlap-ON)**; `--disable-overlap-schedule` is ablation-only.

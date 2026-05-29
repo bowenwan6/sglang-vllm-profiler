@@ -6,19 +6,24 @@
 
 ---
 
-## 1. Current Mainline / Validated v1 Finding
+## 1. Current Mainline (v1 finding + v2 #2 production-default confirmation)
 
-- **Case A TTFT gap is real.** Low-concurrency / short-latency `128→128, c=1`: clean (no-KAPI,
-  no-profiler) SGLang TTFT ~**19.2 ms** vs vLLM **13–14 ms**; **TPOT unchanged** → the gap is on the
-  first-token / prefill side, not decode.
+- **Case A TTFT gap is real on the production default.** v2 #2 (clean, GPU 1, 0 failures) on **SGLang
+  default = overlap-ON**: Case A `128→128, c=1` SGLang TTFT **21.94 ms** vs vLLM **13.12 ms**; **TPOT
+  unchanged** → gap is on the first-token / prefill side, not decode.
+- **PCG still helps under the production default.** `--enforce-piecewise-cuda-graph` drops Case A TTFT
+  **21.94 → 14.04 ms (−36%)**, TPOT flat (5.47 ms), 0 failures → into the vLLM band. The v1 finding is
+  **not an artifact of the overlap-OFF baseline.** Still a **testing lever, not a production fix**.
+- **`--disable-overlap-schedule` is ablation-only.** v2 ran it for v1 comparability: 19.07 ms TTFT —
+  *lower* TTFT than overlap-ON but worse TPOT (5.87 vs 5.47) and throughput (167 vs 179 tok/s). So v1's
+  no-overlap baseline **understated** the production TTFT gap (the default→vLLM gap 21.9 vs 13.1 is
+  *larger* than v1's overlap-OFF gap 19.1 vs 13.1).
 - **Cause direction.** SGLang detects Qwen3-VL as multimodal/VLM and **auto-disables the prefill/extend
   piecewise CUDA graph**, so low-concurrency prefill pays per-launch dispatch overhead that vLLM
   (graph/compile-covered) does not.
-- **Clean intervention.** Forcing the graph on (`--enforce-piecewise-cuda-graph`) drops Case A TTFT to
-  **11.7–13.4 ms**, TPOT unchanged, 0 failures → reaches the vLLM TTFT range. **It is a testing lever,
-  not a production fix** (S2 CV ~10–12% → no stable-superiority claim).
-- **Case C boundary (clean).** At `512→128, c=16` batched, SGLang ≈ vLLM ≈ **~190 ms** — **no material
-  TTFT gap and no Case-A-like median improvement**. The effect is workload-shape-dependent.
+- **Case C boundary confirmed on the production default.** v2 #2 interleaved `512→128, c=16`: SGLang
+  default pooled **204.8 ms**, +PCG **230.6 ms**, vLLM **215.7 ms** (batched CV ~14–15%) → **no
+  material gap and no Case-A-like PCG benefit**. The effect is workload-shape-dependent.
 - **GEMM is shared cost.** Both frameworks spend 72–86% of GPU time in the same `nvjet_sm90_*` FP8 GEMM
   family → GEMM is a shared absolute cost, **not** the SGLang↔vLLM differentiator.
 
@@ -26,8 +31,8 @@
 
 - **Phase 1 four-case ratios (4.89× / 3.20× / 1.32× / 1.33×)** and **Phase 2 Case C W500** → KAPI-
   confounded exploratory provenance only (see `experiments/qwen3vl8b/methodology_correction.md`).
-- **`--disable-overlap-schedule`** → v1 *selected baseline / ablation*, **not** the production-default
-  headline baseline. (This is exactly what v2 #2 fixes.)
+- **`--disable-overlap-schedule`** → *ablation only*, **not** the production-default headline baseline.
+  (v2 #2 fixed this: the headline is now SGLang default overlap-ON.)
 - **`--enforce-piecewise-cuda-graph`** → validation/testing lever, **not** production behavior.
 - **Case B** → SGLang EXTEND trace unavailable → excluded from any headline.
 
@@ -49,16 +54,24 @@ Dependency order: **#2 → {#4, #3 parallel} → #5 → report restructure**.
 | # | Title | Priority | Goal | Status |
 |---|---|---|---|---|
 | 1 | Tracking: next-round follow-ups | meta | Umbrella; final deliverable separates baseline / ablation / Qwen3.5 / image+text / PR proposal | open (tracking) |
-| **2** | **Default-overlap Qwen3-VL rebaseline** | **P0 (foundational)** | Production-default overlap-ON Case A/C baseline; does PCG still help? | **NEXT — protocol drafting** |
-| 3 | Qwen3.5 VL-model profiling | P1 | Same clean methodology on Qwen3.5; does the PCG finding transfer? | planned (after #2) |
-| 4 | Qwen3-VL image+text + CUDA IPC | P1 | Image+text behavior; separate from text-only conclusions | planned (after #2) |
-| 5 | Selective/default-on PCG PR plan | P2 | Minimum safe exception in VLM auto-disable + guards + fallback | planned (needs #2, #4) |
+| **2** | **Default-overlap Qwen3-VL rebaseline** | **P0 (foundational)** | Production-default overlap-ON Case A/C baseline; does PCG still help? | **✅ COMPLETE / PASS** (results under `v2/caseAC_rebaseline/results/`) |
+| **4** | **Qwen3-VL image+text + CUDA IPC** | **P1 — NEXT** | Image+text behavior + `SGLANG_USE_CUDA_IPC_TRANSPORT=1`; separate from text-only conclusions | **next candidate** (unblocked by #2) |
+| 3 | Qwen3.5 VL-model profiling | P1 | Same clean methodology on Qwen3.5; does the PCG finding transfer? | next candidate (parallel/after #2; transfer check) |
+| 5 | Selective/default-on PCG PR plan | P2 | Minimum safe exception in VLM auto-disable + guards + fallback | planned (needs #4) |
 
 ## 5. Immediate Next Step
 
-**Issue #2 protocol** — `experiments/qwen3vl8b/v2/caseAC_rebaseline/protocol.md`.
-Status: **protocol drafting / pending approval before execution.** No server, no benchmark, no runs until
-approved.
+**Issue #2 is COMPLETE** (clean run, GPU 1, 0 failures; results + summaries under
+`experiments/qwen3vl8b/v2/caseAC_rebaseline/results/`).
+
+Recommended next:
+1. **#4 — Qwen3-VL image+text + `SGLANG_USE_CUDA_IPC_TRANSPORT=1` (priority).** The end goal is a VLM
+   *production* story, and image+text is the realistic VLM path; text-only conclusions don't transfer to
+   it automatically. Draft a protocol mirroring #2's clean methodology before any runs.
+2. **#3 — Qwen3.5 transfer check (parallel/after).** Re-run the clean Case A/C methodology on Qwen3.5 to
+   see whether the PCG finding transfers across model versions.
+3. **#5 — selective/default-on PCG PR** comes after #4 (needs the image+text behavior to scope a safe
+   exception in the VLM auto-disable).
 
 ## 6. Artifact Rules
 
@@ -69,3 +82,6 @@ approved.
   `SGLANG_KERNEL_API_LOGDEST`; no profiler. Servers run serialized (never co-resident).
 - Every run records: GPU id, exact flags, framework versions, model snapshot, dataset sha256, warmup/
   reps/num-prompts, failures/error rate, and the KAPI/profiler-disabled confirmation.
+- **Raw per-rep dumps and server logs are generated but NOT committed** unless explicitly approved
+  (committed deliverables = summaries + aggregate `case*_results.json`). Raw lives in `results/raw/`,
+  server logs in `logs/qwen3vl8b/v2/...`.
