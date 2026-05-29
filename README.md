@@ -140,10 +140,14 @@ Every data directory has one `qwen3vl8b/` subtree (the single experiment):
 
 ## Next Step
 
-v2 #2 (default-overlap rebaseline) is **complete**. Next on the v2 roadmap (see `plan.md`):
+v2 #2 (default-overlap rebaseline) is **complete**. **#4 is now active (protocol drafting)** — see
+[`experiments/qwen3vl8b/v2/image_text_benchmarks/protocol.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/protocol.md).
+Next on the v2 roadmap (see `plan.md`):
 
-1. **#4 — Qwen3-VL image+text + `SGLANG_USE_CUDA_IPC_TRANSPORT=1` (priority).** The realistic VLM
-   production path; text-only conclusions don't transfer to image+text automatically.
+1. **#4 — Qwen3-VL image+text + `SGLANG_USE_CUDA_IPC_TRANSPORT=1` (active, protocol drafted).** The
+   realistic VLM production path. **Image+text conclusions are reported separately from the text-only (#2)
+   findings**, and the **CUDA-IPC transport** benefit is separated from the **PCG** prefill-graph lever.
+   No benchmark runs until Phase-4.0 smoke resolves the open items.
 2. **#3 — Qwen3.5 transfer check** (parallel/after #4): re-run the clean Case A/C methodology on Qwen3.5.
 3. **#5 — selective/default-on PCG PR** (after #4): minimum safe exception in the VLM auto-disable for the
    Case-A locus — no global VLM force-on.

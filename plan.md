@@ -55,23 +55,28 @@ Dependency order: **#2 → {#4, #3 parallel} → #5 → report restructure**.
 |---|---|---|---|---|
 | 1 | Tracking: next-round follow-ups | meta | Umbrella; final deliverable separates baseline / ablation / Qwen3.5 / image+text / PR proposal | open (tracking) |
 | **2** | **Default-overlap Qwen3-VL rebaseline** | **P0 (foundational)** | Production-default overlap-ON Case A/C baseline; does PCG still help? | **✅ COMPLETE / PASS** (results under `v2/caseAC_rebaseline/results/`) |
-| **4** | **Qwen3-VL image+text + CUDA IPC** | **P1 — NEXT** | Image+text behavior + `SGLANG_USE_CUDA_IPC_TRANSPORT=1`; separate from text-only conclusions | **next candidate** (unblocked by #2) |
+| **4** | **Qwen3-VL image+text + CUDA IPC** | **P1 — IN PROGRESS** | Image+text behavior + `SGLANG_USE_CUDA_IPC_TRANSPORT=1`; separate from text-only conclusions | **protocol drafting** (`v2/image_text_benchmarks/protocol.md`) |
 | 3 | Qwen3.5 VL-model profiling | P1 | Same clean methodology on Qwen3.5; does the PCG finding transfer? | next candidate (parallel/after #2; transfer check) |
 | 5 | Selective/default-on PCG PR plan | P2 | Minimum safe exception in VLM auto-disable + guards + fallback | planned (needs #4) |
 
 ## 5. Immediate Next Step
 
-**Issue #2 is COMPLETE** (clean run, GPU 1, 0 failures; results + summaries under
+**Issue #2 is COMPLETE** (clean run, GPU 1, 0 failures; results under
 `experiments/qwen3vl8b/v2/caseAC_rebaseline/results/`).
 
-Recommended next:
-1. **#4 — Qwen3-VL image+text + `SGLANG_USE_CUDA_IPC_TRANSPORT=1` (priority).** The end goal is a VLM
-   *production* story, and image+text is the realistic VLM path; text-only conclusions don't transfer to
-   it automatically. Draft a protocol mirroring #2's clean methodology before any runs.
-2. **#3 — Qwen3.5 transfer check (parallel/after).** Re-run the clean Case A/C methodology on Qwen3.5 to
-   see whether the PCG finding transfers across model versions.
-3. **#5 — selective/default-on PCG PR** comes after #4 (needs the image+text behavior to scope a safe
-   exception in the VLM auto-disable).
+**Active: Issue #4 — image+text + CUDA IPC, protocol/asset design only (no runs yet).**
+Protocol drafted at `experiments/qwen3vl8b/v2/image_text_benchmarks/protocol.md` (decision-complete, gated
+Phases 4.0–4.5). It separates the **CUDA-IPC transport** benefit from the **PCG** prefill-graph lever, uses
+the harness-native **synthetic** `image` dataset (no external downloads, reproducible via `--seed`), and
+benchmarks both frameworks through `--backend sglang-oai-chat`.
+
+Open items to resolve before any perf run (Phase 4.0 smoke):
+1. vLLM image anchor — `--backend sglang-oai-chat` against vLLM's chat endpoint is unverified.
+2. Text-length pinning (`--random-range-ratio`) semantics for the image dataset.
+3. Confirm `SGLANG_USE_CUDA_IPC_TRANSPORT=1` actually engages (so the IPC ablation is a real contrast).
+
+Then: **#3** (Qwen3.5 transfer check, parallel/after) → **#5** (selective/default-on PCG PR, needs #4's
+image evidence).
 
 ## 6. Artifact Rules
 
