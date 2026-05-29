@@ -98,11 +98,13 @@ Every data directory has one `qwen3vl8b/` subtree (the single experiment):
 | `reports/qwen3vl8b/` | human-facing reports: `01_current_status_report.md`, `03_profiling_analysis.md` |
 | `logs/qwen3vl8b/` | infrastructure side-effects (server stderr, kernel-API trails) — consult on failure only |
 | `configs/qwen3vl8b/` | reserved for Phase 5 sweep configs |
-| `plan.md` | the execution plan — single source of truth for methodology |
+| `plan.md` | **active v2 source of truth** (short; current mainline + Round 2 roadmap). Full v1 plan archived at `experiments/qwen3vl8b/v1_archive_plan.md` |
+| `experiments/qwen3vl8b/v2/` | Round 2 (v2) experiments; first is `caseAC_rebaseline/` (issue #2, protocol drafted, pending approval) |
 
 ## How To Read This Repo
 
-1. **`reports/qwen3vl8b/01_current_status_report.md`** — start here; the narrative status + key findings.
+0. **`plan.md`** — active v2 mainline + Round 2 roadmap (start here for *current* direction); v1 detail in `experiments/qwen3vl8b/v1_archive_plan.md`.
+1. **`reports/qwen3vl8b/01_current_status_report.md`** — the narrative status + key findings (v1).
 2. **`reports/qwen3vl8b/03_profiling_analysis.md`** — detailed Phase 4 per-case triage analysis.
 3. **`analysis/qwen3vl8b/hypotheses.md`** — structured hypotheses (H1–H4) with evidence + confidence.
 4. **`analysis/qwen3vl8b/ranked_recommendations.md`** — what to validate first, and why.
