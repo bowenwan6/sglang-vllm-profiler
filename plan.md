@@ -18,8 +18,10 @@
   TTFT gap and no Case-A-like median improvement** (pooled S0 ≈ 192.2, S2 ≈ 193.6, vLLM ≈ 189.8 ms) →
   the optimization is workload-shape-dependent; production direction is **selective enablement**, not a
   global VLM force-on.
-- **Phase 5 status: complete for scoped A/C clean validation; production-safe design and optional
-  additional benchmarks are future work.**
+- **v1 (Phase 0–5) — COMPLETE (first version shipped).** Scoped A/C clean validation is done. The
+  production-safe design and additional benchmarks now move into **Round 2 (v2)** — see **§0.2** for the
+  full Issue #1–#5 roadmap (rebaseline on production-default overlap → image+text+IPC / Qwen3.5 →
+  selective PCG PR).
 
 (Side quests / methodological corrections — KAPI confound, Case C W500 variance, Case B trace gap — are
 recorded in §0.1 below and in `experiments/qwen3vl8b/methodology_correction.md`; they are not part of
@@ -75,68 +77,31 @@ the validated outcome above.)
 | 3 — Profiling / Trace collection | ✅ **complete** (GPU 1; `experiments/qwen3vl8b/phase3/{summary.md,extend_supplement_summary.md}`) |
 | 4 — Triage | ✅ **complete** (all 4 cases; `analysis/qwen3vl8b/` + `reports/qwen3vl8b/03_profiling_analysis.md`) |
 | 5 — Validation | ✅ **complete for scoped A/C clean validation** — H1 clean-validated for Case A (−39% TTFT, TPOT unchanged, reaches vLLM range; testing lever, not a production fix); Case C boundary: no Case-A-like benefit; B/D clean baseline and production-safe design are future work |
+| **v2 — Round 2** (issues #1–#5) | 🔜 **planned** — #2 production-default rebaseline (overlap-ON) → #4 image+text+IPC / #3 Qwen3.5 → #5 selective/default-on PCG PR. Full roadmap in **§0.2**. |
 
-**Phase 5 — exploratory screen + clean-validation detail (provenance; the validated outcome is in §0 above).**
+**Phase 5 — clean-validation summary** (validated outcome is in §0 top; full per-rep provenance:
+`experiments/qwen3vl8b/phase5/*/summary.md`).
 
-*Phase 5.1 (offline, done).* **Mechanism confirmed:** for the current Qwen3-VL config SGLang decode
-CUDA graph is nominally ON, but VLM auto-disable turns the **prefill piecewise CUDA graph OFF**
-(`server_args.py:1308`), and `enable_torch_compile=False`. **But** existing profiler traces **cannot**
-reliably establish serving-path graph coverage or CPU-launch-gap causality (captured-window / profiling
-confound — formal DECODE trace shows 0 graph-replay despite `disable_cuda_graph=False`). **H1 remains a
-hypothesis, not a root cause.** See `analysis/qwen3vl8b/phase5/h1_launch_gap/`.
-
-*Phase 5.2 initial intervention (Case A, GPU 3) — **EXPLORATORY ONLY, instrumentation-confounded.***
-All SGLang variants were run with `SGLANG_KERNEL_API_LOGLEVEL=1` (KAPI logging) while the vLLM anchor
-was not; S1 graph-off emitted a **14.7 GB** KAPI log. KAPI per-launch logging plausibly slows the
-eager/direct-launch path more than the graph path, so the S0→S2 improvement is likely **amplified by
-instrumentation**.
-
-| Variant | TTFT p50 median | CV | TPOT p50 | Interpretation |
-|---|---:|---:|---:|---|
-| V0 vLLM anchor | 12.85 ms | 7.5% | 5.32 ms | contemporaneous reference; **not** KAPI-instrumented |
-| S0 SGLang baseline | 53.28 ms | 1.0% | 5.56 ms | instrumented; does **not** reproduce Phase 2's 19.6 ms |
-| S1 graph-off | 53.63 ms | 0.4% | 47.67 ms | instrumented negative control; produced 14.7 GB KAPI log |
-| S2 enforce piecewise graph | 19.74 ms | 3.1% | 5.55 ms | **promising candidate**, instrumentation-confounded |
-| S3 torch.compile | 54.05 ms | 1.3% | 5.15 ms | no observed TTFT benefit in the instrumented screen |
-
-Strongest finding from the *instrumented screen*: "S2 is a promising candidate requiring an
-uninstrumented confirmation" (the 14.7 GB S1 KAPI log evidenced the confound). Audit:
-`experiments/qwen3vl8b/phase5/caseA_h1_intervention/baseline_anomaly_audit.md`.
-
-*Phase 5.2 CLEAN confirmation (Case A, GPU 6 — GPU 3 was externally occupied; no KAPI, no profiler).*
-S0→S2→S0 bracket + clean vLLM anchor, 0 failures:
-
-| Variant | TTFT p50 median | CV | note |
-|---|---:|---:|---|
-| S0_before | 19.17 ms | 1.5% | **reproduces Phase 2's 19.6 ms** (instrumented 53 ms was a KAPI artifact) |
-| S2 enforce piecewise | **11.68 ms** | 10.1% | **−39% vs S0**; 0 errors, smoke OK |
-| S0_after | 19.23 ms | 3.8% | bracket drift 0.34% → stable |
-| V0 vLLM clean anchor | 13.11 ms | 3.2% | reference |
-
-**H1 clean-supported for Case A — no Case-A-like benefit observed for batched Case C.**
-
-- *Case A (c=1):* forcing prefill piecewise CUDA-graph coverage cut TTFT ~39% (19.2 → 11.7 ms), TPOT
-  unchanged, 0 errors → reached the vLLM TTFT range. **Stability supplement (reps=5):** S2 median
-  13.36 ms (CV **12.3%**) vs vLLM 14.49 ms — S2 substantially beats the ~19 ms S0 baseline, but CV>5%
-  so **stable parity/superiority over vLLM is NOT claimed** (S2 only "reaches the vLLM TTFT range").
-- *Case C (c=16):* **no S2 benefit (confirmed by an interleaved rerun).** First S0→S2→S0 bracket drifted
-  17.7% (inconclusive). An **interleaved rerun** (`S0_a→S2_a→S0_b→S2_b→S0_c` + vLLM, GPU 0) better-samples
-  the noise: three S0 medians still span **17.3%** (Case-C c=16 TTFT has intrinsic ~17% session variance
-  even at w500 — unresolved, a workload property), **but the comparison is now robust**: pooled S2
-  (193.6 ms) ≈ pooled S0 (192.2 ms) = **+0.7%**, both ≈ vLLM (189.8 ms). → **No Case-A-like TTFT benefit
-  observed for Case C under the clean interleaved test; smaller effects unresolved under the observed
-  ~17% session variance.** The validated S2 effect is established only for Case-A short-latency (c=1)
-  dispatch-bound behavior. **Note:** the earlier "Case C stable 1.32× gap" is **superseded** (it relied
-  on KAPI-confounded SGLang measurements) — clean Case C shows **no material median gap**.
-  Consistent with Phase 4 (batched prefill is compute/GEMM-bound). Secondary: enforce-piecewise *reduces*
-  batched run-to-run variance (S2 CV 3–4% vs S0 5–9%) without changing median TTFT — a stability note,
-  not a latency win.
-
-Caveats: `--enforce-piecewise-cuda-graph` is a **testing lever** (validates locus/direction for Case A,
-**not** a production fix; smoke-checked only); Case A S2 CV 10–12%; Case C baseline drifted (warm-up/
-environment sensitivity). Detail: `experiments/qwen3vl8b/phase5/{caseA_h1_confirmation,caseA_s2_stability,caseC_h1_confirmation}/summary.md`.
-Instrumented GPU-3 screen remains exploratory-only (KAPI confound). Next (needs approval): production-safe
-design discussion for the Case-A short-latency path; H2 (PR #22392) as a separate absolute-speed track.
+- *Mechanism (5.1, offline).* Qwen3-VL decode CUDA graph nominally ON, but VLM auto-disable turns the
+  **prefill piecewise CUDA graph OFF** (`server_args.py:1308`), `enable_torch_compile=False`. Traces
+  alone could not establish serving-path graph coverage → H1 stayed a hypothesis until the clean
+  intervention. (`analysis/qwen3vl8b/phase5/h1_launch_gap/`.)
+- *Instrumented screen (5.2, GPU 3) — EXPLORATORY ONLY.* SGLang-only KAPI logging inflated S0 to
+  53.28 ms (vs Phase-2's 19.6 ms) and S1 emitted a 14.7 GB log → the S0→S2 drop was instrumentation-
+  amplified. Kept only as "S2 is a candidate needing clean confirmation". Audit:
+  `caseA_h1_intervention/baseline_anomaly_audit.md`.
+- *Clean Case A (c=1), S0→S2→S0 + vLLM anchor, 0 failures.* S0 19.17 / 19.23 ms (bracket drift 0.34%,
+  reproduces Phase-2 19.6 ms → the 53 ms was a KAPI artifact); **S2 11.68 ms (−39%)**; vLLM 13.11 ms.
+  Stability supplement (reps=5): S2 median 13.36 ms (CV **12.3%**) vs vLLM 14.49 ms → S2 "reaches the
+  vLLM TTFT range"; CV>5% so **no stable parity/superiority claim**.
+- *Clean Case C (c=16), interleaved rerun (GPU 0).* Pooled S0 192.2 ≈ S2 193.6 ≈ vLLM 189.8 ms →
+  **no Case-A-like benefit (boundary result)**. Three S0 blocks span 17.3% = intrinsic batched session
+  variance (workload property, not a protocol bug). The earlier "Case C 1.32× gap" is **superseded**
+  (KAPI-confounded). Secondary: enforce-piecewise reduces batched run-to-run variance without changing
+  the median (stability note, not a latency win). Consistent with Phase 4 (batched prefill GEMM-bound).
+- *Caveat.* `--enforce-piecewise-cuda-graph` is a **testing lever** (validates the Case-A locus/direction,
+  **not** a production fix; smoke-checked only). **v2 will rebaseline against production-default
+  overlap-ON and design the selective enablement — see §0.2 (issues #2, #5).**
 
 **Phase 4 results (completed 2026-05-23, offline triage, no GPU).** All 4 cases triaged.
 A/C/D EXTEND+DECODE two-trace triage successful; B DECODE two-trace successful but **EXTEND
@@ -233,6 +198,79 @@ CUDA 12.9, SGLang `ga4cf2ea12`, vLLM 0.19.0, torch 2.9.1/2.10.0) was **removed**
 restructure; its numbers were not comparable (per §6.4) and are not reused here. The single retained
 experiment is `qwen3vl8b`. Environment detail: `experiments/qwen3vl8b/env_snapshot.md`. Working tree:
 `experiments/qwen3vl8b/` (see its `README.md`).
+
+---
+
+## 0.2 Round 2 (v2) Roadmap — upstream-facing follow-ups (Issues #1–#5)
+
+> Source: GitHub issues #1–#5 on `bowenwan6/sglang-vllm-profiler` (opened by @JustinTong0323,
+> 2026-05-27). v1 shipped a clean Case-A finding; **v2 tightens the production-facing story before it
+> becomes an upstream SGLang recommendation.** Final v2 deliverable = a project record that separates
+> *production baseline / ablation / Qwen3.5 replication / image+text behavior / the PCG PR proposal*.
+
+**Why v2 is needed (the load-bearing gap):** v1's headline Case-A baseline used
+`--disable-overlap-schedule`, which Phase 2 *selected as the fastest* SGLang config (19.6 ms) — but
+overlap schedule is normally **ON** in production. So the validated −39% PCG win was only measured in the
+overlap-**OFF** regime, and Case A (overlap-off) vs Case C (overlap-on, default) were asymmetric. v2's #2
+re-establishes a production-default baseline so every later claim stands on it. v1 is also **text-only**.
+
+### #1 — Tracking parent: next-round Qwen3-VL / Qwen3.5 follow-ups
+Umbrella for #2–#5. Key framing it sets: (a) `--disable-overlap-schedule` is an **ablation, not the
+headline baseline**; (b) **"Qwen3.5" is the VL model name — there is no `Qwen3.5-VL` suffix**; (c) add
+image+text before any broader VLM claim; (d) image runs use `SGLANG_USE_CUDA_IPC_TRANSPORT=1`; (e) the
+SGLang PR direction is **selective/default-on PCG**, not promoting the testing lever to production.
+
+### #2 — Rebaseline Qwen3-VL with default overlap schedule (FOUNDATIONAL — do first)
+- **Goal:** re-run clean Case A/C with **production-default overlap-ON** as the main baseline; demote
+  `--disable-overlap-schedule` to an ablation only.
+- **Why:** overlap schedule stays enabled in production; v1's headline used the disabled variant. Must
+  answer: **does PCG still help against the overlap-ON baseline?**
+- **How:** variants = SGLang default(overlap-ON) / SGLang default + PCG lever / vLLM clean anchor /
+  *optional* `--disable-overlap-schedule` ablation. Scope: Case A (128→128, c=1) + Case C (512→128,
+  c=16). **Clean only — no KAPI, no profiler.** Record TTFT, TPOT, CV, failures, warmup, reps, GPU id,
+  exact flags.
+- **Acceptance:** main tables explicitly label overlap/default status; `--disable-overlap-schedule`
+  moved out of headline wording; report states whether PCG still helps vs production-default SGLang.
+
+### #3 — Qwen3.5 VL-model profiling with the same clean methodology
+- **Goal:** replicate the clean pipeline on **Qwen3.5** (the VL model name — **not** `Qwen3.5-VL`);
+  test whether the Qwen3-VL PCG finding transfers.
+- **How:** confirm exact HF model ID first and record it in the env snapshot. Phase 0 functional
+  equivalence → clean benchmark only (no KAPI/profiler), greedy (temperature=0, top_p=1). Minimum:
+  text-only Case A (128→128, c=1) + Case C (512→128, c=16); mirror #4 image+text if time allows.
+- **Acceptance:** results in a separate Qwen3.5 experiment dir; report compares transfer of the PCG
+  finding; naming explicit (Qwen3.5, not Qwen3.5-VL); any non-apples-to-apples comparison marked OOS.
+
+### #4 — Qwen3-VL image+text benchmarks with CUDA IPC transport
+- **Goal:** add image+text workloads (v1 conclusion is text-only; image path may behave differently and
+  PCG could help more there).
+- **How:** set `SGLANG_USE_CUDA_IPC_TRANSPORT=1` for SGLang image runs; keep a without-IPC ablation if
+  time allows (separates IPC benefit from PCG benefit). Workloads: single image+short text c=1 / single
+  image+medium text c=1 / image+text batched c=16 / optional multi-image. Variants as in #2. Record
+  whether TTFT includes preprocessing + vision-encoder time; add preprocessing/vision/prefill/decode
+  breakdown if possible; check in or hash-record image assets + prompts. **Clean headline runs only.**
+- **Acceptance:** report separates text-only from image+text conclusions; any image-PCG claim rests on
+  clean SGLang/vLLM comparisons, not inferred from text-only Case A.
+
+### #5 — Prototype selective/default-on Qwen3-VL PCG behavior for SGLang (depends on #2, #4)
+- **Goal:** an upstream SGLang PR that enables Qwen3-VL prefill piecewise CUDA graph **by default where
+  safe and beneficial** — **NOT** simply turning `--enforce-piecewise-cuda-graph` into production.
+- **How:** start from the VLM auto-disable path (`server_args.py` condition #8: multimodal →
+  `disable_piecewise_cuda_graph=True`), find the **minimum safe exception** for Qwen3-VL, preserve all
+  other auto-disable conditions unless there is specific evidence, add runtime logging for PCG
+  enable/disable + hit/miss reasons, keep eager fallback for unsupported dynamic shapes / multimodal
+  states. Use #4's image+text results before deciding whether real multimodal inputs are part of
+  default-on. Safety checks: text-only / true image+text / mixed / Case-A low-concurrency / Case-C
+  batched / output correctness vs default path.
+- **Acceptance:** a concrete patch plan or draft PR that states **exactly which auto-disable condition
+  changes and why**, with benchmark evidence from the default-overlap baseline (#2) and, if available,
+  image+text IPC runs (#4).
+
+### Dependency-ordered execution sequence
+`#2 (production-default rebaseline) → {#4 image+text+IPC, #3 Qwen3.5 — parallel} → #5 selective PCG PR
+→ report restructure (#1 deliverable: separate baseline / ablation / Qwen3.5 / image+text / PR proposal)`.
+Rationale: #2 is the baseline everything else rests on; #5 needs both #2 (default-overlap evidence) and
+#4 (image evidence) before a credible upstream proposal; #3 is independent of #4 so they parallelize.
 
 ---
 
@@ -963,7 +1001,10 @@ Never invert a row. Auto-benchmark does not read kernels; profiler-analysis does
 
 ---
 
-## 15. Results
+## 15. Results — v1 (Phase 0–5) provenance archive
+
+> Detailed per-phase tables for the **first version** (v1). Retained for provenance; the headline
+> validated outcome is in §0, and the v2 roadmap is in §0.2. KAPI-confounded rows are labeled inline.
 
 ### Phase 0 — Functional Equivalence (completed 2026-05-21)
 
@@ -1140,3 +1181,20 @@ gap; TPOT parity; vLLM Case B bimodal); magnitudes are not interchangeable.
 7. ✅ Phase 4  — triage + breakdown + vLLM cross-check for all 4 cases; `analysis/qwen3vl8b/hypotheses.md` + `ranked_recommendations.md` + `reports/qwen3vl8b/03_profiling_analysis.md`. Case B EXTEND unavailable (≤ M). See §15 (Phase 4).
 8. ✅ **Phase 5 — complete for scoped A/C clean validation.** Case A clean intervention validated graph coverage as a Case-A TTFT contributor (`--enforce-piecewise-cuda-graph` → ~12 ms, TPOT unchanged, reaches vLLM range; testing-lever, not production fix); Case A stability (reps=5) done; Case C clean interleaved rerun shows no Case-A-like benefit (boundary). **Future work:** production-safe selective enablement; optional B/D clean baseline; optional H2 absolute-speed track.
 9. Promote `analysis/**` into `reports/**` deliverables. *(03_profiling_analysis.md done; PR-ready writeup pending Phase 5.)*
+
+---
+
+**v2 (Round 2) — to do, in dependency order (full detail in §0.2):**
+
+10. 🔜 **#2 Rebaseline (FOUNDATIONAL).** Clean Case A/C on **production-default overlap-ON** baseline +
+    PCG lever + vLLM anchor (+ optional `--disable-overlap-schedule` ablation). Answer: does PCG still
+    help vs overlap-ON? Scaffold: `experiments/qwen3vl8b/v2/caseAC_rebaseline/`.
+11. 🔜 **#4 Image+text + CUDA IPC** (`SGLANG_USE_CUDA_IPC_TRANSPORT=1`, optional without-IPC ablation);
+    separate text-only vs image conclusions. *(parallel with #3)*
+12. 🔜 **#3 Qwen3.5 replication** (confirm HF model ID first; "Qwen3.5", no `-VL` suffix); separate
+    experiment dir; test PCG-finding transfer. *(parallel with #4)*
+13. 🔜 **#5 Selective/default-on PCG PR** (depends on #2 + #4): minimum safe exception in the VLM
+    auto-disable path + logging + eager fallback; patch plan/draft PR stating which condition changes
+    and why.
+14. 🔜 **Report restructure (#1 deliverable):** separate production baseline / ablation / Qwen3.5 /
+    image+text / PCG PR proposal.
