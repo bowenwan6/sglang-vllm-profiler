@@ -46,9 +46,12 @@ P(video_pad in 128-token prompt): 1 − (1 − 1/151668)^128 ≈ 0.084%  ≈ 1 i
 Expected failures per 430 requests (30 warmup + 400 measured): 0.36
 ```
 
-With ~0.36 expected video_pad prompts per batch and 5 reps, P(at least 1 failure
-in 5 reps) ≈ 83%. The benchmark **cannot** reach 5 clean reps with the current
-`gen_mm_prompt` for Qwen3-VL.
+**Empirical confirmation (50 seeds × 430 prompts = 21,500 total):**
+- 17 prompts contained `<|video_pad|>` → **0.079% per prompt** (matches theoretical 0.084%)
+- P(at least 1 failure in 5 reps) ≈ 83%
+
+The benchmark **cannot** reach 5 clean reps with the current `gen_mm_prompt` for
+Qwen3-VL.
 
 ### 2c. Server-side path: why the error fires
 
