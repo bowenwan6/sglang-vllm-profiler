@@ -1,0 +1,107 @@
+[
+  {
+    "id": "smoke_sglang_ipc",
+    "framework": "sglang",
+    "ipc_on": true,
+    "extra_server_flags": [],
+    "port": 30000,
+    "kapi_logging": false,
+    "profiler": false,
+    "timestamp_utc": "2026-05-30T20:53:50.525773+00:00",
+    "gpu": "7",
+    "snapshot": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+    "bench_elapsed_s": 12.7,
+    "bench_rc": 0,
+    "completed": 2,
+    "failures": 0,
+    "has_non_empty_output": true,
+    "median_ttft_ms": 204.94718599366024,
+    "total_input_tokens": 2043,
+    "total_input_text_tokens": 279,
+    "total_input_vision_tokens": 1764,
+    "total_output_tokens": 64,
+    "generated_texts_sample": [
+      "The text you've provided appears to be a random, nonsensical string of characters, symbols, and words \u2014 likely generated",
+      "It seems like your message is a mix of random characters, symbols, and fragmented words \u2014 possibly due to a corrupted in"
+    ],
+    "errors_sample": [
+      "",
+      ""
+    ],
+    "ttfts_ms": [
+      326.3,
+      83.6
+    ],
+    "status": "OK"
+  },
+  {
+    "id": "smoke_sglang_noipc",
+    "framework": "sglang",
+    "ipc_on": false,
+    "extra_server_flags": [],
+    "port": 30000,
+    "kapi_logging": false,
+    "profiler": false,
+    "timestamp_utc": "2026-05-30T20:54:46.446843+00:00",
+    "gpu": "7",
+    "snapshot": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+    "bench_elapsed_s": 10.2,
+    "bench_rc": 0,
+    "completed": 2,
+    "failures": 0,
+    "has_non_empty_output": true,
+    "median_ttft_ms": 124.87074144883081,
+    "total_input_tokens": 2043,
+    "total_input_text_tokens": 279,
+    "total_input_vision_tokens": 1764,
+    "total_output_tokens": 64,
+    "generated_texts_sample": [
+      "The text you've provided appears to be a random, nonsensical string of characters, symbols, and words from multiple lang",
+      "The image you've provided appears to be corrupted or filled with noise \u2014 it's not a clear image, but rather a mosaic of "
+    ],
+    "errors_sample": [
+      "",
+      ""
+    ],
+    "ttfts_ms": [
+      118.2,
+      131.5
+    ],
+    "status": "OK"
+  },
+  {
+    "id": "smoke_vllm_anchor",
+    "framework": "vllm",
+    "ipc_on": false,
+    "extra_server_flags": [],
+    "port": 30001,
+    "kapi_logging": false,
+    "profiler": false,
+    "timestamp_utc": "2026-05-30T20:55:32.874393+00:00",
+    "gpu": "7",
+    "snapshot": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+    "bench_elapsed_s": 10.2,
+    "bench_rc": 0,
+    "completed": 2,
+    "failures": 0,
+    "has_non_empty_output": true,
+    "median_ttft_ms": 99.81352143222466,
+    "total_input_tokens": 2049,
+    "total_input_text_tokens": 285,
+    "total_input_vision_tokens": 1764,
+    "total_output_tokens": 64,
+    "generated_texts_sample": [
+      "The text you've provided appears to be a random string of characters, symbols, and words \u2014 many of which are nonsensical",
+      "The image you've provided appears to be corrupted or entirely noise \u2014 it's filled with static, pixelation, and multicolo"
+    ],
+    "errors_sample": [
+      "",
+      ""
+    ],
+    "ttfts_ms": [
+      62.7,
+      136.9
+    ],
+    "status": "OK"
+  }
+]
