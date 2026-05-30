@@ -5,7 +5,13 @@ PCG finding (#2) transfers to the image path, and separates the **CUDA-IPC trans
 **PCG** prefill-graph lever.
 
 - **Issue:** #4 (parent #1) on `bowenwan6/sglang-vllm-profiler`. Builds on #2 (text-only, complete).
-- **Status:** **protocol drafting / pending approval — no benchmark runs, no servers, no runner yet.**
+- **Status:** ⚠️ **BLOCKED — `video_pad` correctness blocker. Formal IMG-A/B/C paused.**
+  Smoke passed (2026-05-30). IMG-A S0_ipc rep3 hit HTTP 400
+  `"No data iterator found for token: <|video_pad|>"` at 2/400 requests. Root cause
+  identified: `gen_mm_prompt` in `sglang/benchmark/datasets/common.py` does not exclude
+  `video_pad_id` from the random token pool. Debug plan at
+  [`debug_video_pad/debug_plan.md`](debug_video_pad/debug_plan.md);
+  audit at [`debug_video_pad/audit_notes.md`](debug_video_pad/audit_notes.md).
 - **Protocol:** [`protocol.md`](protocol.md) — decision-complete, gated Phases 4.0–4.5.
 - **Model:** `Qwen/Qwen3-VL-8B-Instruct` @ `0c351dd` (same as v1/#2; verify in env snapshot before runs).
 
@@ -24,12 +30,20 @@ Key design points (see protocol for detail):
 Workloads: **IMG-A** (1 img + short text, c=1), **IMG-B** (1 img + medium text, c=1), **IMG-C** (1 img,
 c=16 batched); optional **IMG-D** multi-image.
 
-## Open items (gate Phase 4.0, before any perf run)
+## Phase 4.0 open items — RESOLVED ✅ (smoke 2026-05-30)
 
-1. **vLLM image anchor** — `sglang-oai-chat` against vLLM's chat endpoint with data-URI images is
-   **unverified**; must smoke first.
-2. **Length pinning** — confirm the `--random-range-ratio` value that fixes text length.
-3. **IPC observability** — confirm `SGLANG_USE_CUDA_IPC_TRANSPORT=1` actually engages the transport path.
+1. **vLLM image anchor** — ✅ confirmed working via `sglang-oai-chat`.
+2. **Length pinning** — ✅ `--random-range-ratio 1.0` pins text length.
+3. **IPC observability** — ✅ env var accepted; both IPC-on and off paths smoke-clean.
+
+## Active blocker — video_pad correctness (Phase 4.1+)
+
+`gen_mm_prompt` does not exclude `video_pad_id` (151656) from the Qwen3-VL
+random token pool. ~0.084% of 128-token prompts contain `<|video_pad|>`.
+Expected failures per 430-request batch ≈ 0.36; P(≥1 failure in 5 reps) ≈ 83%.
+
+**Resolution path:** `debug_video_pad/debug_plan.md` — staged D0–D7. Must be
+resolved (or workaround approved) before resuming formal IMG-A/B/C.
 
 ## Layout (created as phases proceed)
 

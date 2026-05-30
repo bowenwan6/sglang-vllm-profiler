@@ -55,7 +55,7 @@ Dependency order: **#2 → {#4, #3 parallel} → #5 → report restructure**.
 |---|---|---|---|---|
 | 1 | Tracking: next-round follow-ups | meta | Umbrella; final deliverable separates baseline / ablation / Qwen3.5 / image+text / PR proposal | open (tracking) |
 | **2** | **Default-overlap Qwen3-VL rebaseline** | **P0 (foundational)** | Production-default overlap-ON Case A/C baseline; does PCG still help? | **✅ COMPLETE / PASS** (results under `v2/caseAC_rebaseline/results/`) |
-| **4** | **Qwen3-VL image+text + CUDA IPC** | **P1 — IN PROGRESS** | Image+text behavior + `SGLANG_USE_CUDA_IPC_TRANSPORT=1`; separate from text-only conclusions | **protocol drafting** (`v2/image_text_benchmarks/protocol.md`) |
+| **4** | **Qwen3-VL image+text + CUDA IPC** | **P1 — BLOCKED** | Image+text behavior + `SGLANG_USE_CUDA_IPC_TRANSPORT=1`; separate from text-only conclusions | **blocked: video_pad correctness bug in `gen_mm_prompt`** — smoke ✅, IMG-A rep3 failed; debug plan at `v2/image_text_benchmarks/debug_video_pad/debug_plan.md` |
 | 3 | Qwen3.5 VL-model profiling | P1 | Same clean methodology on Qwen3.5; does the PCG finding transfer? | next candidate (parallel/after #2; transfer check) |
 | 5 | Selective/default-on PCG PR plan | P2 | Minimum safe exception in VLM auto-disable + guards + fallback | planned (needs #4) |
 
@@ -64,16 +64,21 @@ Dependency order: **#2 → {#4, #3 parallel} → #5 → report restructure**.
 **Issue #2 is COMPLETE** (clean run, GPU 1, 0 failures; results under
 `experiments/qwen3vl8b/v2/caseAC_rebaseline/results/`).
 
-**Active: Issue #4 — image+text + CUDA IPC, protocol/asset design only (no runs yet).**
-Protocol drafted at `experiments/qwen3vl8b/v2/image_text_benchmarks/protocol.md` (decision-complete, gated
-Phases 4.0–4.5). It separates the **CUDA-IPC transport** benefit from the **PCG** prefill-graph lever, uses
-the harness-native **synthetic** `image` dataset (no external downloads, reproducible via `--seed`), and
-benchmarks both frameworks through `--backend sglang-oai-chat`.
+**Issue #4 is BLOCKED on a correctness bug in `sglang.bench_serving`.**
 
-Open items to resolve before any perf run (Phase 4.0 smoke):
-1. vLLM image anchor — `--backend sglang-oai-chat` against vLLM's chat endpoint is unverified.
-2. Text-length pinning (`--random-range-ratio`) semantics for the image dataset.
-3. Confirm `SGLANG_USE_CUDA_IPC_TRANSPORT=1` actually engages (so the IPC ablation is a real contrast).
+Phase 4.0 smoke ✅ (all 3 paths clean; vLLM anchor, length pinning, IPC observability resolved, 2026-05-30).
+IMG-A runner implemented and committed. Formal IMG-A halted at S0_ipc rep3 (2/400 failures:
+`"No data iterator found for token: <|video_pad|>"`).
+
+**Root cause:** `gen_mm_prompt` in `sglang/benchmark/datasets/common.py` does not exclude `video_pad_id`
+(151656) from the random token pool. ~0.084% of 128-token prompts contain `<|video_pad|>`. With 430 requests
+per rep, E[failures/rep] ≈ 0.36; P(≥1 failure in 5 reps) ≈ 83%. Dataset generation is also non-deterministic
+between subprocess runs despite fixed `--seed`.
+
+**Next step for #4:** Resolve the correctness blocker via the staged debug plan at
+`experiments/qwen3vl8b/v2/image_text_benchmarks/debug_video_pad/debug_plan.md`. Minimum path:
+run Stage D0 (payload audit, no GPU), confirm root cause, then either:
+(a) implement the pre-flight dataset check workaround, or (b) wait for upstream fix, before resuming IMG-A.
 
 Then: **#3** (Qwen3.5 transfer check, parallel/after) → **#5** (selective/default-on PCG PR, needs #4's
 image evidence).
