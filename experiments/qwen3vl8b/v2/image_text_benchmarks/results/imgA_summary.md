@@ -10,11 +10,17 @@
 
 > **Image+text conclusions are separate from text-only Issue #2 findings.**
 
+> ⚠️ **STATUS: INVALID / INCOMPLETE.** This run was halted by a benchmark-generator
+> correctness bug (see "Corrected diagnosis" below). No headline numbers are produced.
+> A sanitized rerun supersedes this file.
+
 ## Headline numbers (TTFT p50, median of reps)
 
 | variant | ipc | pcg | ttft_p50 median (ms) | CV% | tpot_p50 (ms) | out_tok/s | status |
 |---|---|---|---|---|---|---|---|
 | IMG_A_S0_ipc | on | off | FAIL | ?% | ? | ? | INVALID_FAILURES |
+
+(S2_ipc_pcg, S0_ipc_repeat, V0_vllm, S0_noipc were never reached — the runner stops on first failure.)
 
 ## Bracket drift (S0_ipc vs S0_ipc_repeat)
 
@@ -34,40 +40,70 @@
 
 ## Token composition (per request)
 
-Vision tokens: ?/req  |  Text tokens: ?/req  |  Resolution: 720p, image-count=1, range_ratio=1.0, seed=1
+Vision tokens: 882/req  |  Text tokens: ~139/req  |  Resolution: 720p, image-count=1, range_ratio=1.0, seed=1
 
 ## Failure summary
 
-❌ 1 variants with issues:
-  - IMG_A_S0_ipc: status=INVALID_FAILURES
+❌ 1 variant with issues:
+  - IMG_A_S0_ipc: status=INVALID_FAILURES (rep3: 2/400 failures, HTTP 400 `<|video_pad|>`)
 
 ## Failure diagnosis
 
 **Error:** `"No data iterator found for token: <|video_pad|>"` (SGLang HTTP 400, `BadRequestError`).
 
-**Pattern:** 2 failures at measured-window indices 44 and 185 in rep3 only. Rep1 and rep2 completed 400/400 with 0 failures. All reps use the same 400 seeded requests (deterministic dataset). The same server instance served all 3 reps (~860 total requests before rep3's failure).
+**Pattern:** 2 failures at measured-window indices 44 and 185 in rep3 only. Rep1 and rep2 completed 400/400 with 0 failures.
 
-**Root cause hypothesis:** Server-side cache state accumulation. After ~800 requests (reps 1–2 + warmup), SGLang's RadixCache/image cache reaches a state where certain requests trigger the `<|video_pad|>` code path. The Qwen3-VL model has both `<|image_pad|>` and `<|video_pad|>` multimodal tokens; if cache contamination causes the server to interpret an image-only request as requiring a video iterator, the 400 error follows. Rep1 and rep2 processed the identical prompts without failure, confirming this is server-state-triggered, not prompt-content-triggered.
+> ⚠️ **SUPERSEDED HYPOTHESIS (do not rely on):** The original write-up attributed this
+> to *server-side cache state accumulation* (RadixCache / image cache after ~800
+> requests). **This is now known to be wrong.** It also incorrectly assumed all reps
+> use the identical seeded prompt set; in fact each `bench_serving` subprocess
+> regenerates its own random text, so reps do **not** share prompts. The corrected
+> diagnosis is below.
 
-**Not investigated:** Whether `/flush_cache` between reps, or a fresh server restart between reps, would prevent the issue.
+### ✅ Corrected diagnosis — benchmark-generator special-token bug (not perf, not cache)
 
-**Corrective options (requires user decision):**
-1. **Restart server between reps** (safest): each rep starts with clean server state. Adds ~30–60s per inter-rep restart overhead.
-2. **Call `/flush_cache` between reps**: resets RadixCache without full restart; faster but less thorough.
-3. **Try a different seed** (`--seed 2`): different request order might avoid the problematic cache state. Cache contamination root cause unresolved.
-4. **Accept 0.5% failure rate** and run with `--allowed-failure-rate` flag if supported: not recommended for headline data.
+This is a **correctness bug in the SGLang benchmark generator**, not a server
+cache/state or CUDA-IPC performance finding.
 
-**Partial data (reps 1–2 of S0_ipc, informational only — not headline):**
+- `sglang.bench_serving --dataset-name image` synthesizes random text via
+  `gen_mm_prompt` in `sglang/benchmark/datasets/common.py`.
+- `image.py` passes only `processor.image_token_id` into `gen_mm_prompt`, which
+  removes **only** `<|image_pad|>` (151655) from the random token pool.
+- **`<|video_pad|>` (151656) and other multimodal control tokens
+  (`<|vision_start|>`, `<|vision_end|>`, …) are NOT excluded.** The random text can
+  therefore contain `<|video_pad|>`.
+- Qwen3-VL's chat-template + multimodal preprocessor treat `<|video_pad|>` as a
+  **video placeholder**. Since the request supplies an image but no video, the
+  server returns HTTP 400 `No data iterator found for token: <|video_pad|>`.
+- **Probability:** ~0.084% per 128-token prompt (empirically 0.079% over 21,500
+  prompts). E[failures] ≈ 0.36 per 430-request rep; P(≥1 failure in 5 reps) ≈ 83%.
+  This is why the failures appear intermittently, not from cache buildup.
+
+This is directly analogous to the historical text-only issue where random benchmark
+prompts had to be sanitized to avoid multimodal/control special tokens.
+
+**Corrective action (chosen):** Sanitize the generated prompts so they contain no
+multimodal special/control tokens. Implemented in this repo as a runtime
+monkeypatch wrapper around `bench_serving` (no SGLang source modification). An
+upstream fix to `gen_mm_prompt` is a **follow-up**, not a prerequisite to finishing
+#4. See `../debug_video_pad/audit_notes.md` and `../debug_video_pad/debug_plan.md`.
+
+## Partial data (informational only — NOT headline)
+
 | rep | completed | failures | ttft_p50 (ms) | tpot_p50 (ms) |
 |---|---|---|---|---|
 | 1 | 400 | 0 | 87.06 | 5.20 |
 | 2 | 400 | 0 | 61.81 | 5.20 |
 | 3 (stopped) | 398 | **2** | 60.69 | 5.20 |
 
-Note: rep1 TTFT (87ms) is higher than rep2 (62ms), suggesting 30 warmup requests are insufficient to fully settle the image pipeline for 720p inputs. This is a secondary finding relevant to warmup tuning.
+Note: rep1 TTFT (87ms) > rep2 (62ms) suggests 30 warmup requests may be insufficient
+to fully settle the 720p image pipeline. Secondary finding for warmup tuning.
 
-**Do NOT use partial rep1/rep2 numbers as headline results.** Headline requires 5 clean reps.
+**Do NOT use these partial numbers as headline.** Headline requires the sanitized
+rerun with 5 clean reps per variant.
 
 ## Recommendation
 
-IMG-A incomplete due to server-state-related failures in rep3. **Do not proceed to IMG-B / IMG-C.** Await user decision on corrective option (see above) before re-running S0_ipc.
+IMG-A incomplete due to the benchmark-generator special-token bug. Proceed with the
+**sanitized** runner (`run_image_text_imgA_sanitized.py`). **Do not proceed to
+IMG-B / IMG-C** until the sanitized IMG-A passes with 0 failures.
