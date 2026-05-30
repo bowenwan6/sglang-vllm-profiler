@@ -1,43 +1,95 @@
-# v2 / Round 2 — Project Memory
+# v2 project memory — quick-resume checkpoint
 
-Short running state for the v2 round. Source of truth for *direction* is `plan.md`; this file is the
-quick "where are we" pointer. Last updated: 2026-05-29.
+> Short, executable memory for resuming v2 work across context windows. Not a report.
+> Active source of truth is root [`plan.md`](../../../plan.md); this file just speeds re-entry.
+> Last refreshed: 2026-05-29 (for issue #4 image+text benchmarks).
 
-## Active state
+## 1. Repo / commit rules
 
-- **Round:** v2 (Round 2), experiment `qwen3vl8b`, model `Qwen/Qwen3-VL-8B-Instruct` @ `0c351dd`.
-- **v1 (Phase 0–5):** complete. v1 artifacts are frozen and never overwritten.
-- **Issue #2 (default-overlap rebaseline): ✅ COMPLETE / PASS.** First v2 experiment done.
-- GitHub issues #1–#5 on `bowenwan6/sglang-vllm-profiler` (@JustinTong0323). Dependency order:
-  #2 → {#4, #3} → #5.
+- [`CLAUDE.md`](../../../CLAUDE.md) is the binding commit convention. Conventional Commits:
+  `type(scope): summary` (types: docs/feat/fix/chore/refactor/test/perf/ci).
+- **No `Co-Authored-By` trailers; never mention Claude/Anthropic/AI** in subjects, bodies, scopes, or
+  trailers. Pre-push check: `git log --max-count=5 --format='%h %s%n%B' | rg -i 'claude|anthropic|co-authored-by'`
+  must return nothing.
+- **Do not stage `.claude/settings.local.json`.**
+- **Raw JSON / traces / logs / generated outputs are NOT committed unless the user explicitly approves.**
+- Keep commits focused/separate (docs vs runner vs results).
 
-## Issue #2 result (clean, GPU 1, 0 failures)
+## 2. Active source of truth
 
-Production-default **overlap-ON** is now the headline baseline; `--disable-overlap-schedule` is ablation
-only.
+- Active v2 plan: root [`plan.md`](../../../plan.md). Old full v1 plan archived at
+  [`experiments/qwen3vl8b/v1_archive_plan.md`](../v1_archive_plan.md).
+- Experiment: `qwen3vl8b` · model `Qwen/Qwen3-VL-8B-Instruct` @ snapshot `0c351dd` · single H200 ·
+  TP=1 · bf16 · greedy.
 
-| | SGLang default | SGLang + PCG | vLLM | no-overlap ablation |
-|---|---:|---:|---:|---:|
-| Case A (c=1) TTFT p50 | 21.94 ms | 14.04 ms | 13.12 ms | 19.07 ms |
-| Case C (c=16) TTFT p50 pooled | 204.8 ms | 230.6 ms | 215.7 ms | — |
+## 3. Validated findings (do not re-litigate)
 
-- **Case A:** PCG still helps on the production default — TTFT −36% (21.94 → 14.04 ms), TPOT flat,
-  into vLLM band. v1's no-overlap baseline understated the production gap (default→vLLM gap is *larger*
-  than v1's overlap-OFF gap). Confirms the v1 PCG finding is not an overlap-OFF artifact.
-- **Case C:** no material gap / no Case-A-like PCG benefit at c=16 (batched CV ~14–15%). Wording stays at
-  "no improvement," never "PCG hurts."
-- `--enforce-piecewise-cuda-graph` is a **testing lever, not a production fix.**
-- Details: `experiments/qwen3vl8b/v2/caseAC_rebaseline/results/{summary,caseA_summary,caseC_summary}.md`.
+- v1 text-only **Case A gap is real**; **Issue #2 = ✅ COMPLETE / PASS** (clean, GPU 1, 0 failures;
+  results under [`caseAC_rebaseline/results/`](caseAC_rebaseline/results/)).
 
-## Next recommended step
+| Case | SGLang default | +PCG | vLLM | no-overlap (abl.) | Note |
+|---|---|---|---|---|---|
+| A (128→128, c=1) | 21.94 ms | 14.04 ms (−36%) | 13.12 ms | 19.07 ms | PCG → vLLM band; TPOT flat |
+| C (512→128, c=16) | 204.8 ms | 230.6 ms | 215.7 ms | — | no batched benefit; CV ~14–15% |
 
-1. **#4 — Qwen3-VL image+text + `SGLANG_USE_CUDA_IPC_TRANSPORT=1` (priority):** realistic VLM production
-   path; draft a protocol mirroring #2's clean methodology before any runs.
-2. **#3 — Qwen3.5 transfer check** (parallel/after): does the PCG finding transfer to Qwen3.5?
-3. **#5 — selective/default-on PCG PR** (after #4).
+- **PCG (`--enforce-piecewise-cuda-graph`) is a testing lever, NOT a production fix.** It still helps on
+  the production default (overlap-ON), so the v1 finding is **not** an overlap-OFF artifact (no-overlap
+  19.07 < default 21.94 → v1 *understated* the gap).
+- **`--disable-overlap-schedule` is ablation only, never the headline baseline.**
+- **Not headline:** KAPI-confounded Phase 1 four-case ratios and Phase 2 Case C W500.
 
-## Artifact note
+## 4. Current next task — Issue #4 (image+text + CUDA IPC)
 
-- Raw per-rep dumps (`results/raw/`, ~123 MB) and server logs (`logs/qwen3vl8b/v2/`) are **generated but
-  not committed** — pending an explicit decision (commit raw like v1, or `.gitignore`/clean up).
-- Committed deliverables = summaries + aggregate `case{A,C}_results.json`.
+- Add **image+text** workloads; test whether the Case-A PCG finding **transfers to the image path**.
+- **Separate two levers:** CUDA IPC = image-feature *transport* (`SGLANG_USE_CUDA_IPC_TRANSPORT=1`);
+  PCG = prefill *graph coverage*. Report as distinct numbers — never conflated.
+- **SGLang image headline baseline MUST set `SGLANG_USE_CUDA_IPC_TRANSPORT=1`** (S0_noipc is the ablation).
+- **Clean only** (no KAPI, no profiler); servers serialized.
+- **Image+text conclusions reported separately from text-only (#2) findings.**
+
+## 5. Issue #4 protocol summary
+
+Protocol: [`image_text_benchmarks/protocol.md`](image_text_benchmarks/protocol.md) (decision-complete,
+gated). Scaffold READMEs exist; **no runner, no runs, no servers yet.**
+
+- **Workloads:** IMG-A (1×720p + short text, c=1; primary Case-A analog), IMG-B (medium text, c=1),
+  IMG-C (short text, c=16; Case-C analog), IMG-D (opt, 2 images).
+- **Dataset:** synthetic `--dataset-name image` (inline base64, seed-reproducible, no downloads, no large
+  checked-in assets). Headline: `--image-resolution 720p --image-format png --image-content random
+  --image-count 1 --seed 1`. Identity = harness commit + image params + seed.
+- **Variants:** `S0_ipc` (IPC on), `S2_ipc_pcg` (IPC+PCG), `S0_noipc` (IPC ablation), `V0_vllm`. Both
+  frameworks use `--backend sglang-oai-chat` (image dataset rejects `--backend vllm`).
+- **Run design:** IMG-A/B bracket `S0_ipc → S2_ipc_pcg → S0_ipc_repeat → V0_vllm → S0_noipc` (drift ≤5%);
+  IMG-C interleaved `S0_a → S2_a → S0_b → S2_b → S0_c → V0`. Reps: c=1 → 5, c=16 → 3.
+- **Open items (UNVERIFIED — gate Phase 4.0):** (1) vLLM image anchor via `sglang-oai-chat`;
+  (2) text-length pinning via `--random-range-ratio`; (3) `SGLANG_USE_CUDA_IPC_TRANSPORT=1` actually engages.
+
+## 6. Immediate execution plan (Phase 4.0 smoke first)
+
+- **Phase 4.0 = smoke, NOT a full benchmark.** Implement
+  `experiments/qwen3vl8b/v2/image_text_benchmarks/run_image_text_smoke.py`.
+- Before running: `python3 -m py_compile` + diff review.
+- Smoke covers 3 paths: SGLang+IPC, SGLang no-IPC, vLLM anchor. Tiny `--num-prompts 2`, c=1.
+  **No perf conclusions** — purpose is only to resolve the 3 open items.
+- **If smoke fails → stop and report** (do NOT run IMG-A).
+- **If smoke succeeds → commit smoke summary, then implement the IMG-A formal runner.** IMG-A formal runs
+  only after smoke passes (Phase 4.1).
+
+## 7. Artifact rules for #4
+
+- Protocol: `experiments/qwen3vl8b/v2/image_text_benchmarks/protocol.md`.
+- Future smoke/results under `experiments/qwen3vl8b/v2/image_text_benchmarks/` (summaries + aggregate JSON);
+  raw in `results/raw/`; server logs under `logs/qwen3vl8b/v2/image_text_benchmarks/`.
+- Raw + logs NOT committed unless explicitly approved.
+- **Never overwrite #2 (`caseAC_rebaseline/`) or v1 Phase 0–5 artifacts.**
+
+## 8. Open cautions
+
+1. **vLLM image anchor is unverified** — `sglang-oai-chat` against vLLM's chat endpoint with data-URI
+   images must smoke-pass before any comparison is trusted.
+2. **Synthetic images ≠ real-user distribution** — fine for relative IPC/PCG contrasts, not an absolute
+   production claim.
+3. **TTFT is end-to-end (client-side)** — no preprocessing / vision / prefill split (profiler forbidden).
+4. **CUDA IPC and PCG must be analyzed separately** — they are independent levers.
+5. **If a residual gap remains after IPC + PCG, open a new profiling issue** — do not expand #4
+   indefinitely.
