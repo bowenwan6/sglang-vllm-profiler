@@ -8,8 +8,10 @@ PCG finding (#2) transfers to the image path, and separates the **CUDA-IPC trans
 - **Status:** ⚠️ **BLOCKED — `video_pad` correctness blocker. Formal IMG-A/B/C paused.**
   Smoke passed (2026-05-30). IMG-A S0_ipc rep3 hit HTTP 400
   `"No data iterator found for token: <|video_pad|>"` at 2/400 requests. Root cause
-  identified: `gen_mm_prompt` in `sglang/benchmark/datasets/common.py` does not exclude
-  `video_pad_id` from the random token pool. Debug plan at
+  identified and validated: `gen_mm_prompt` in `sglang/benchmark/datasets/common.py` does not exclude
+  `video_pad_id` from the random token pool. V1 payload audit PASS and V2 tiny serving repro PASS are recorded
+  in [`debug_video_pad/validation_plan.md`](debug_video_pad/validation_plan.md). V3 sanitized smoke is pending.
+  Debug plan at
   [`debug_video_pad/debug_plan.md`](debug_video_pad/debug_plan.md);
   audit at [`debug_video_pad/audit_notes.md`](debug_video_pad/audit_notes.md).
 - **Protocol:** [`protocol.md`](protocol.md) — decision-complete, gated Phases 4.0–4.5.
@@ -42,13 +44,16 @@ c=16 batched); optional **IMG-D** multi-image.
 random token pool. ~0.084% of 128-token prompts contain `<|video_pad|>`.
 Expected failures per 430-request batch ≈ 0.36; P(≥1 failure in 5 reps) ≈ 83%.
 
-**Resolution path:** `debug_video_pad/debug_plan.md` — staged D0–D7. Must be
-resolved (or workaround approved) before resuming formal IMG-A/B/C.
+**Resolution path:** `debug_video_pad/validation_plan.md` — V1 payload audit PASS and V2 serving repro PASS
+are complete; V3 sanitized smoke is the next gate. The blocker must be resolved (or the sanitized
+workaround approved) before resuming formal IMG-A/B/C.
 
 ## Layout (created as phases proceed)
 
 - `protocol.md` — this experiment's plan (exists).
-- `run_image_text_benchmarks.py` — runner (**not implemented until Phase 4.0 confirms schema**).
+- `run_image_text_smoke.py`, `run_image_text_imgA.py` — original runners (IMG-A invalidated by blocker).
+- `bench_serving_sanitized.py`, `run_image_text_smoke_sanitized.py`, `run_image_text_imgA_sanitized.py` —
+  sanitized prompt path for validation/resume after approval.
 - `results/` — future per-variant `results.json`, `summary.md`, and `raw/` per-rep dumps (raw not committed
   unless approved).
 - server logs → `logs/qwen3vl8b/v2/image_text_benchmarks/` (not committed unless approved).

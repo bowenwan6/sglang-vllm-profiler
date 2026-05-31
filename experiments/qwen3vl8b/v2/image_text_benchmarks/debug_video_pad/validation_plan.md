@@ -1,8 +1,8 @@
 # Validation plan — `<|video_pad|>` benchmark-generator blocker
 
-> **Status: PLAN ONLY — nothing here has been executed. Do NOT modify
-> `/sgl-workspace/sglang`.** Validate the bug *inside the profiler repo* first; branch
-> SGLang and prepare a PR only after V1–V3 pass.
+> **Status: V1/V2 PASS; V3 pending. Do NOT modify `/sgl-workspace/sglang` yet.**
+> The generator bug has been validated inside the profiler repo at the payload and
+> serving-symptom levels. Branch SGLang and prepare a PR only after V1–V3 pass.
 >
 > Companion docs: [`audit_notes.md`](audit_notes.md) (root-cause audit),
 > [`debug_plan.md`](debug_plan.md) (staged D0–D7), [`workaround_design.md`](workaround_design.md)
@@ -100,6 +100,19 @@ deliberate single-request probe. No benchmark, no perf numbers.
 **Output (committed):** `debug_video_pad/results/V2_serving_repro.md` (the two probes,
 exact status codes, error string, sanitized request shape). Raw server log stays under
 `logs/.../debug_video_pad/` and is **not** committed unless approved.
+
+#### V2 result — PASS (2026-05-31, GPU 7, clean serving probe)
+
+| probe | text | status | expectation | verdict |
+|---|---|---:|---|---|
+| failing | `<\|video_pad\|>describe the image` | 400 | 400 + `No data iterator found for token: <\|video_pad\|>` | PASS |
+| control | `describe the image` | 200 | 200 + non-empty output | PASS |
+
+V2 confirms the serving symptom is real: an image-only request whose text contains
+`<|video_pad|>` returns HTTP 400, while the same image request with safe text succeeds.
+This does **not** make SGLang serving the primary bug; the server is rejecting a video
+placeholder without video payload. Together with V1, the fix target remains the benchmark
+generator (`gen_mm_prompt`). Artifact: `results/V2_serving_repro.{md,json}`.
 
 ### V3 — Sanitized smoke (GPU 7 needed)
 
