@@ -170,7 +170,7 @@ Prepared on 2026-05-31 in a clean clone:
 ```text
 /data/sglang-pr
 branch: fix/mm-benchmark-special-tokens
-commit: e384fe215 fix(benchmark): exclude special tokens from multimodal prompts
+commit: 2e75085a3 fix(benchmark): exclude special tokens from multimodal prompts
 ```
 
 Implementation:
@@ -187,6 +187,9 @@ Implementation:
 Validation:
 
 ```text
+pre-commit run --files python/sglang/benchmark/datasets/common.py test/registered/bench_fn/test_benchmark_datasets_api.py
+PASS
+
 PYTHONPATH=/data/sglang-pr/python python test/registered/bench_fn/test_benchmark_datasets_api.py TestBenchmarkDatasetsAPI.test_gen_mm_prompt_excludes_special_tokens
 PASS
 
