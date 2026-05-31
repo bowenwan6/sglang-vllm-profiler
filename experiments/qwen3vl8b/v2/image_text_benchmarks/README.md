@@ -10,7 +10,8 @@ PCG finding (#2) transfers to the image path, and separates the **CUDA-IPC trans
   `"No data iterator found for token: <|video_pad|>"` at 2/400 requests. Root cause
   identified and validated: `gen_mm_prompt` in `sglang/benchmark/datasets/common.py` does not exclude
   `video_pad_id` from the random token pool. V1 payload audit PASS and V2 tiny serving repro PASS are recorded
-  in [`debug_video_pad/validation_plan.md`](debug_video_pad/validation_plan.md). V3 sanitized smoke is pending.
+  in [`debug_video_pad/validation_plan.md`](debug_video_pad/validation_plan.md). Current decision: prepare
+  the upstream SGLang fix before resuming V3/formal image benchmarks.
   Debug plan at
   [`debug_video_pad/debug_plan.md`](debug_video_pad/debug_plan.md);
   audit at [`debug_video_pad/audit_notes.md`](debug_video_pad/audit_notes.md).
@@ -44,9 +45,9 @@ c=16 batched); optional **IMG-D** multi-image.
 random token pool. ~0.084% of 128-token prompts contain `<|video_pad|>`.
 Expected failures per 430-request batch ≈ 0.36; P(≥1 failure in 5 reps) ≈ 83%.
 
-**Resolution path:** `debug_video_pad/validation_plan.md` — V1 payload audit PASS and V2 serving repro PASS
-are complete; V3 sanitized smoke is the next gate. The blocker must be resolved (or the sanitized
-workaround approved) before resuming formal IMG-A/B/C.
+**Resolution path:** `debug_video_pad/upstream_fix_plan.md` — V1 payload audit PASS and V2 serving repro
+PASS are complete, so the next step is to patch `gen_mm_prompt` in a clean SGLang clone. V3/formal
+IMG-A/B/C remain paused until the upstream fix or local patched clone is validated.
 
 ## Layout (created as phases proceed)
 

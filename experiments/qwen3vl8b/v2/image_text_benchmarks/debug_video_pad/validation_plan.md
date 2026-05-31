@@ -1,8 +1,10 @@
 # Validation plan — `<|video_pad|>` benchmark-generator blocker
 
-> **Status: V1/V2 PASS; V3 pending. Do NOT modify `/sgl-workspace/sglang` yet.**
-> The generator bug has been validated inside the profiler repo at the payload and
-> serving-symptom levels. Branch SGLang and prepare a PR only after V1–V3 pass.
+> **Status: V1/V2 PASS; upstream fix path selected; V3 postponed until patch validation.**
+> Do NOT modify `/sgl-workspace/sglang`. The generator bug has been validated inside
+> the profiler repo at the payload and serving-symptom levels. Per the current decision,
+> prepare the upstream `gen_mm_prompt` fix in a clean `/data/sglang-pr` clone first,
+> then return to V3/image benchmarks after the fix or local patch is validated.
 >
 > Companion docs: [`audit_notes.md`](audit_notes.md) (root-cause audit),
 > [`debug_plan.md`](debug_plan.md) (staged D0–D7), [`workaround_design.md`](workaround_design.md)
@@ -21,7 +23,7 @@ touching upstream SGLang:
    <|video_pad|>` for an **image-only** request to Qwen3-VL.
 3. A **sanitized** generator / prompt path (exclude all special ids) **eliminates** the
    issue (0 forbidden tokens, 0 serving failures).
-4. **Only then** branch SGLang, patch `gen_mm_prompt`, add tests, and open a PR.
+4. Branch SGLang in a clean clone, patch `gen_mm_prompt`, add tests, and open a PR.
 
 Non-goal: performance conclusions. This is a correctness-bug validation, kept strictly
 separate from the IPC/PCG benchmark questions.
@@ -114,11 +116,16 @@ This does **not** make SGLang serving the primary bug; the server is rejecting a
 placeholder without video payload. Together with V1, the fix target remains the benchmark
 generator (`gen_mm_prompt`). Artifact: `results/V2_serving_repro.{md,json}`.
 
-### V3 — Sanitized smoke (GPU 7 needed)
+### V3 — Sanitized smoke (GPU 7 needed, postponed)
 
 Run `run_image_text_smoke_sanitized.py` (drives `bench_serving` through the
 `bench_serving_sanitized.py` monkeypatch wrapper; writes to `smoke_sanitized/`, does
 **not** touch the original `smoke/` artifacts).
+
+Current decision: because V1 and V2 already prove the upstream generator bug, V3 is
+postponed until the SGLang fix branch is prepared/validated. This keeps the formal
+image benchmark path aligned with the real upstream fix rather than relying on a
+long-lived profiler-side monkeypatch.
 
 Validate all three smoke paths:
 
