@@ -68,6 +68,21 @@ generator that excludes **all** `tokenizer.all_special_ids` + `get_added_vocab()
 > **increase `--seeds`** rather than concluding "no bug" — the forbidden-token inventory
 > in the JSON (which lists `video_pad_id` as in-pool) is the deterministic backstop.
 
+#### V1 result — ✅ PASS (2026-05-31, 30 seeds × 430 = 12,900 prompts, CPU only)
+
+| metric | value | gate | verdict |
+|---|---|---|---|
+| `image_pad_id` | 151655 (excluded by stock gen) | — | — |
+| `video_pad_id` | 151656 (**in** stock pool) | — | — |
+| stock `<\|video_pad\|>` hits | **8 / 12,900** (0.062%) | ≥ 1 | ✅ |
+| stock any-forbidden hits | **42 / 12,900** (0.326%) | ≥ 1 | ✅ |
+| sanitized any-forbidden hits | **0 / 12,900** | = 0 | ✅ |
+
+Root cause confirmed at the **generator** level: `gen_mm_prompt` leaves `video_pad_id`
+(and other multimodal/control ids) in the random pool; excluding all special ids
+eliminates every forbidden token. Artifacts: `results/D0_payload_audit.{md,json}`
+(run config `--seeds 30 --prompts-per-seed 430 --input-len 128`).
+
 ### V2 — Tiny serving repro (GPU 7 needed)
 
 Prove the failure path is **real at serving time**, not only theoretical, with a

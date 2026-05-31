@@ -1,0 +1,140 @@
+{
+  "timestamp_utc": "2026-05-31T20:21:13.636368+00:00",
+  "snapshot": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+  "config": {
+    "prompts_per_seed": 430,
+    "seeds": 30,
+    "input_len": 128,
+    "total_prompts": 12900
+  },
+  "token_ids": {
+    "image_pad_id": 151655,
+    "video_pad_id": 151656,
+    "num_special_ids": 14,
+    "special_id_range": [
+      151643,
+      151656
+    ]
+  },
+  "buggy_generator": {
+    "total": 12900,
+    "prompts_with_video_pad": 8,
+    "prompts_with_any_forbidden": 42,
+    "rate_video_pad_pct": 0.062,
+    "rate_any_forbidden_pct": 0.3256,
+    "expected_failures_per_430_rep": 1.4
+  },
+  "sanitized_generator": {
+    "total": 12900,
+    "prompts_with_any_forbidden": 0,
+    "clean": true
+  },
+  "examples": [
+    {
+      "seed": 1,
+      "index": 42,
+      "found_tokens": [
+        "<|vision_pad|>"
+      ],
+      "prompt_sha12": "e8b33e051cd9",
+      "snippet": "n uttered Schul LINE<|vision_pad|>\u04d8\u90a3\u6837\u7684a\u00f1 Higgins\"math\u7387\u9886\u043a\u0435\u0440/p"
+    },
+    {
+      "seed": 1,
+      "index": 78,
+      "found_tokens": [
+        "<|video_pad|>"
+      ],
+      "prompt_sha12": "6f18ecf41b92",
+      "snippet": "<|video_pad|>\u0cb2 Goblin mysterious Seconda"
+    },
+    {
+      "seed": 1,
+      "index": 139,
+      "found_tokens": [
+        "<|vision_pad|>"
+      ],
+      "prompt_sha12": "4e49bb71de8e",
+      "snippet": "hority converters\u05d9\u05e0\u05d4<|vision_pad|>.Global enlight:j pav\u9898\u6750 fp"
+    },
+    {
+      "seed": 1,
+      "index": 385,
+      "found_tokens": [
+        "<|vision_pad|>"
+      ],
+      "prompt_sha12": "2529ea8fe44a",
+      "snippet": "li prison\u05e0\u05dd.Paths.Ex<|vision_pad|>\uff09 \u8fd8\u4e0d\u5982\u4e50\u56ed\u4ea4\u878d among\u0e23\u0e31\u0e01\u0e29\u0e32maze.P"
+    },
+    {
+      "seed": 2,
+      "index": 31,
+      "found_tokens": [
+        "<|video_pad|>"
+      ],
+      "prompt_sha12": "8fa46da3b040",
+      "snippet": "ticalangles.event\u53ca\u4ee5\u4e0a<|video_pad|>ulturalGl combust-rounded q"
+    },
+    {
+      "seed": 2,
+      "index": 417,
+      "found_tokens": [
+        "<|vision_pad|>"
+      ],
+      "prompt_sha12": "a7be68b67660",
+      "snippet": "s \ub85c gums\ud84f\udded.animation\ub178<|vision_pad|>\u751f\u547d\u7684_eventsfre Louisfal\ubed1\u4c9f/d"
+    },
+    {
+      "seed": 3,
+      "index": 253,
+      "found_tokens": [
+        "<|vision_start|>"
+      ],
+      "prompt_sha12": "9ef0916c64db",
+      "snippet": "eANY institutesitag\u883c<|vision_start|>lxdings\u9762\u8c8c/memoryINTEGERO"
+    },
+    {
+      "seed": 4,
+      "index": 85,
+      "found_tokens": [
+        "<|vision_pad|>"
+      ],
+      "prompt_sha12": "3d538f942e18",
+      "snippet": "ir battleConditional<|vision_pad|>(sooguemarine Maurit \u0111ang\ufffd"
+    },
+    {
+      "seed": 5,
+      "index": 83,
+      "found_tokens": [
+        "<|vision_pad|>"
+      ],
+      "prompt_sha12": "3ea3213f711d",
+      "snippet": "iazza\ud863\udc54 pasa.se\uff76?>\"> <|vision_pad|> yat Vir\u4e2d\u534e\u4eba\u6c11 \u05de\u05e7]\\=[]\r  roo"
+    },
+    {
+      "seed": 6,
+      "index": 182,
+      "found_tokens": [
+        "<|vision_end|>"
+      ],
+      "prompt_sha12": "f13ad366e3a2",
+      "snippet": "\u5f71\u97f3.Paths_NOTE\u043d\u0435\u043crive<|vision_end|>)?.Migration>): \ud56d-tech_Com"
+    }
+  ],
+  "special_inventory": {
+    "151643": "<|endoftext|>",
+    "151644": "<|im_start|>",
+    "151645": "<|im_end|>",
+    "151646": "<|object_ref_start|>",
+    "151647": "<|object_ref_end|>",
+    "151648": "<|box_start|>",
+    "151649": "<|box_end|>",
+    "151650": "<|quad_start|>",
+    "151651": "<|quad_end|>",
+    "151652": "<|vision_start|>",
+    "151653": "<|vision_end|>",
+    "151654": "<|vision_pad|>",
+    "151655": "<|image_pad|>",
+    "151656": "<|video_pad|>"
+  }
+}
