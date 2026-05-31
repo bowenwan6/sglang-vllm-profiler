@@ -27,9 +27,10 @@ SNAPSHOT = ("/root/.cache/huggingface/hub/models--Qwen--Qwen3-VL-8B-Instruct/"
             "snapshots/0c351dd01ed87e9c1b53cbc748cba10e6187ff3b")
 LAB      = Path("/data/sglang-vllm-profiler")
 BASE     = LAB / "experiments/qwen3vl8b/v2/image_text_benchmarks"
-SMOKE_DIR = BASE / "smoke"
-LOGS     = LAB / "logs/qwen3vl8b/v2/image_text_benchmarks/smoke"
+SMOKE_DIR = BASE / "smoke_sanitized"
+LOGS     = LAB / "logs/qwen3vl8b/v2/image_text_benchmarks/smoke_sanitized"
 VLLM_PYTHON = "/opt/miniconda3/envs/profiling/bin/python"
+BENCH_WRAPPER = BASE / "bench_serving_sanitized.py"  # monkeypatch wrapper (no source mod)
 GPU = "7"  # user-specified; never auto-switch
 SGLANG_PORT = 30000
 VLLM_PORT   = 30001
@@ -128,8 +129,9 @@ def parse_bench_jsonl(path):
 
 def run_bench_smoke(case_id, port, out_jsonl, case_env):
     out_jsonl.unlink(missing_ok=True)
+    # SANITIZED: drive bench_serving through the monkeypatch wrapper.
     cmd = (
-        ["python3", "-m", "sglang.bench_serving",
+        ["python3", str(BENCH_WRAPPER),
          "--backend", "sglang-oai-chat",
          "--base-url", f"http://127.0.0.1:{port}",
          "--model", SNAPSHOT]

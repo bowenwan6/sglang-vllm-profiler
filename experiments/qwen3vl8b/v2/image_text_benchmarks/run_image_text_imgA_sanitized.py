@@ -36,6 +36,7 @@ RESULTS  = BASE / "results"
 RAW      = RESULTS / "raw"
 LOGS     = LAB / "logs/qwen3vl8b/v2/image_text_benchmarks"
 VLLM_PYTHON = "/opt/miniconda3/envs/profiling/bin/python"
+BENCH_WRAPPER = BASE / "bench_serving_sanitized.py"  # monkeypatch wrapper (no source mod)
 GPU = "7"  # user-specified; never auto-switch
 SGLANG_PORT = 30000
 VLLM_PORT   = 30001
@@ -151,10 +152,11 @@ def parse_bench_jsonl(path):
 
 
 def run_rep(vid, framework, port, rep, case_env):
-    out_jsonl = RAW / f"{vid}_rep{rep}.jsonl"
+    out_jsonl = RAW / f"{vid}_san_rep{rep}.jsonl"
     out_jsonl.unlink(missing_ok=True)
+    # SANITIZED: drive bench_serving through the monkeypatch wrapper.
     cmd = (
-        ["python3", "-m", "sglang.bench_serving",
+        ["python3", str(BENCH_WRAPPER),
          "--backend", "sglang-oai-chat",
          "--base-url", f"http://127.0.0.1:{port}",
          "--model", SNAPSHOT]
@@ -477,7 +479,7 @@ def main():
     log(f"Image: 720p random png seed={SEED} count=1 input=128 output=128 range_ratio=1.0")
     log("")
 
-    out_path = RESULTS / "imgA_results.json"
+    out_path = RESULTS / "imgA_sanitized_results.json"
     results = []
     all_ok = True
 
@@ -498,7 +500,7 @@ def main():
     log(f"\nimgA_results.json written: {out_path}")
 
     summary = write_summary(results)
-    summary_path = RESULTS / "imgA_summary.md"
+    summary_path = RESULTS / "imgA_sanitized_summary.md"
     summary_path.write_text(summary)
     log(f"imgA_summary.md written: {summary_path}")
 
