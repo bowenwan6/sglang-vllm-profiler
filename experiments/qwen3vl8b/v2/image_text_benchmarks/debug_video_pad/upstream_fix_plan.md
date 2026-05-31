@@ -1,6 +1,6 @@
 # Upstream fix plan — multimodal benchmark special-token filtering
 
-> Status: ready to start in a clean SGLang clone under `/data/sglang-pr`.
+> Status: local SGLang fix branch prepared and tested in `/data/sglang-pr`.
 > Do not modify `/sgl-workspace/sglang`.
 
 ## 1. Problem
@@ -162,3 +162,42 @@ resume:
 1. sanitized or patched image smoke,
 2. formal IMG-A,
 3. then IMG-B/IMG-C only if IMG-A is clean.
+
+## 9. Local implementation status
+
+Prepared on 2026-05-31 in a clean clone:
+
+```text
+/data/sglang-pr
+branch: fix/mm-benchmark-special-tokens
+commit: e384fe215 fix(benchmark): exclude special tokens from multimodal prompts
+```
+
+Implementation:
+
+- `python/sglang/benchmark/datasets/common.py`
+  - added `get_available_multimodal_text_tokens`
+  - `gen_mm_prompt` now filters `tokenizer.all_special_ids` plus the existing
+    `image_pad_id` argument
+- `test/registered/bench_fn/test_benchmark_datasets_api.py`
+  - added `test_gen_mm_prompt_excludes_special_tokens`
+  - deterministic test patches `random.choices` and asserts multimodal special ids are
+    absent from the sampled token pool
+
+Validation:
+
+```text
+PYTHONPATH=/data/sglang-pr/python python test/registered/bench_fn/test_benchmark_datasets_api.py TestBenchmarkDatasetsAPI.test_gen_mm_prompt_excludes_special_tokens
+PASS
+
+PYTHONPATH=/data/sglang-pr/python python test/registered/bench_fn/test_benchmark_datasets_api.py
+PASS — 32 tests
+```
+
+Push/PR status:
+
+- The initial intended fork remote `git@github.com:bowenwan6/sglang.git` was not
+  accessible (`Repository not found`), so the working clone currently tracks
+  `https://github.com/sgl-project/sglang.git`.
+- Next step for PR: create or grant access to the `bowenwan6/sglang` fork, add it as a
+  writable remote, push `fix/mm-benchmark-special-tokens`, then open the upstream PR.
