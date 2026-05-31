@@ -1,0 +1,29 @@
+{
+  "stage": "V2_serving_repro",
+  "timestamp_utc": "2026-05-31T20:34:53.117859+00:00",
+  "gpu": "7",
+  "snapshot": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+  "kapi_logging": false,
+  "profiler": false,
+  "expected_error_substring": "No data iterator found for token: <|video_pad|>",
+  "probe_A_failing": {
+    "text": "<|video_pad|>describe the image",
+    "status_code": 400,
+    "error_substring_present": true,
+    "body_head": "{\"object\":\"error\",\"message\":\"No data iterator found for token: <|video_pad|>\",\"type\":\"BadRequestError\",\"param\":null,\"code\":400}"
+  },
+  "probe_B_control": {
+    "text": "describe the image",
+    "status_code": 200,
+    "non_empty_output": true,
+    "output_head": "This image is a classic example of **"
+  },
+  "status": "PASS",
+  "pass_criteria": {
+    "A_returns_400": true,
+    "A_error_matches": true,
+    "B_returns_200": true,
+    "B_non_empty": true
+  },
+  "gpu_freed_after": true
+}
