@@ -170,13 +170,16 @@ Prepared on 2026-05-31 in a clean clone:
 ```text
 /data/sglang-pr
 branch: fix/mm-benchmark-special-tokens
-commit: 2e75085a3 fix(benchmark): exclude special tokens from multimodal prompts
+commit: e6debe6ea fix(benchmark): exclude special tokens from multimodal prompts
 ```
 
 Implementation:
 
 - `python/sglang/benchmark/datasets/common.py`
   - added `get_available_multimodal_text_tokens`
+  - added `@lru_cache(maxsize=1)` after reviewer feedback, matching the existing
+    `get_available_tokens` pattern and avoiding repeated vocabulary filtering per
+    generated prompt
   - `gen_mm_prompt` now filters `tokenizer.all_special_ids` plus the existing
     `image_pad_id` argument
 - `test/registered/bench_fn/test_benchmark_datasets_api.py`
@@ -203,5 +206,7 @@ Push/PR status:
   `git@github.com:bowenwan6/sglang.git:fix/mm-benchmark-special-tokens`
 - PR creation link:
   `https://github.com/bowenwan6/sglang/pull/new/fix/mm-benchmark-special-tokens`
+- Reviewer cache suggestion handled and branch force-pushed with updated commit
+  `e6debe6ea`.
 - `gh` is not installed in the current environment, so the PR must be opened through
   the GitHub web UI unless `gh` is installed later.
