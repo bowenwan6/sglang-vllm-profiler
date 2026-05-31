@@ -196,8 +196,9 @@ PASS — 32 tests
 
 Push/PR status:
 
-- The initial intended fork remote `git@github.com:bowenwan6/sglang.git` was not
-  accessible (`Repository not found`), so the working clone currently tracks
-  `https://github.com/sgl-project/sglang.git`.
-- Next step for PR: create or grant access to the `bowenwan6/sglang` fork, add it as a
-  writable remote, push `fix/mm-benchmark-special-tokens`, then open the upstream PR.
+- Fork branch pushed:
+  `git@github.com:bowenwan6/sglang.git:fix/mm-benchmark-special-tokens`
+- PR creation link:
+  `https://github.com/bowenwan6/sglang/pull/new/fix/mm-benchmark-special-tokens`
+- `gh` is not installed in the current environment, so the PR must be opened through
+  the GitHub web UI unless `gh` is installed later.
