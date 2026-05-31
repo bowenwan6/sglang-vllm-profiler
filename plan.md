@@ -55,7 +55,7 @@ Dependency order: **#2 → {#4, #3 parallel} → #5 → report restructure**.
 |---|---|---|---|---|
 | 1 | Tracking: next-round follow-ups | meta | Umbrella; final deliverable separates baseline / ablation / Qwen3.5 / image+text / PR proposal | open (tracking) |
 | **2** | **Default-overlap Qwen3-VL rebaseline** | **P0 (foundational)** | Production-default overlap-ON Case A/C baseline; does PCG still help? | **✅ COMPLETE / PASS** (results under `v2/caseAC_rebaseline/results/`) |
-| **4** | **Qwen3-VL image+text + CUDA IPC** | **P1 — BLOCKED** | Image+text behavior + `SGLANG_USE_CUDA_IPC_TRANSPORT=1`; separate from text-only conclusions | **blocked: video_pad correctness bug in `gen_mm_prompt`** — smoke ✅, IMG-A rep3 failed; debug plan at `v2/image_text_benchmarks/debug_video_pad/debug_plan.md` |
+| **4** | **Qwen3-VL image+text + CUDA IPC** | **P1 — BLOCKED** | Image+text behavior + `SGLANG_USE_CUDA_IPC_TRANSPORT=1`; separate from text-only conclusions | **blocked: video_pad correctness bug in `gen_mm_prompt`** — smoke ✅, IMG-A rep3 failed; **validation plan drafted** at `v2/image_text_benchmarks/debug_video_pad/validation_plan.md` (V0–V4), gates upstream fix; debug menu at `debug_video_pad/debug_plan.md` |
 | 3 | Qwen3.5 VL-model profiling | P1 | Same clean methodology on Qwen3.5; does the PCG finding transfer? | next candidate (parallel/after #2; transfer check) |
 | 5 | Selective/default-on PCG PR plan | P2 | Minimum safe exception in VLM auto-disable + guards + fallback | planned (needs #4) |
 

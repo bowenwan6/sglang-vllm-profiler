@@ -5,6 +5,11 @@
 >
 > **Prerequisite reading:** `audit_notes.md` (same directory).
 >
+> **Execution gate:** before branching/patching SGLang, follow
+> [`validation_plan.md`](validation_plan.md) (stages V0–V4) — it is the decision-complete
+> validation that must pass first. This file (D0–D7) is the broader diagnostic menu;
+> `validation_plan.md` is the ordered path actually being executed.
+>
 > **Goal:** Confirm the root cause, verify the workaround, and produce evidence for
 > an upstream SGLang issue/PR.
 >
