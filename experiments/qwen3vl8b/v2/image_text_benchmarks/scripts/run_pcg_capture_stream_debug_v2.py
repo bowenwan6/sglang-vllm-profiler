@@ -221,6 +221,33 @@ CASE_SPECS = {
         "server_wait_s": 480,
         "expected_classification": "OK",
     },
+    # ----- E3: same shape as E2a but IPC off. Tests whether IPC is required -----
+    # to trigger the assertion. Matched-size control for E2a (image + PCG +
+    # n=32 + warmup=30 + output=128). expected_classification is left as OK
+    # so that any non-OK outcome flips the runner exit code.
+    "E3": {
+        "stage_id": "E3",
+        "label": "image_noIPC_PCG_n32",
+        "description": (
+            "Image+PCG+n32, but SGLANG_USE_CUDA_IPC_TRANSPORT unset. Matched "
+            "shape control for E2a; if E3 also asserts, IPC is not a "
+            "required trigger and the fault is VLM image + PCG."
+        ),
+        "dataset_kind": "image",
+        "ipc_on": False,
+        "pcg_on": True,
+        "num_prompts": 32,
+        "warmup": 30,
+        "output_len": 128,
+        "input_len": 128,
+        "image_resolution": "720p",
+        "image_content": "random",
+        "image_format": "png",
+        "image_count": 1,
+        "range_ratio": 1.0,
+        "server_wait_s": 480,
+        "expected_classification": "OK",
+    },
 }
 
 
