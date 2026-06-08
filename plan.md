@@ -55,7 +55,7 @@ Dependency order: **#2 → {#4, #3 parallel} → #5 → report restructure**.
 |---|---|---|---|---|
 | 1 | Tracking: next-round follow-ups | meta | Umbrella; final deliverable separates baseline / ablation / Qwen3.5 / image+text / PR proposal | open (tracking) |
 | **2** | **Default-overlap Qwen3-VL rebaseline** | **P0 (foundational)** | Production-default overlap-ON Case A/C baseline; does PCG still help? | **✅ COMPLETE / PASS** (results under `v2/caseAC_rebaseline/results/`) |
-| **4** | **Qwen3-VL image+text + CUDA IPC** | **P1 — PARTIAL / PCG capture-stream blocker** | Image+text behavior + `SGLANG_USE_CUDA_IPC_TRANSPORT=1`; separate from text-only conclusions | Generator `<\|video_pad\|>` bug merged upstream as `07f326c184` (#26864). Profiler uses `/data/sglang-pr` on `main` (HEAD `62c505a196`). Stage 4.1 smoke ✅. Stage 4.2 IMG-A: **S0_ipc 5/5 reps clean** (TTFT p50 64.8 ms, TPOT 5.23 ms, no forbidden-token errors); **S2_ipc_pcg crashes on rep1** with `AssertionError: PCG capture stream is not set` in `srt/compilation/cuda_piecewise_backend.py:171`. Remaining variants (S0_ipc_repeat / V0_vllm / S0_noipc) skipped per protocol §9. **Not a generator bug.** Debug at `v2/image_text_benchmarks/debug_pcg_capture_stream/`. |
+| **4** | **Qwen3-VL image+text + CUDA IPC** | **P1 — PCG path closed; non-PCG IMG-A resume pending** | Image+text behavior + `SGLANG_USE_CUDA_IPC_TRANSPORT=1`; separate from text-only conclusions | Generator `<\|video_pad\|>` bug merged upstream as `07f326c184` (#26864). Profiler uses `/data/sglang-pr` on `main` (HEAD `62c505a196`). Stage 4.1 smoke ✅. Stage 4.2 IMG-A: S0_ipc 5/5 reps clean (TTFT p50 64.8 ms); S2_ipc_pcg deterministically crashes with `AssertionError: PCG capture stream is not set`. PCG debug (`debug_pcg_capture_stream/conclusion.md`) shows E1 text-only PCG OK, E2a image+IPC+PCG+n=32 ASSERT, E3 image+noIPC+PCG+n=32 ASSERT → **fault is VLM image + PCG**, **IPC not required**. Upstream auto-disables PCG for VLMs (`server_args.py:1374-1376`); `--enforce-piecewise-cuda-graph` is a "for testing" override and crashes deterministically on Qwen3-VL. **PCG benefit (Q2) cannot be measured on this HEAD without an upstream change.** Next: file informational upstream SGLang issue with the n=32 minimal repro; resume IMG-A with non-PCG variants only (`S0_ipc_repeat → V0_vllm → S0_noipc`) to recover Q1/Q3 + bracket drift. No SGLang PR. |
 | 3 | Qwen3.5 VL-model profiling | P1 | Same clean methodology on Qwen3.5; does the PCG finding transfer? | next candidate (parallel/after #2; transfer check) |
 | 5 | Selective/default-on PCG PR plan | P2 | Minimum safe exception in VLM auto-disable + guards + fallback | planned (needs #4) |
 
@@ -86,14 +86,35 @@ Stage 4.1 fixed-generator smoke PASS; Stage 4.2 IMG-A:
 The prior pre-fix partial IMG-A is **invalid for performance conclusions** and
 kept as historical record only.
 
-**Next step for #4:** **debug the PCG capture-stream crash before any further
-formal #4 runs.** Debug plan and audit under
-`experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/`.
-Goal: classify whether the crash is config / IPC+PCG interaction / VLM+PCG
-unsupported / broader upstream PCG regression. **Do not proceed to IMG-B / IMG-C**
-until IMG-A yields headline-quality data **or** the PCG path is explicitly
-excluded with a documented rationale. Fixed-generator recovery plan at
-`v2/image_text_benchmarks/fixed_generator_plan.md` is paused at Stage 4.2.
+PCG debug closed (`v2/image_text_benchmarks/debug_pcg_capture_stream/conclusion.md`):
+**E1** text-only + PCG `OK` (upstream main PCG not broadly regressed);
+**E2a** image + IPC + PCG @ n=32 `PCG_CAPTURE_STREAM_ASSERT` (Stage 4.2 crash
+deterministically reproduced at minimal cost ~30 s GPU);
+**E3** image + **no IPC** + PCG @ n=32 also `PCG_CAPTURE_STREAM_ASSERT` with
+identical signature → **IPC is not a required trigger**. The fault is **VLM
+image path + PCG**. Upstream auto-disables PCG for VLMs
+(`server_args.py:1374-1376`) and `--enforce-piecewise-cuda-graph` is a
+"for testing" override that bypasses the safety; the assertion at
+`cuda_piecewise_backend.py:170-172` is a defensive guard. The generator fix
+gate stayed green throughout — this is not a generator bug.
+
+**Next step for #4 (outside this debug branch):**
+- File an informational upstream SGLang issue with the E2a n=32 minimal
+  repro recipe — ask for a graceful CUDA fallback (mirroring the existing
+  HIP fallback at `cuda_piecewise_backend.py:163-169`) or a loud warning on
+  VLM + `--enforce-piecewise-cuda-graph`. **No SGLang PR** at this stage.
+- Resume IMG-A with the **non-PCG** variants only
+  (`S0_ipc_repeat → V0_vllm → S0_noipc`) to recover bracket drift, IPC
+  benefit (Q3), and vLLM anchor (Q1). `S2_ipc_pcg` stays explicitly
+  excluded with rationale: PCG is upstream-auto-disabled for VLMs and the
+  override required to force it crashes deterministically on this HEAD.
+  PCG benefit (Q2) for image+text is **not measurable on this upstream
+  HEAD without an upstream change**, and the Case-A text-only PCG finding
+  from #2 cannot be transferred to image+text within #4 here.
+- Do **not** proceed to IMG-B / IMG-C until IMG-A yields headline-quality
+  data on the non-PCG variants.
+Fixed-generator recovery plan at `v2/image_text_benchmarks/fixed_generator_plan.md`
+remains the source of truth for the IMG-A resume.
 
 Then: **#3** (Qwen3.5 transfer check, parallel/after) → **#5** (selective/default-on PCG PR, needs #4's
 image evidence).
