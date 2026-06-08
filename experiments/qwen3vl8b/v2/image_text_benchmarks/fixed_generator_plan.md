@@ -58,6 +58,23 @@ current HEAD:   62c505a196  (origin/main after pull on 2026-06-08)
 upstream:       origin  https://github.com/sgl-project/sglang.git
 ```
 
+**Runtime dependency note:** the merged-fix line of upstream main also requires
+`flashinfer-python >= 0.6.12` (introduced by `7f706f4cfb [Deps] Bump FI to 0.6.12 and
+cutedsl to 4.5.2 (#26854)`, which is an ancestor of `07f326c184`). On this profiler
+container the upgrade was performed system-wide via pip on 2026-06-08:
+
+```text
+flashinfer-python      0.6.11.post1   →  0.6.12
+flashinfer-cubin       0.6.11.post1   →  0.6.12
+flashinfer-jit-cache   0.6.11.post1+cu130  →  0.6.12rc3+cu130
+                                       (no final 0.6.12 build for cu130/torch2.11 yet)
+```
+
+The dependency-conflict warning against the system-wide old SGLang at
+`/sgl-workspace/sglang` (`requires flashinfer_python==0.6.11.post1`) is expected; we
+no longer use that copy for new perf work. The flashinfer upgrade is **isolated to
+this Docker container** (other users on the host run in separate containers).
+
 The fork branch `fix/mm-benchmark-special-tokens` @ `78e6c03e2` (the PR branch
 before merge) is now **historical**. Source of truth is `/data/sglang-pr` on
 `main` after `git pull --ff-only origin main`. Do not pin to the fork branch.
