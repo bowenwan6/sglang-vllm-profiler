@@ -1,0 +1,29 @@
+{
+  "provenance": {
+    "sglang_pr_path": "/data/sglang-pr",
+    "pythonpath_prefix": "/data/sglang-pr/python",
+    "sglang_pr_head_sha": "62c505a196fd5bc997f478b0a7c6403ce655a838",
+    "sglang_pr_branch": "main",
+    "merged_fix_in_history": true,
+    "sglang_dunder_file": "/data/sglang-pr/python/sglang/__init__.py",
+    "common_dunder_file": "/data/sglang-pr/python/sglang/benchmark/datasets/common.py",
+    "fix_marker": "FIX_OK",
+    "probe_stderr_tail": "",
+    "fixed_path_ok": true
+  },
+  "cases": [
+    {
+      "id": "smoke_sglang_ipc",
+      "framework": "sglang",
+      "ipc_on": true,
+      "extra_server_flags": [],
+      "port": 30000,
+      "kapi_logging": false,
+      "profiler": false,
+      "timestamp_utc": "2026-06-08T14:51:24.758627+00:00",
+      "gpu": "7",
+      "snapshot": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+      "status": "SERVER_NO_START"
+    }
+  ]
+}
