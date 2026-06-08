@@ -20,10 +20,105 @@
       "port": 30000,
       "kapi_logging": false,
       "profiler": false,
-      "timestamp_utc": "2026-06-08T14:51:24.758627+00:00",
+      "timestamp_utc": "2026-06-08T15:22:02.126752+00:00",
       "gpu": "7",
       "snapshot": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
-      "status": "SERVER_NO_START"
+      "bench_elapsed_s": 11.1,
+      "bench_rc": 0,
+      "completed": 2,
+      "failures": 0,
+      "forbidden_token_error_present": false,
+      "has_non_empty_output": true,
+      "median_ttft_ms": 80.8823883999139,
+      "total_input_tokens": 2044,
+      "total_input_text_tokens": 280,
+      "total_input_vision_tokens": 1764,
+      "total_output_tokens": 64,
+      "generated_texts_sample": [
+        "The text you've provided appears to be a random, nonsensical string of characters, symbols, and fragments \u2014 likely corru",
+        "The text you've provided appears to be a random string of characters, symbols, and words with no coherent meaning or str"
+      ],
+      "errors_sample": [
+        "",
+        ""
+      ],
+      "ttfts_ms": [
+        63.6,
+        98.1
+      ],
+      "status": "OK"
+    },
+    {
+      "id": "smoke_sglang_noipc",
+      "framework": "sglang",
+      "ipc_on": false,
+      "extra_server_flags": [],
+      "port": 30000,
+      "kapi_logging": false,
+      "profiler": false,
+      "timestamp_utc": "2026-06-08T15:23:15.660563+00:00",
+      "gpu": "7",
+      "snapshot": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+      "bench_elapsed_s": 11.2,
+      "bench_rc": 0,
+      "completed": 2,
+      "failures": 0,
+      "forbidden_token_error_present": false,
+      "has_non_empty_output": true,
+      "median_ttft_ms": 165.08410056121647,
+      "total_input_tokens": 2048,
+      "total_input_text_tokens": 284,
+      "total_input_vision_tokens": 1764,
+      "total_output_tokens": 64,
+      "generated_texts_sample": [
+        "The text you've provided appears to be a random, nonsensical string of characters, symbols, and words from multiple lang",
+        "The text you've provided appears to be a random, nonsensical string of characters, symbols, and words from multiple lang"
+      ],
+      "errors_sample": [
+        "",
+        ""
+      ],
+      "ttfts_ms": [
+        199.8,
+        130.4
+      ],
+      "status": "OK"
+    },
+    {
+      "id": "smoke_vllm_anchor",
+      "framework": "vllm",
+      "ipc_on": false,
+      "extra_server_flags": [],
+      "port": 30001,
+      "kapi_logging": false,
+      "profiler": false,
+      "timestamp_utc": "2026-06-08T15:24:00.526692+00:00",
+      "gpu": "7",
+      "snapshot": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+      "bench_elapsed_s": 11.1,
+      "bench_rc": 0,
+      "completed": 2,
+      "failures": 0,
+      "forbidden_token_error_present": false,
+      "has_non_empty_output": true,
+      "median_ttft_ms": 104.0576274972409,
+      "total_input_tokens": 2047,
+      "total_input_text_tokens": 283,
+      "total_input_vision_tokens": 1764,
+      "total_output_tokens": 64,
+      "generated_texts_sample": [
+        "It seems the text you've provided is either corrupted, encoded incorrectly, or contains a mix of random characters, symb",
+        "It seems the content you've provided is either corrupted, encoded incorrectly, or contains a mix of random characters, s"
+      ],
+      "errors_sample": [
+        "",
+        ""
+      ],
+      "ttfts_ms": [
+        68.7,
+        139.4
+      ],
+      "status": "OK"
     }
   ]
 }
