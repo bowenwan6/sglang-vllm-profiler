@@ -22,10 +22,18 @@ PCG finding (#2) transfers to the image path, and separates the **CUDA-IPC trans
   - `IMG_A_S0_ipc_repeat` / `IMG_A_V0_vllm` / `IMG_A_S0_noipc` skipped per protocol §9.
 
   See [`results_fixed/imgA_summary.md`](results_fixed/imgA_summary.md) for partial
-  numbers. PCG crash debug is the active workstream:
-  [`debug_pcg_capture_stream/README.md`](debug_pcg_capture_stream/README.md).
-  Recovery plan: [`fixed_generator_plan.md`](fixed_generator_plan.md) is paused at
-  Stage 4.2 until the PCG path is classified.
+  numbers. PCG crash debug closed (2026-06-08):
+  [`debug_pcg_capture_stream/conclusion.md`](debug_pcg_capture_stream/conclusion.md)
+  — E1 text-only + PCG `OK`; E2a image + IPC + PCG @ n=32 ASSERT; E3 image + **no
+  IPC** + PCG @ n=32 ASSERT → fault is **VLM image + PCG**, IPC not required.
+  Upstream auto-disables PCG for VLMs and `--enforce-piecewise-cuda-graph` is a
+  "for testing" override; the assertion is a defensive guard. **PCG benefit (Q2)
+  cannot be measured on this HEAD without an upstream change.** Next step is to
+  resume IMG-A with the non-PCG variants only
+  (`S0_ipc_repeat → V0_vllm → S0_noipc`) to recover Q1/Q3 + bracket drift.
+  `S2_ipc_pcg` stays explicitly excluded. Recovery plan:
+  [`fixed_generator_plan.md`](fixed_generator_plan.md) resumes at Stage 4.2's
+  non-PCG variants.
   Original protocol unchanged at [`protocol.md`](protocol.md); see
   [`debug_video_pad/upstream_fix_plan.md`](debug_video_pad/upstream_fix_plan.md)
   for the merged-fix history.
