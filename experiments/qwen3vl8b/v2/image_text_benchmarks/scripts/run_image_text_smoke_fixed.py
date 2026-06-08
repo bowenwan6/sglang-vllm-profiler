@@ -113,9 +113,15 @@ def gpu_used():
         return -1
 
 
-def wait_server(port, timeout):
+def wait_server(port, timeout, proc=None):
+    """Wait for /health to return 200. Also fail fast if the server process exits
+    early (e.g. immediate startup crash from bad model path / missing snapshot)."""
     deadline = time.time() + timeout
     while time.time() < deadline:
+        if proc is not None and proc.poll() is not None:
+            # Server exited before /health responded — surface this fast.
+            log(f"  ERROR: server process exited early with rc={proc.returncode}")
+            return False
         try:
             code = urllib.request.urlopen(
                 f"http://127.0.0.1:{port}/health", timeout=3).getcode()
@@ -279,7 +285,7 @@ def run_case(case_id, framework, ipc_on, extra_flags, wait_s):
     }
 
     try:
-        if not wait_server(port, wait_s):
+        if not wait_server(port, wait_s, proc=proc):
             log(f"  ERROR: server {case_id} did not come up in {wait_s}s")
             rec["status"] = "SERVER_NO_START"
             return rec
