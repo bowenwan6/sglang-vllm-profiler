@@ -1,7 +1,13 @@
 # Upstream fix plan — multimodal benchmark special-token filtering
 
-> Status: local SGLang fix branch prepared and tested in `/data/sglang-pr`.
-> Do not modify `/sgl-workspace/sglang`.
+> **Status (2026-06-08): MERGED upstream.** The fix was merged into SGLang
+> `origin/main` as commit `07f326c184 Fix multimodal synthetic benchmark prompt
+> generation to exclude special tokens (#26864)`. Profiler runs source the fix from
+> `/data/sglang-pr` on `main` (after `git pull`), selected via
+> `PYTHONPATH=/data/sglang-pr/python`. The fork-branch sections below
+> (`fix/mm-benchmark-special-tokens` @ `78e6c03e2`) are kept as historical record of
+> how the fix was prepared, reviewed, and pushed. Do not modify
+> `/sgl-workspace/sglang`. Recovery proceeds via [`../fixed_generator_plan.md`](../fixed_generator_plan.md).
 
 ## 1. Problem
 

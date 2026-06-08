@@ -55,7 +55,7 @@ Dependency order: **#2 → {#4, #3 parallel} → #5 → report restructure**.
 |---|---|---|---|---|
 | 1 | Tracking: next-round follow-ups | meta | Umbrella; final deliverable separates baseline / ablation / Qwen3.5 / image+text / PR proposal | open (tracking) |
 | **2** | **Default-overlap Qwen3-VL rebaseline** | **P0 (foundational)** | Production-default overlap-ON Case A/C baseline; does PCG still help? | **✅ COMPLETE / PASS** (results under `v2/caseAC_rebaseline/results/`) |
-| **4** | **Qwen3-VL image+text + CUDA IPC** | **P1 — UNBLOCKED / recovery plan drafted** | Image+text behavior + `SGLANG_USE_CUDA_IPC_TRANSPORT=1`; separate from text-only conclusions | Generator `<\|video_pad\|>` bug fixed in `/data/sglang-pr` (`fix/mm-benchmark-special-tokens` @ `78e6c03e2`). **V1 audit PASS + V2 serving repro PASS** (`debug_video_pad/validation_plan.md`). **Fixed-generator recovery plan** at `v2/image_text_benchmarks/fixed_generator_plan.md` (gated Stages 4.1 smoke → 4.2 IMG-A → 4.3 IMG-B/C). Prior partial IMG-A is invalid for perf conclusions. |
+| **4** | **Qwen3-VL image+text + CUDA IPC** | **P1 — UNBLOCKED / recovery plan drafted** | Image+text behavior + `SGLANG_USE_CUDA_IPC_TRANSPORT=1`; separate from text-only conclusions | Generator `<\|video_pad\|>` bug merged upstream as `07f326c184 Fix multimodal synthetic benchmark prompt generation to exclude special tokens (#26864)`. Profiler runs use `/data/sglang-pr` on `main` (HEAD `62c505a196` after pull on 2026-06-08). **V1 audit PASS + V2 serving repro PASS** (`debug_video_pad/validation_plan.md`). **Fixed-generator recovery plan** at `v2/image_text_benchmarks/fixed_generator_plan.md` (gated Stages 4.1 smoke → 4.2 IMG-A → 4.3 IMG-B/C). Prior partial IMG-A is invalid for perf conclusions. |
 | 3 | Qwen3.5 VL-model profiling | P1 | Same clean methodology on Qwen3.5; does the PCG finding transfer? | next candidate (parallel/after #2; transfer check) |
 | 5 | Selective/default-on PCG PR plan | P2 | Minimum safe exception in VLM auto-disable + guards + fallback | planned (needs #4) |
 
@@ -64,9 +64,12 @@ Dependency order: **#2 → {#4, #3 parallel} → #5 → report restructure**.
 **Issue #2 is COMPLETE** (clean run, GPU 1, 0 failures; results under
 `experiments/qwen3vl8b/v2/caseAC_rebaseline/results/`).
 
-**Issue #4 is UNBLOCKED.** The benchmark-generator `<|video_pad|>` bug is fixed in the
-local SGLang clone at `/data/sglang-pr` (`fix/mm-benchmark-special-tokens` @ `78e6c03e2`).
-V1 payload audit and V2 tiny serving repro both PASS
+**Issue #4 is UNBLOCKED.** The benchmark-generator `<|video_pad|>` bug is merged
+upstream as commit `07f326c184 Fix multimodal synthetic benchmark prompt generation
+to exclude special tokens (#26864)`. The profiler-side source of truth for #4 recovery
+is `/data/sglang-pr` on `main` (HEAD `62c505a196` after `git pull` on 2026-06-08),
+**not** the historical fork branch `fix/mm-benchmark-special-tokens`. V1 payload audit
+and V2 tiny serving repro both PASS
 (`experiments/qwen3vl8b/v2/image_text_benchmarks/debug_video_pad/validation_plan.md`).
 
 The prior partial IMG-A is **invalid for performance conclusions** (3/5 reps of one

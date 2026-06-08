@@ -47,33 +47,30 @@ Carry-over facts that constrain this plan:
 
 ## 2. Fixed SGLang sync plan (commands as templates — DO NOT EXECUTE YET)
 
-The fix is committed on the local fork branch:
+The fix is **merged upstream**:
 
 ```text
-repo:    /data/sglang-pr
-branch:  fix/mm-benchmark-special-tokens
-commit:  78e6c03e2  fix(benchmark): exclude special tokens from multimodal prompts
-remote:  fork  git@github.com:bowenwan6/sglang.git
-upstream remote: origin  https://github.com/sgl-project/sglang.git
+repo:           /data/sglang-pr
+branch:         main
+merged commit:  07f326c184  Fix multimodal synthetic benchmark prompt generation
+                            to exclude special tokens (#26864)
+current HEAD:   62c505a196  (origin/main after pull on 2026-06-08)
+upstream:       origin  https://github.com/sgl-project/sglang.git
 ```
 
-**Note on upstream merge state:** as of writing, the fix is on the fork branch and
-in the active local clone, but `origin/main` (upstream) does **not** yet contain
-this commit. Treat the local fix branch as the source of truth for the
-fixed-generator path. If/when the PR is merged into `origin/main`, this section's
-templates apply equally — just point at the merged SHA instead.
+The fork branch `fix/mm-benchmark-special-tokens` @ `78e6c03e2` (the PR branch
+before merge) is now **historical**. Source of truth is `/data/sglang-pr` on
+`main` after `git pull --ff-only origin main`. Do not pin to the fork branch.
 
 Pre-execution sync (templates):
 
 ```bash
 cd /data/sglang-pr
-git fetch origin                                # upstream main
-git fetch fork                                  # our fork
-# A) if upstream-merged: rebase onto upstream main
-git checkout main && git pull origin main
-# B) otherwise stay on the fix branch
-git checkout fix/mm-benchmark-special-tokens
-git rev-parse HEAD                              # record SHA in results
+git fetch origin
+git checkout main
+git pull --ff-only origin main
+git rev-parse HEAD                                  # record SHA in results
+git log --oneline origin/main | grep 07f326c        # verify merged fix in history
 ```
 
 Verify the fix is in the working tree (templates):
@@ -103,8 +100,8 @@ PYTHONPATH=/data/sglang-pr/python:$PYTHONPATH \
 Provenance to record in every fixed-generator results file:
 
 - SGLang clone path: `/data/sglang-pr`
-- SGLang branch: `fix/mm-benchmark-special-tokens` (or `main` post-merge)
-- SGLang commit SHA: from `git rev-parse HEAD`
+- SGLang branch: `main` (must contain merged commit `07f326c184`)
+- SGLang commit SHA: from `git rev-parse HEAD` (recorded per run; current `62c505a196`)
 - `sglang.__file__` and `sglang.benchmark.datasets.common.__file__` from the
   runtime `python -c` check above
 - vLLM version: from the vLLM env (`/opt/miniconda3/envs/profiling/bin/python -c
@@ -524,8 +521,11 @@ fixed-generator data exists.
 
 Pre-flight (no GPU):
 
-- [ ] Sync `/data/sglang-pr` (or accept current `HEAD = 78e6c03e2`).
-- [ ] Verify fix present in `python/sglang/benchmark/datasets/common.py`.
+- [ ] Sync `/data/sglang-pr` to upstream `main` (`git checkout main && git pull
+      --ff-only origin main`); confirm `git log --oneline | grep 07f326c` returns the
+      merged fix.
+- [ ] Verify fix present in `python/sglang/benchmark/datasets/common.py`
+      (`get_available_multimodal_text_tokens` + `all_special_ids` exclusion).
 - [ ] Run the `python -c "import sglang, ..."` check; record `sglang.__file__`
       under `/data/sglang-pr/python/...`, **not** `/sgl-workspace/sglang/...`.
 - [ ] Optional: re-run V1 audit via patched `PYTHONPATH`; assert 0

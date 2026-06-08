@@ -6,14 +6,17 @@ PCG finding (#2) transfers to the image path, and separates the **CUDA-IPC trans
 
 - **Issue:** #4 (parent #1) on `bowenwan6/sglang-vllm-profiler`. Builds on #2 (text-only, complete).
 - **Status:** ✅ **UNBLOCKED — fixed-generator recovery plan drafted.** The SGLang
-  benchmark generator `<|video_pad|>` bug is fixed at `/data/sglang-pr`
-  (`fix/mm-benchmark-special-tokens`, commit `78e6c03e2`). V1 payload audit and V2
-  serving repro both PASS (see [`debug_video_pad/validation_plan.md`](debug_video_pad/validation_plan.md)).
+  benchmark generator `<|video_pad|>` bug is **merged upstream** as commit
+  `07f326c184 Fix multimodal synthetic benchmark prompt generation to exclude special
+  tokens (#26864)`. Profiler runs source the fix from `/data/sglang-pr` on `main`
+  (HEAD `62c505a196` after `git pull` on 2026-06-08), selected via
+  `PYTHONPATH=/data/sglang-pr/python`. V1 payload audit and V2 serving repro both PASS
+  (see [`debug_video_pad/validation_plan.md`](debug_video_pad/validation_plan.md)).
   **Recovery plan:** [`fixed_generator_plan.md`](fixed_generator_plan.md) — gated
   Stages 4.1 (fixed-generator smoke) → 4.2 (IMG-A formal) → 4.3 (IMG-B/C decision).
   Original protocol unchanged at [`protocol.md`](protocol.md); see
   [`debug_video_pad/upstream_fix_plan.md`](debug_video_pad/upstream_fix_plan.md)
-  for the local fix branch state.
+  for the local fix-branch history (now superseded by the merged upstream commit).
 - **Prior partial IMG-A is INVALID for performance conclusions** — it ran only 3 of
   5 reps of one of five variants under the buggy generator. Kept in
   [`results/imgA_summary.md`](results/imgA_summary.md) as historical record only.
@@ -44,10 +47,13 @@ c=16 batched); optional **IMG-D** multi-image.
 
 `gen_mm_prompt` previously excluded only `image_pad_id`, leaving `<|video_pad|>`
 (151656) and other multimodal/control tokens in the Qwen3-VL random pool
-(~0.084% per 128-token prompt → P(≥1 failure in 5 reps) ≈ 83%). The upstream fix
-in `/data/sglang-pr` (`fix/mm-benchmark-special-tokens`, `78e6c03e2`) excludes
-`tokenizer.all_special_ids` from the multimodal random pool. V1 audit PASS, V2
-serving repro PASS. Recovery proceeds via [`fixed_generator_plan.md`](fixed_generator_plan.md).
+(~0.084% per 128-token prompt → P(≥1 failure in 5 reps) ≈ 83%). The fix is **merged
+upstream** as commit `07f326c184 Fix multimodal synthetic benchmark prompt generation
+to exclude special tokens (#26864)`. It excludes `tokenizer.all_special_ids` from the
+multimodal random pool. V1 audit PASS, V2 serving repro PASS. Profiler runs source
+the fix from `/data/sglang-pr` on `main` (HEAD `62c505a196` after pull on 2026-06-08),
+selected at runtime via `PYTHONPATH=/data/sglang-pr/python`. Recovery proceeds via
+[`fixed_generator_plan.md`](fixed_generator_plan.md).
 
 ## Layout
 
