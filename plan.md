@@ -55,7 +55,7 @@ Dependency order: **#2 → {#4, #3 parallel} → #5 → report restructure**.
 |---|---|---|---|---|
 | 1 | Tracking: next-round follow-ups | meta | Umbrella; final deliverable separates baseline / ablation / Qwen3.5 / image+text / PR proposal | open (tracking) |
 | **2** | **Default-overlap Qwen3-VL rebaseline** | **P0 (foundational)** | Production-default overlap-ON Case A/C baseline; does PCG still help? | **✅ COMPLETE / PASS** (results under `v2/caseAC_rebaseline/results/`) |
-| **4** | **Qwen3-VL image+text + CUDA IPC** | **P1 — UNBLOCKED / recovery plan drafted** | Image+text behavior + `SGLANG_USE_CUDA_IPC_TRANSPORT=1`; separate from text-only conclusions | Generator `<\|video_pad\|>` bug merged upstream as `07f326c184 Fix multimodal synthetic benchmark prompt generation to exclude special tokens (#26864)`. Profiler runs use `/data/sglang-pr` on `main` (HEAD `62c505a196` after pull on 2026-06-08). **V1 audit PASS + V2 serving repro PASS** (`debug_video_pad/validation_plan.md`). **Fixed-generator recovery plan** at `v2/image_text_benchmarks/fixed_generator_plan.md` (gated Stages 4.1 smoke → 4.2 IMG-A → 4.3 IMG-B/C). Prior partial IMG-A is invalid for perf conclusions. |
+| **4** | **Qwen3-VL image+text + CUDA IPC** | **P1 — PARTIAL / PCG capture-stream blocker** | Image+text behavior + `SGLANG_USE_CUDA_IPC_TRANSPORT=1`; separate from text-only conclusions | Generator `<\|video_pad\|>` bug merged upstream as `07f326c184` (#26864). Profiler uses `/data/sglang-pr` on `main` (HEAD `62c505a196`). Stage 4.1 smoke ✅. Stage 4.2 IMG-A: **S0_ipc 5/5 reps clean** (TTFT p50 64.8 ms, TPOT 5.23 ms, no forbidden-token errors); **S2_ipc_pcg crashes on rep1** with `AssertionError: PCG capture stream is not set` in `srt/compilation/cuda_piecewise_backend.py:171`. Remaining variants (S0_ipc_repeat / V0_vllm / S0_noipc) skipped per protocol §9. **Not a generator bug.** Debug at `v2/image_text_benchmarks/debug_pcg_capture_stream/`. |
 | 3 | Qwen3.5 VL-model profiling | P1 | Same clean methodology on Qwen3.5; does the PCG finding transfer? | next candidate (parallel/after #2; transfer check) |
 | 5 | Selective/default-on PCG PR plan | P2 | Minimum safe exception in VLM auto-disable + guards + fallback | planned (needs #4) |
 
@@ -64,24 +64,36 @@ Dependency order: **#2 → {#4, #3 parallel} → #5 → report restructure**.
 **Issue #2 is COMPLETE** (clean run, GPU 1, 0 failures; results under
 `experiments/qwen3vl8b/v2/caseAC_rebaseline/results/`).
 
-**Issue #4 is UNBLOCKED.** The benchmark-generator `<|video_pad|>` bug is merged
-upstream as commit `07f326c184 Fix multimodal synthetic benchmark prompt generation
-to exclude special tokens (#26864)`. The profiler-side source of truth for #4 recovery
-is `/data/sglang-pr` on `main` (HEAD `62c505a196` after `git pull` on 2026-06-08),
-**not** the historical fork branch `fix/mm-benchmark-special-tokens`. V1 payload audit
-and V2 tiny serving repro both PASS
-(`experiments/qwen3vl8b/v2/image_text_benchmarks/debug_video_pad/validation_plan.md`).
+**Issue #4 is PARTIAL — generator unblocked, PCG path blocked by upstream
+SGLang capture-stream assertion.** The benchmark-generator `<|video_pad|>` bug is
+merged upstream as `07f326c184` (#26864); profiler runs use `/data/sglang-pr` on
+`main` (HEAD `62c505a196`, 2026-06-08). V1 audit + V2 serving repro both PASS;
+Stage 4.1 fixed-generator smoke PASS; Stage 4.2 IMG-A:
 
-The prior partial IMG-A is **invalid for performance conclusions** (3/5 reps of one
-of five variants, with 2 failures in rep 3 under the buggy generator). It is kept as
-historical record only.
+- **`IMG_A_S0_ipc`** ✅ 5/5 reps, 2000 requests, 0 failures, TTFT p50 64.8 ms
+  (87.2/65.1/63.7/63.6/64.8 across reps), TPOT 5.23 ms, throughput 175 tok/s,
+  no forbidden-token errors. **Single clean datapoint — not yet a headline** (no
+  bracket counterpart, no anchor).
+- **`IMG_A_S2_ipc_pcg`** ❌ rep1 server crash with
+  `AssertionError: PCG capture stream is not set, please check if runtime
+  recompilation happened` in `srt/compilation/cuda_piecewise_backend.py:171`,
+  triggered on first prefill of Qwen3-VL with `--enforce-piecewise-cuda-graph`
+  + `SGLANG_USE_CUDA_IPC_TRANSPORT=1`. Not generator-related; fix gate stayed
+  green.
+- **`IMG_A_S0_ipc_repeat` / `IMG_A_V0_vllm` / `IMG_A_S0_noipc`** — skipped per
+  protocol §9 stop condition.
 
-**Next step for #4:** execute the fixed-generator recovery plan at
-`experiments/qwen3vl8b/v2/image_text_benchmarks/fixed_generator_plan.md`. Gated
-stages: 4.1 fixed-generator smoke → 4.2 IMG-A formal → 4.3 IMG-B/C decision (only if
-IMG-A is clean). The fixed code is selected via
-`PYTHONPATH=/data/sglang-pr/python` — `/sgl-workspace/sglang` is not modified.
-Each result records `sglang.__file__` and SGLang commit SHA as provenance.
+The prior pre-fix partial IMG-A is **invalid for performance conclusions** and
+kept as historical record only.
+
+**Next step for #4:** **debug the PCG capture-stream crash before any further
+formal #4 runs.** Debug plan and audit under
+`experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/`.
+Goal: classify whether the crash is config / IPC+PCG interaction / VLM+PCG
+unsupported / broader upstream PCG regression. **Do not proceed to IMG-B / IMG-C**
+until IMG-A yields headline-quality data **or** the PCG path is explicitly
+excluded with a documented rationale. Fixed-generator recovery plan at
+`v2/image_text_benchmarks/fixed_generator_plan.md` is paused at Stage 4.2.
 
 Then: **#3** (Qwen3.5 transfer check, parallel/after) → **#5** (selective/default-on PCG PR, needs #4's
 image evidence).

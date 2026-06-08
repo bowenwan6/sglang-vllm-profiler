@@ -5,21 +5,35 @@ PCG finding (#2) transfers to the image path, and separates the **CUDA-IPC trans
 **PCG** prefill-graph lever.
 
 - **Issue:** #4 (parent #1) on `bowenwan6/sglang-vllm-profiler`. Builds on #2 (text-only, complete).
-- **Status:** ✅ **UNBLOCKED — fixed-generator recovery plan drafted.** The SGLang
-  benchmark generator `<|video_pad|>` bug is **merged upstream** as commit
-  `07f326c184 Fix multimodal synthetic benchmark prompt generation to exclude special
-  tokens (#26864)`. Profiler runs source the fix from `/data/sglang-pr` on `main`
-  (HEAD `62c505a196` after `git pull` on 2026-06-08), selected via
-  `PYTHONPATH=/data/sglang-pr/python`. V1 payload audit and V2 serving repro both PASS
-  (see [`debug_video_pad/validation_plan.md`](debug_video_pad/validation_plan.md)).
-  **Recovery plan:** [`fixed_generator_plan.md`](fixed_generator_plan.md) — gated
-  Stages 4.1 (fixed-generator smoke) → 4.2 (IMG-A formal) → 4.3 (IMG-B/C decision).
+- **Status:** ⚠️ **PARTIAL — generator unblocked, PCG path blocked by upstream
+  capture-stream assertion.** The benchmark generator `<|video_pad|>` bug is **merged
+  upstream** as commit `07f326c184 Fix multimodal synthetic benchmark prompt generation
+  to exclude special tokens (#26864)`. Profiler runs source the fix from
+  `/data/sglang-pr` on `main` (HEAD `62c505a196` after `git pull` on 2026-06-08),
+  selected via `PYTHONPATH=/data/sglang-pr/python`. V1 audit + V2 serving repro both
+  PASS (see [`debug_video_pad/validation_plan.md`](debug_video_pad/validation_plan.md));
+  Stage 4.1 smoke PASS (see [`smoke_fixed/smoke_summary.md`](smoke_fixed/smoke_summary.md));
+  Stage 4.2 IMG-A **PARTIAL**:
+
+  - `IMG_A_S0_ipc` ✅ 5/5 reps, 2000 requests, 0 failures, TTFT p50 64.8 ms.
+  - `IMG_A_S2_ipc_pcg` ❌ rep1 server crash with
+    `AssertionError: PCG capture stream is not set` in
+    `srt/compilation/cuda_piecewise_backend.py:171`.
+  - `IMG_A_S0_ipc_repeat` / `IMG_A_V0_vllm` / `IMG_A_S0_noipc` skipped per protocol §9.
+
+  See [`results_fixed/imgA_summary.md`](results_fixed/imgA_summary.md) for partial
+  numbers. PCG crash debug is the active workstream:
+  [`debug_pcg_capture_stream/README.md`](debug_pcg_capture_stream/README.md).
+  Recovery plan: [`fixed_generator_plan.md`](fixed_generator_plan.md) is paused at
+  Stage 4.2 until the PCG path is classified.
   Original protocol unchanged at [`protocol.md`](protocol.md); see
   [`debug_video_pad/upstream_fix_plan.md`](debug_video_pad/upstream_fix_plan.md)
-  for the local fix-branch history (now superseded by the merged upstream commit).
-- **Prior partial IMG-A is INVALID for performance conclusions** — it ran only 3 of
-  5 reps of one of five variants under the buggy generator. Kept in
+  for the merged-fix history.
+- **Prior pre-fix partial IMG-A is INVALID for performance conclusions** — it ran
+  only 3 of 5 reps of one of five variants under the buggy generator. Kept in
   [`results/imgA_summary.md`](results/imgA_summary.md) as historical record only.
+- **Do NOT proceed to IMG-B / IMG-C** until IMG-A yields headline-quality data or
+  the PCG path is explicitly excluded with a documented rationale.
 - **Model:** `Qwen/Qwen3-VL-8B-Instruct` @ `0c351dd` (same as v1/#2; verify in env snapshot before runs).
 
 Key design points (see protocol for detail):

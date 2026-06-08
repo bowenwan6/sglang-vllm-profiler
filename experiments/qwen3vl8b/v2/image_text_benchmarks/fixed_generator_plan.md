@@ -1,15 +1,23 @@
 # Issue #4 recovery plan — image+text benchmarks on the fixed generator
 
-> **Status: PLAN ONLY — nothing here has been executed.** Do **not** start any
-> server, do **not** run any benchmark, do **not** modify SGLang source, and do
-> **not** alter raw JSON/traces/logs from prior runs (including the invalidated
-> partial IMG-A and the original smoke).
+> **Status (2026-06-08): PAUSED at Stage 4.2.** Stage 4.1 fixed-generator smoke
+> PASSED. Stage 4.2 IMG-A is **PARTIAL**: `IMG_A_S0_ipc` completed cleanly (5/5
+> reps, 0 failures, TTFT p50 64.8 ms); `IMG_A_S2_ipc_pcg` crashed on rep 1 with
+> `AssertionError: PCG capture stream is not set` in
+> `srt/compilation/cuda_piecewise_backend.py:171`. Remaining variants
+> (`IMG_A_S0_ipc_repeat`, `IMG_A_V0_vllm`, `IMG_A_S0_noipc`) were skipped per
+> protocol §9 stop condition. **Active workstream is the PCG capture-stream
+> debug** at [`debug_pcg_capture_stream/`](debug_pcg_capture_stream/) — the
+> generator fix gate stayed green throughout, so this is **not** a generator bug.
+> Do **not** resume formal IMG-A, IMG-B, or IMG-C until the PCG path is classified
+> (config / IPC interaction / VLM unsupported / upstream regression).
 >
 > Companion docs: [`protocol.md`](protocol.md) (original #4 protocol — still the
 > source of truth for workload identity, dataset recipe, and acceptance rules),
 > [`debug_video_pad/upstream_fix_plan.md`](debug_video_pad/upstream_fix_plan.md)
 > (the generator fix in `/data/sglang-pr`), [`debug_video_pad/validation_plan.md`](debug_video_pad/validation_plan.md)
-> (V1+V2 validation evidence — both PASS).
+> (V1+V2 validation evidence — both PASS), [`results_fixed/imgA_summary.md`](results_fixed/imgA_summary.md)
+> (Stage 4.2 partial run with the PCG crash traceback head).
 
 ---
 
