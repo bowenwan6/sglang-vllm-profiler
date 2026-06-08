@@ -129,6 +129,98 @@ CASE_SPECS = {
         "server_wait_s": 360,  # PCG capture loop typically ~25s + startup ~30s
         "expected_classification": "OK",
     },
+    # ----- E2 ladder: image + IPC + PCG, growing sample size -----
+    # Same recipe as Stage 4.2 IMG_A_S2_ipc_pcg except num_prompts. The first
+    # stage that classifies PCG_CAPTURE_STREAM_ASSERT is the minimal repro
+    # size. expected_classification is left as OK so a non-OK outcome flips
+    # the runner's exit code to 1 (signal to stop the ladder).
+    "E2a": {
+        "stage_id": "E2a",
+        "label": "image_IPC_PCG_n32",
+        "description": (
+            "Image+IPC+PCG ladder step 1 (n=32). Probes whether the Stage 4.2 "
+            "PCG capture-stream assertion reproduces at a small sample size."
+        ),
+        "dataset_kind": "image",
+        "ipc_on": True,
+        "pcg_on": True,
+        "num_prompts": 32,
+        "warmup": 30,
+        "output_len": 128,
+        "input_len": 128,
+        "image_resolution": "720p",
+        "image_content": "random",
+        "image_format": "png",
+        "image_count": 1,
+        "range_ratio": 1.0,
+        "server_wait_s": 480,
+        "expected_classification": "OK",
+    },
+    "E2b": {
+        "stage_id": "E2b",
+        "label": "image_IPC_PCG_n64",
+        "description": (
+            "Image+IPC+PCG ladder step 2 (n=64). Run only if E2a is OK."
+        ),
+        "dataset_kind": "image",
+        "ipc_on": True,
+        "pcg_on": True,
+        "num_prompts": 64,
+        "warmup": 30,
+        "output_len": 128,
+        "input_len": 128,
+        "image_resolution": "720p",
+        "image_content": "random",
+        "image_format": "png",
+        "image_count": 1,
+        "range_ratio": 1.0,
+        "server_wait_s": 480,
+        "expected_classification": "OK",
+    },
+    "E2c": {
+        "stage_id": "E2c",
+        "label": "image_IPC_PCG_n100",
+        "description": (
+            "Image+IPC+PCG ladder step 3 (n=100). Run only if E2b is OK."
+        ),
+        "dataset_kind": "image",
+        "ipc_on": True,
+        "pcg_on": True,
+        "num_prompts": 100,
+        "warmup": 30,
+        "output_len": 128,
+        "input_len": 128,
+        "image_resolution": "720p",
+        "image_content": "random",
+        "image_format": "png",
+        "image_count": 1,
+        "range_ratio": 1.0,
+        "server_wait_s": 480,
+        "expected_classification": "OK",
+    },
+    "E2d": {
+        "stage_id": "E2d",
+        "label": "image_IPC_PCG_n400",
+        "description": (
+            "Image+IPC+PCG ladder step 4 (n=400). Exact Stage 4.2 IMG-A "
+            "S2_ipc_pcg config except this is a single attempt (no rep loop). "
+            "Run only if E2c is OK."
+        ),
+        "dataset_kind": "image",
+        "ipc_on": True,
+        "pcg_on": True,
+        "num_prompts": 400,
+        "warmup": 30,
+        "output_len": 128,
+        "input_len": 128,
+        "image_resolution": "720p",
+        "image_content": "random",
+        "image_format": "png",
+        "image_count": 1,
+        "range_ratio": 1.0,
+        "server_wait_s": 480,
+        "expected_classification": "OK",
+    },
 }
 
 
