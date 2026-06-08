@@ -55,7 +55,7 @@ Dependency order: **#2 → {#4, #3 parallel} → #5 → report restructure**.
 |---|---|---|---|---|
 | 1 | Tracking: next-round follow-ups | meta | Umbrella; final deliverable separates baseline / ablation / Qwen3.5 / image+text / PR proposal | open (tracking) |
 | **2** | **Default-overlap Qwen3-VL rebaseline** | **P0 (foundational)** | Production-default overlap-ON Case A/C baseline; does PCG still help? | **✅ COMPLETE / PASS** (results under `v2/caseAC_rebaseline/results/`) |
-| **4** | **Qwen3-VL image+text + CUDA IPC** | **P1 — BLOCKED** | Image+text behavior + `SGLANG_USE_CUDA_IPC_TRANSPORT=1`; separate from text-only conclusions | **blocked: video_pad correctness bug in `gen_mm_prompt`** — smoke passed, IMG-A rep3 failed; **V1 payload audit PASS + V2 serving repro PASS**; upstream fix plan ready at `v2/image_text_benchmarks/debug_video_pad/upstream_fix_plan.md` |
+| **4** | **Qwen3-VL image+text + CUDA IPC** | **P1 — UNBLOCKED / recovery plan drafted** | Image+text behavior + `SGLANG_USE_CUDA_IPC_TRANSPORT=1`; separate from text-only conclusions | Generator `<\|video_pad\|>` bug fixed in `/data/sglang-pr` (`fix/mm-benchmark-special-tokens` @ `78e6c03e2`). **V1 audit PASS + V2 serving repro PASS** (`debug_video_pad/validation_plan.md`). **Fixed-generator recovery plan** at `v2/image_text_benchmarks/fixed_generator_plan.md` (gated Stages 4.1 smoke → 4.2 IMG-A → 4.3 IMG-B/C). Prior partial IMG-A is invalid for perf conclusions. |
 | 3 | Qwen3.5 VL-model profiling | P1 | Same clean methodology on Qwen3.5; does the PCG finding transfer? | next candidate (parallel/after #2; transfer check) |
 | 5 | Selective/default-on PCG PR plan | P2 | Minimum safe exception in VLM auto-disable + guards + fallback | planned (needs #4) |
 
@@ -64,21 +64,21 @@ Dependency order: **#2 → {#4, #3 parallel} → #5 → report restructure**.
 **Issue #2 is COMPLETE** (clean run, GPU 1, 0 failures; results under
 `experiments/qwen3vl8b/v2/caseAC_rebaseline/results/`).
 
-**Issue #4 is BLOCKED on a correctness bug in `sglang.bench_serving`.**
+**Issue #4 is UNBLOCKED.** The benchmark-generator `<|video_pad|>` bug is fixed in the
+local SGLang clone at `/data/sglang-pr` (`fix/mm-benchmark-special-tokens` @ `78e6c03e2`).
+V1 payload audit and V2 tiny serving repro both PASS
+(`experiments/qwen3vl8b/v2/image_text_benchmarks/debug_video_pad/validation_plan.md`).
 
-Phase 4.0 smoke ✅ (all 3 paths clean; vLLM anchor, length pinning, IPC observability resolved, 2026-05-30).
-IMG-A runner implemented and committed. Formal IMG-A halted at S0_ipc rep3 (2/400 failures:
-`"No data iterator found for token: <|video_pad|>"`).
+The prior partial IMG-A is **invalid for performance conclusions** (3/5 reps of one
+of five variants, with 2 failures in rep 3 under the buggy generator). It is kept as
+historical record only.
 
-**Root cause:** `gen_mm_prompt` in `sglang/benchmark/datasets/common.py` does not exclude `video_pad_id`
-(151656) from the random token pool. ~0.084% of 128-token prompts contain `<|video_pad|>`. With 430 requests
-per rep, E[failures/rep] ≈ 0.36; P(≥1 failure in 5 reps) ≈ 83%. Dataset generation is also non-deterministic
-between subprocess runs despite fixed `--seed`.
-
-**Next step for #4:** Prepare the upstream generator fix in a clean SGLang clone under `/data/sglang-pr`
-using `experiments/qwen3vl8b/v2/image_text_benchmarks/debug_video_pad/upstream_fix_plan.md`.
-V1 payload audit and V2 tiny serving repro already pass, so the current decision is to fix
-`gen_mm_prompt` first and postpone V3/formal image benchmarks until the patch path is validated.
+**Next step for #4:** execute the fixed-generator recovery plan at
+`experiments/qwen3vl8b/v2/image_text_benchmarks/fixed_generator_plan.md`. Gated
+stages: 4.1 fixed-generator smoke → 4.2 IMG-A formal → 4.3 IMG-B/C decision (only if
+IMG-A is clean). The fixed code is selected via
+`PYTHONPATH=/data/sglang-pr/python` — `/sgl-workspace/sglang` is not modified.
+Each result records `sglang.__file__` and SGLang commit SHA as provenance.
 
 Then: **#3** (Qwen3.5 transfer check, parallel/after) → **#5** (selective/default-on PCG PR, needs #4's
 image evidence).

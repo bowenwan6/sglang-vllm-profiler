@@ -5,17 +5,18 @@ PCG finding (#2) transfers to the image path, and separates the **CUDA-IPC trans
 **PCG** prefill-graph lever.
 
 - **Issue:** #4 (parent #1) on `bowenwan6/sglang-vllm-profiler`. Builds on #2 (text-only, complete).
-- **Status:** ⚠️ **BLOCKED — `video_pad` correctness blocker. Formal IMG-A/B/C paused.**
-  Smoke passed (2026-05-30). IMG-A S0_ipc rep3 hit HTTP 400
-  `"No data iterator found for token: <|video_pad|>"` at 2/400 requests. Root cause
-  identified and validated: `gen_mm_prompt` in `sglang/benchmark/datasets/common.py` does not exclude
-  `video_pad_id` from the random token pool. V1 payload audit PASS and V2 tiny serving repro PASS are recorded
-  in [`debug_video_pad/validation_plan.md`](debug_video_pad/validation_plan.md). Current decision: prepare
-  the upstream SGLang fix before resuming V3/formal image benchmarks.
-  Debug plan at
-  [`debug_video_pad/debug_plan.md`](debug_video_pad/debug_plan.md);
-  audit at [`debug_video_pad/audit_notes.md`](debug_video_pad/audit_notes.md).
-- **Protocol:** [`protocol.md`](protocol.md) — decision-complete, gated Phases 4.0–4.5.
+- **Status:** ✅ **UNBLOCKED — fixed-generator recovery plan drafted.** The SGLang
+  benchmark generator `<|video_pad|>` bug is fixed at `/data/sglang-pr`
+  (`fix/mm-benchmark-special-tokens`, commit `78e6c03e2`). V1 payload audit and V2
+  serving repro both PASS (see [`debug_video_pad/validation_plan.md`](debug_video_pad/validation_plan.md)).
+  **Recovery plan:** [`fixed_generator_plan.md`](fixed_generator_plan.md) — gated
+  Stages 4.1 (fixed-generator smoke) → 4.2 (IMG-A formal) → 4.3 (IMG-B/C decision).
+  Original protocol unchanged at [`protocol.md`](protocol.md); see
+  [`debug_video_pad/upstream_fix_plan.md`](debug_video_pad/upstream_fix_plan.md)
+  for the local fix branch state.
+- **Prior partial IMG-A is INVALID for performance conclusions** — it ran only 3 of
+  5 reps of one of five variants under the buggy generator. Kept in
+  [`results/imgA_summary.md`](results/imgA_summary.md) as historical record only.
 - **Model:** `Qwen/Qwen3-VL-8B-Instruct` @ `0c351dd` (same as v1/#2; verify in env snapshot before runs).
 
 Key design points (see protocol for detail):
@@ -39,22 +40,28 @@ c=16 batched); optional **IMG-D** multi-image.
 2. **Length pinning** — ✅ `--random-range-ratio 1.0` pins text length.
 3. **IPC observability** — ✅ env var accepted; both IPC-on and off paths smoke-clean.
 
-## Active blocker — video_pad correctness (Phase 4.1+)
+## Resolved: video_pad correctness blocker
 
-`gen_mm_prompt` does not exclude `video_pad_id` (151656) from the Qwen3-VL
-random token pool. ~0.084% of 128-token prompts contain `<|video_pad|>`.
-Expected failures per 430-request batch ≈ 0.36; P(≥1 failure in 5 reps) ≈ 83%.
+`gen_mm_prompt` previously excluded only `image_pad_id`, leaving `<|video_pad|>`
+(151656) and other multimodal/control tokens in the Qwen3-VL random pool
+(~0.084% per 128-token prompt → P(≥1 failure in 5 reps) ≈ 83%). The upstream fix
+in `/data/sglang-pr` (`fix/mm-benchmark-special-tokens`, `78e6c03e2`) excludes
+`tokenizer.all_special_ids` from the multimodal random pool. V1 audit PASS, V2
+serving repro PASS. Recovery proceeds via [`fixed_generator_plan.md`](fixed_generator_plan.md).
 
-**Resolution path:** `debug_video_pad/upstream_fix_plan.md` — V1 payload audit PASS and V2 serving repro
-PASS are complete, so the next step is to patch `gen_mm_prompt` in a clean SGLang clone. V3/formal
-IMG-A/B/C remain paused until the upstream fix or local patched clone is validated.
+## Layout
 
-## Layout (created as phases proceed)
-
-- `protocol.md` — this experiment's plan (exists).
-- `run_image_text_smoke.py`, `run_image_text_imgA.py` — original runners (IMG-A invalidated by blocker).
-- `bench_serving_sanitized.py`, `run_image_text_smoke_sanitized.py`, `run_image_text_imgA_sanitized.py` —
-  sanitized prompt path for validation/resume after approval.
-- `results/` — future per-variant `results.json`, `summary.md`, and `raw/` per-rep dumps (raw not committed
-  unless approved).
-- server logs → `logs/qwen3vl8b/v2/image_text_benchmarks/` (not committed unless approved).
+- `protocol.md` — original #4 protocol (unchanged source of truth).
+- `fixed_generator_plan.md` — **active** recovery plan for the fixed generator.
+- `run_image_text_smoke.py`, `run_image_text_imgA.py` — original runners; partial
+  IMG-A from these is invalidated.
+- `bench_serving_sanitized.py`, `run_image_text_smoke_sanitized.py`,
+  `run_image_text_imgA_sanitized.py` — sanitized monkeypatch fallback (only if
+  the fixed clone is unavailable).
+- `smoke_fixed/` — Stage 4.1 fixed-generator smoke outputs (future).
+- `results_fixed/` — Stage 4.2+ fixed-generator IMG-A/B/C outputs (future);
+  raw per-rep dumps under `results_fixed/raw/` not committed unless approved.
+- `results/` — historical (invalidated partial IMG-A); not overwritten.
+- `smoke/` — original 2026-05-30 smoke; not overwritten.
+- server logs → `logs/qwen3vl8b/v2/image_text_benchmarks/{smoke_fixed,results_fixed}/`
+  (not committed unless approved).
