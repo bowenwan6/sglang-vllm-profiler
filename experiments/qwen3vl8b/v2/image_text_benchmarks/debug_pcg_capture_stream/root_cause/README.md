@@ -6,10 +6,24 @@
 > that lands a piecewise submodule without a capture stream, and what is
 > the minimal fix?
 
-Branch: `debug/v2-imgA-pcg-capture-stream-fix` (off `main` after PR #6
-merged the prior debug). All sglang source patches are committed here as
-`patches/*.patch` and applied / reverted around runs — no fork of sglang,
-no edits left in `/sgl-workspace/sglang` between commits.
+Branches:
+
+- **Profiler repo:** `debug/v2-imgA-pcg-capture-stream-fix` (off `main`
+  after PR #6 merged the prior debug). Carries runners, results, and
+  the `patches/*.patch` copies of each sglang change for
+  reproducibility.
+- **SGLang source:** the user's fork at
+  `git@github.com:bowenwan6/sglang.git`, cloned to `/data/sglang-fork`,
+  branch `fix/pcg-vlm-deepstack-warmup` started from upstream commit
+  `da802ddca` (the same HEAD `/sgl-workspace/sglang` runs at, so
+  patched python files stay binary-compatible with the installed
+  `sgl_kernel` extension). All actual code edits live here.
+
+Runs source the fork via `PYTHONPATH=/data/sglang-fork/python` so the
+container's installed sglang at `/sgl-workspace/sglang` stays
+untouched. Verified: with the prefix prepended,
+`import sglang` resolves to
+`/data/sglang-fork/python/sglang/__init__.py`.
 
 ## 1. Where we start
 
@@ -65,7 +79,7 @@ not committed).
 |---|---|---|
 | R0 | Plan + record findings to date | This README + `plan.md` §5a updated, committed. |
 | R1 | Capture exact Dynamo recompile reason via `TORCH_LOGS=recompiles_verbose,dynamic,guards` (env-vars only, no source patch) | Raw recompile-reason excerpt + analysis under `results/R1_dynamo_recompile_log/`. |
-| R2 | Source-level instrumentation in `cuda_piecewise_backend.py.__call__` to log per-call shapes/dtypes/capture-stream-state | Patch saved at `patches/R2_piecewise_call_logging.patch`, trace at `results/R2_pcg_call_trace/`, source reverted. |
+| R2 | Source-level instrumentation in `cuda_piecewise_backend.py.__call__` to log per-call shapes/dtypes/capture-stream-state | Edits committed to `/data/sglang-fork` branch `fix/pcg-vlm-deepstack-warmup`; runs use `PYTHONPATH=/data/sglang-fork/python` so `/sgl-workspace/sglang` stays clean. Trace under `results/R2_pcg_call_trace/`. A regenerated `patches/R2_piecewise_call_logging.patch` is committed in the profiler repo for reproducibility. |
 | R3 | 2–3 ranked hypotheses + minimal differential experiments (one axis flipped per experiment) | Per-experiment result under `results/R3_<id>/`. |
 | R4 | Fix proposal X / Y / Z + validation via E2a PASS, stretch IMG-A `S2_ipc_pcg` | Fix patch under `patches/R4_fix_<choice>.patch`, validation results under `results/R4_fix_<choice>/`. |
 | R5 | Upstream issue / PR draft only — filing is user-triggered | Draft under `upstream_handoff.md`. |
