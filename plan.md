@@ -119,6 +119,47 @@ remains the source of truth for the IMG-A resume.
 Then: **#3** (Qwen3.5 transfer check, parallel/after) → **#5** (selective/default-on PCG PR, needs #4's
 image evidence).
 
+## 5a. Sub-track — PCG capture-stream root-cause (active, branch `debug/v2-imgA-pcg-capture-stream-fix`)
+
+Server was rebuilt on 2026-06-28; environment re-set up from scratch (system sglang
+at `/sgl-workspace/sglang`, profiling conda env at `/opt/miniconda3/envs/profiling`,
+Qwen3-VL-8B-Instruct snapshot `0c351dd` re-downloaded). On the rebuilt env the bug
+**reproduces deterministically** on system sglang HEAD `da802dd` (newer than the
+prior debug's HEAD `62c505a196`), GPU 0:
+
+- Repro recipe unchanged from prior E2a: image 720p, 1 image, c=1, n=32, warmup=30,
+  output_len=128, IPC on, PCG on, ≈80 s wall-clock from launch to assertion.
+- Crash now observable as fired at the **warmup→bench-phase boundary**: ~30 warmup
+  POSTs complete successfully with `cuda graph: True`, then the very next forward
+  hits the assertion at `cuda_piecewise_backend.py:171` in
+  `qwen3_vl.forward` → fx `submod_0` (layer-0 piecewise submodule). The failing
+  call is the first prefix-cache-hit prefill (`#new-seq: 1, #new-token: 1,
+  #cached-token: 1020`).
+- **New upstream surface observation:** the VLM PCG auto-disable is now gated by
+  a per-model knob `ModelConfig.is_multimodal_piecewise_cuda_graph_supported`
+  (`server_args.py:3145-3146`). Same selective-enablement shape Issue #5 plans,
+  so the fix surface has shifted under us.
+
+Sub-track plan (R0 → R5) lives at
+[`v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/README.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/README.md).
+
+- **R0** — record plan + findings to date (this update).
+- **R1** — Dynamo guard instrumentation via `TORCH_LOGS=recompiles_verbose,dynamic,guards`
+  to capture the exact recompile reason.
+- **R2** — source-level instrumentation in `cuda_piecewise_backend.py` (patch file
+  under `root_cause/patches/`, applied + reverted around the run).
+- **R3** — ranked hypotheses + minimal differential experiments (one axis at a time).
+- **R4** — fix proposal (X defensive fallback / Y broaden warmup capture / Z per-model
+  opt-in) + validation via E2a PASS + stretch IMG-A S2_ipc_pcg run.
+- **R5** — upstream issue/PR draft (filing is user-triggered, not automatic).
+
+Sub-track does **not** touch v1 Phase 0–5 artifacts, does **not** restart
+#4 IMG-A non-PCG resume in parallel (that remains queued), and does **not**
+modify `--enforce-piecewise-cuda-graph` defaults or the
+`is_multimodal_piecewise_cuda_graph_supported` table without explicit approval
+(that is Issue #5's scope). All sglang source modifications are kept as
+revertable `.patch` files under `root_cause/patches/`.
+
 ## 6. Artifact Rules
 
 - v2 results go **only** under `experiments/qwen3vl8b/v2/...` and `logs/qwen3vl8b/v2/...`. Never overwrite
