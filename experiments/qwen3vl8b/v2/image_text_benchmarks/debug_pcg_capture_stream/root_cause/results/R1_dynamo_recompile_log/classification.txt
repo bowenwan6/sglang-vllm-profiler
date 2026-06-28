@@ -1,0 +1,11 @@
+stage: R1
+snapshot: snapshots/0c351dd01ed87e9c1b53cbc748cba10e6187ff3b
+gpu: 0
+classification: PCG_CAPTURE_STREAM_ASSERT
+gpu_used_mib_after_teardown: 0
+server_log: /data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R1_dynamo_recompile_log/raw/server.log (NOT committed)
+bench_log:  /data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R1_dynamo_recompile_log/raw/bench.log (NOT committed)
+bench_jsonl: /data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R1_dynamo_recompile_log/raw/bench.jsonl (NOT committed)
+recompile_excerpt: /data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R1_dynamo_recompile_log/recompile_excerpt.log (committed)
+torch_logs: recompiles_verbose,dynamic,guards,graph_breaks
+torchdynamo_verbose: 1
