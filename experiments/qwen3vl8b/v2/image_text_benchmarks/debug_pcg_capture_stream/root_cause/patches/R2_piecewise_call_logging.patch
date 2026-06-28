@@ -1,0 +1,167 @@
+From 2167b5f4d6124c8f1df11039826f3a050cc9f1cf Mon Sep 17 00:00:00 2001
+From: Bowen Wang <wangbowen1001@yahoo.com>
+Date: Sun, 28 Jun 2026 21:56:59 +0000
+Subject: [PATCH] debug(pcg): add SGLANG_DEBUG_PCG_CALL_TRACE per-call
+ diagnostic
+
+Adds env-var-gated debug logging to CUDAPiecewiseBackend.__call__ so
+the runtime path that lands at the 'PCG capture stream is not set'
+assertion can be characterised without changing production behavior.
+
+Gate: SGLANG_DEBUG_PCG_CALL_TRACE=1 (off by default).
+
+When enabled, every call logs:
+  - instance id and piecewise_compile_index/total
+  - first_run_finished, is_in_torch_compile_warmup
+  - runtime_shape and whether it is tracked in concrete_size_entries
+  - entry.cudagraph state, entry.num_finished_warmup, entry.compiled
+  - just before consulting get_pcg_capture_stream(): the captured
+    stream identity ('set' / 'None')
+  - immediately before the AssertionError fires: full state dump
+    for the offending entry (id, layer_idx, runtime_shape, compiled,
+    num_finished_warmup)
+
+Production behavior unchanged: the gate is read once at module
+import; with the env var unset every probe is short-circuited by the
+truth check on _DEBUG_PCG_CALL_TRACE.
+
+Intended use: pair with TORCH_LOGS=recompiles_verbose to correlate
+Dynamo recompile frames against the specific
+CUDAPiecewiseBackend instance whose capture stream is absent. This
+is the R2 instrumentation for the
+debug/v2-imgA-pcg-capture-stream-fix profiler sub-track.
+---
+ .../srt/compilation/cuda_piecewise_backend.py | 65 +++++++++++++++++++
+ 1 file changed, 65 insertions(+)
+
+diff --git a/python/sglang/srt/compilation/cuda_piecewise_backend.py b/python/sglang/srt/compilation/cuda_piecewise_backend.py
+index a750eb967..ca4981324 100644
+--- a/python/sglang/srt/compilation/cuda_piecewise_backend.py
++++ b/python/sglang/srt/compilation/cuda_piecewise_backend.py
+@@ -4,6 +4,7 @@
+ 
+ import dataclasses
+ import logging
++import os
+ from contextlib import ExitStack
+ from typing import Any, Callable, Optional
+ from unittest.mock import patch
+@@ -24,6 +25,21 @@ from sglang.srt.utils.common import print_warning_once
+ logger = logging.getLogger(__name__)
+ _is_hip = is_hip()
+ 
++# Diagnostic gate for the PCG capture-stream root-cause investigation.
++# When SGLANG_DEBUG_PCG_CALL_TRACE=1, every CUDAPiecewiseBackend.__call__
++# entry logs its instance id, layer index, warmup state, runtime shape,
++# entry.cudagraph state, and (when about to consult get_pcg_capture_stream)
++# the capture-stream identity. Off by default; production behavior unchanged.
++_DEBUG_PCG_CALL_TRACE = os.environ.get("SGLANG_DEBUG_PCG_CALL_TRACE") == "1"
++
++
++def _pcg_dbg(msg: str) -> None:
++    # Single sink so the trace lands in the server log alongside Dynamo
++    # recompile lines. Uses print so it survives whatever logger config
++    # the launcher set.
++    if _DEBUG_PCG_CALL_TRACE:
++        print("[PCG_DEBUG] " + msg, flush=True)
++
+ 
+ @dataclasses.dataclass
+ class ConcreteSizeEntry:
+@@ -110,6 +126,14 @@ class CUDAPiecewiseBackend:
+             self.sglang_backend.compiler_manager.save_to_file()
+ 
+     def __call__(self, *args) -> Any:
++        if _DEBUG_PCG_CALL_TRACE:
++            _pcg_dbg(
++                f"call enter id={id(self):#x} layer_idx={self.piecewise_compile_index}"
++                f"/{self.total_piecewise_compiles} first_run_finished={self.first_run_finished} "
++                f"in_warmup={is_in_torch_compile_warmup()} "
++                f"sym_shape_indices={self.sym_shape_indices}"
++            )
++
+         if not self.first_run_finished:
+             self.first_run_finished = True
+             self.check_for_ending_compilation()
+@@ -120,10 +144,24 @@ class CUDAPiecewiseBackend:
+ 
+         runtime_shape = args[self.sym_shape_indices[0]]
+         if runtime_shape not in self.concrete_size_entries:
++            if _DEBUG_PCG_CALL_TRACE:
++                _pcg_dbg(
++                    f"call id={id(self):#x} layer_idx={self.piecewise_compile_index} "
++                    f"runtime_shape={runtime_shape} NOT in concrete_size_entries "
++                    f"(general-shape fallback)"
++                )
+             # we don't need to do anything for this shape
+             return self.compiled_graph_for_general_shape(*args)
+ 
+         entry = self.concrete_size_entries[runtime_shape]
++        if _DEBUG_PCG_CALL_TRACE:
++            _pcg_dbg(
++                f"call id={id(self):#x} layer_idx={self.piecewise_compile_index} "
++                f"runtime_shape={runtime_shape} "
++                f"entry.cudagraph={'set' if entry.cudagraph is not None else 'None'} "
++                f"entry.num_finished_warmup={entry.num_finished_warmup} "
++                f"entry.compiled={entry.compiled}"
++            )
+ 
+         if entry.runnable is None:
+             entry.runnable = self.compiled_graph_for_general_shape
+@@ -151,6 +189,13 @@ class CUDAPiecewiseBackend:
+         if entry.cudagraph is None:
+             if entry.num_finished_warmup < 1:  # noqa
+                 entry.num_finished_warmup += 1
++                if _DEBUG_PCG_CALL_TRACE:
++                    _pcg_dbg(
++                        f"call id={id(self):#x} layer_idx={self.piecewise_compile_index} "
++                        f"runtime_shape={runtime_shape} "
++                        f"first warmup pass (num_finished_warmup -> "
++                        f"{entry.num_finished_warmup}) — returning without capture"
++                    )
+                 return entry.runnable(*args)
+ 
+             # During normal capture (PiecewiseCudaGraphRunner.capture()),
+@@ -160,6 +205,13 @@ class CUDAPiecewiseBackend:
+             # has no capture stream; fall back there instead of crashing while
+             # preserving the original assertion on other platforms.
+             stream = get_pcg_capture_stream()
++            if _DEBUG_PCG_CALL_TRACE:
++                _pcg_dbg(
++                    f"call id={id(self):#x} layer_idx={self.piecewise_compile_index} "
++                    f"runtime_shape={runtime_shape} "
++                    f"about to capture; stream={'set' if stream is not None else 'None'} "
++                    f"_is_hip={_is_hip}"
++                )
+             if _is_hip and stream is None:
+                 print_warning_once(
+                     "PCG capture stream is not set; likely a Dynamo runtime "
+@@ -167,6 +219,14 @@ class CUDAPiecewiseBackend:
+                     "subgraph."
+                 )
+                 return entry.runnable(*args)
++            if stream is None and _DEBUG_PCG_CALL_TRACE:
++                _pcg_dbg(
++                    f"ASSERTION ABOUT TO FIRE id={id(self):#x} "
++                    f"layer_idx={self.piecewise_compile_index} "
++                    f"runtime_shape={runtime_shape} "
++                    f"entry.compiled={entry.compiled} "
++                    f"entry.num_finished_warmup={entry.num_finished_warmup}"
++                )
+             assert (
+                 stream is not None
+             ), "PCG capture stream is not set, please check if runtime recompilation happened"
+@@ -221,5 +281,10 @@ class CUDAPiecewiseBackend:
+                 "Input addresses for cudagraphs are different during replay."
+                 f" Expected {entry.input_addresses}, got {new_input_addresses}"
+             )
++        if _DEBUG_PCG_CALL_TRACE:
++            _pcg_dbg(
++                f"call id={id(self):#x} layer_idx={self.piecewise_compile_index} "
++                f"runtime_shape={runtime_shape} replay captured cudagraph"
++            )
+         entry.cudagraph.replay()
+         return entry.output
+-- 
+2.43.0
+
