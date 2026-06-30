@@ -1,0 +1,12 @@
+stage: R4.A
+purpose: production-shape sanity, no diagnostic gate
+snapshot: 0c351dd01ed87e9c1b53cbc748cba10e6187ff3b
+gpu: 0
+classification: OK_FALLBACK_TAKEN
+gpu_used_mib_after_teardown: 4
+fork_head: 8a2dcb33a107424b34ddf3033bee66ba20ab9975
+pcg_assert_count:           0
+0
+fallback_warning_count:     1
+pcg_debug_trace_count:      0
+0  # expect 0 with gate unset
