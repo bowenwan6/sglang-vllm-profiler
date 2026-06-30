@@ -1,0 +1,13 @@
+stage: R4.C
+purpose: validate (Y) prototype eliminates the multimodal recompile + fallback
+snapshot: 0c351dd01ed87e9c1b53cbc748cba10e6187ff3b
+gpu: 0
+classification: SERVER_ASSERTION_OTHER
+gpu_used_mib_after_teardown: 0
+fork_head: 31cc8752f0cf5c00a86a63cb19a86a3fc14b48c1  (X + Y prototype)
+pcg_assert_count:                          0
+0
+fallback_warning_count:                    0
+0
+compiling_num_tokens_text_lines:           3
+compiling_MM_num_tokens_lines:             1
