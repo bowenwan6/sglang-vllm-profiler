@@ -122,43 +122,120 @@ image evidence).
 ## 5a. Sub-track — PCG capture-stream root-cause (active, branch `debug/v2-imgA-pcg-capture-stream-fix`)
 
 Server was rebuilt on 2026-06-28; environment re-set up from scratch (system sglang
-at `/sgl-workspace/sglang`, profiling conda env at `/opt/miniconda3/envs/profiling`,
-Qwen3-VL-8B-Instruct snapshot `0c351dd` re-downloaded). On the rebuilt env the bug
-**reproduces deterministically** on system sglang HEAD `da802dd` (newer than the
-prior debug's HEAD `62c505a196`), GPU 0:
+at `/sgl-workspace/sglang` HEAD `da802dd`, profiling conda env at
+`/opt/miniconda3/envs/profiling`, Qwen3-VL-8B-Instruct snapshot `0c351dd`
+re-downloaded). Source-of-truth for sglang edits: user fork
+`git@github.com:bowenwan6/sglang.git` cloned to `/data/sglang-fork` on branch
+`fix/pcg-vlm-deepstack-warmup`, started from upstream `da802ddca` so patched
+python files stay binary-compatible with the installed `sgl_kernel`. Runs source
+the fork via `PYTHONPATH=/data/sglang-fork/python`.
 
-- Repro recipe unchanged from prior E2a: image 720p, 1 image, c=1, n=32, warmup=30,
-  output_len=128, IPC on, PCG on, ≈80 s wall-clock from launch to assertion.
-- Crash now observable as fired at the **warmup→bench-phase boundary**: ~30 warmup
-  POSTs complete successfully with `cuda graph: True`, then the very next forward
-  hits the assertion at `cuda_piecewise_backend.py:171` in
-  `qwen3_vl.forward` → fx `submod_0` (layer-0 piecewise submodule). The failing
-  call is the first prefix-cache-hit prefill (`#new-seq: 1, #new-token: 1,
-  #cached-token: 1020`).
-- **New upstream surface observation:** the VLM PCG auto-disable is now gated by
-  a per-model knob `ModelConfig.is_multimodal_piecewise_cuda_graph_supported`
-  (`server_args.py:3145-3146`). Same selective-enablement shape Issue #5 plans,
-  so the fix surface has shifted under us.
-
-Sub-track plan (R0 → R5) lives at
+Sub-track artifacts and full per-phase writeups under
 [`v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/README.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/README.md).
+All sglang source modifications are kept as revertable `.patch` files under
+`root_cause/patches/`. Raw per-run server / bench logs stay under
+`results/<R-id>/raw/` and are **not committed** unless explicitly approved.
 
-- **R0** — record plan + findings to date (this update).
-- **R1** — Dynamo guard instrumentation via `TORCH_LOGS=recompiles_verbose,dynamic,guards`
-  to capture the exact recompile reason.
-- **R2** — source-level instrumentation in `cuda_piecewise_backend.py` (patch file
-  under `root_cause/patches/`, applied + reverted around the run).
-- **R3** — ranked hypotheses + minimal differential experiments (one axis at a time).
-- **R4** — fix proposal (X defensive fallback / Y broaden warmup capture / Z per-model
-  opt-in) + validation via E2a PASS + stretch IMG-A S2_ipc_pcg run.
-- **R5** — upstream issue/PR draft (filing is user-triggered, not automatic).
+### What we did (R1 → R4)
 
-Sub-track does **not** touch v1 Phase 0–5 artifacts, does **not** restart
-#4 IMG-A non-PCG resume in parallel (that remains queued), and does **not**
-modify `--enforce-piecewise-cuda-graph` defaults or the
-`is_multimodal_piecewise_cuda_graph_supported` table without explicit approval
-(that is Issue #5's scope). All sglang source modifications are kept as
-revertable `.patch` files under `root_cause/patches/`.
+| Phase | What was run | Outcome |
+|---|---|---|
+| **R1** | Env-var-only Dynamo verbose tracing (`TORCH_LOGS=recompiles_verbose,dynamic,guards,graph_breaks`, `TORCHDYNAMO_VERBOSE=1`) on the E2a recipe (image 720p, c=1, n=32, warmup=30, PCG on, IPC on, GPU 0). | **Recompile trigger identified.** Four recompiles of `Qwen3LLMModel.forward` before the assertion. The decisive one (`[0/3]`) fail-reason: `input_deepstack_embeds is None` guard failure at `qwen3_vl.py:1129`. Failing token counts (80, 1024) are inside the captured 1..8192 range → **not** a shape recompile, it's a multimodal control-flow recompile. |
+| **R2** | Source-level patch to `cuda_piecewise_backend.__call__` (`SGLANG_DEBUG_PCG_CALL_TRACE=1`) emitting per-call instance id / layer idx / warmup state / runtime_shape / capture-stream state. Patch saved as `R2_piecewise_call_logging.patch`. | **Mechanism confirmed.** The asserting `CUDAPiecewiseBackend` instance (`id=0x702f42eba060`, `sym_shape_indices=[1,4,9,10]`) is a **distinct Python object** from the warmup-frame layer-0 instance (which had `sym_shape_indices=[1,8]`). The recompiled instance never gets a capture stream because `set_pcg_capture_stream()` is only set inside `PiecewiseCudaGraphRunner.capture_session()`, which never re-runs at inference time. |
+| **R3.A** | Source read of the warmup driver, dummy-batch builder, multimodal embed routine, and Qwen3-VL `forward`. | **Architecture mapped.** `_run_compile_pass` → `_run_dummy_forward(num_tokens)` → `capture_prepare` which **never sets `mm_inputs`** → `general_mm_embed_routine` gates `input_deepstack_embeds` on `contains_mm_inputs()` → therefore Dynamo only ever sees `input_deepstack_embeds = None` during warmup. |
+| **R3.B** | Patch (X) on fork: extend the existing HIP eager fallback in `cuda_piecewise_backend.py:163` to CUDA (drop the `_is_hip and` guard so missing-stream falls back to `entry.runnable` instead of asserting). ~9-line change. Re-fired E2a. | **(X) PASS for safety.** 32 / 32 requests, no `AssertionError`, single `print_warning_once` fallback warning. TTFT median **103.05 ms**. |
+| **R4.A** | Re-ran E2a with `SGLANG_DEBUG_PCG_CALL_TRACE` unset (production shape). | **(X) PASS without diagnostic gate.** TTFT median 106.25 ms; consistent with R3.B. |
+| **R4.B** | Stretched (X) to the original Stage 4.2 IMG_A_S2_ipc_pcg recipe (n=400, warmup=30, single rep). | **(X) PASS at scale.** 400 / 400 requests, TTFT median **104.62 ms**, no regression. |
+| **R4.C** | Naive (Y) prototype on fork: added `Qwen3VLForConditionalGeneration.pcg_warmup_multimodal_branch()` synthesizing `torch.zeros([num_tokens, hidden_size × num_deepstack_embeddings])` and calling `self.model(...)` directly; called from `_run_compile_pass` as a second per-shape loop. | **(Y) FAILURE (documented, instructive).** Server crashes on the first MM warmup call inside the torch.compile-traced model forward: `forward_context.py:59 assert _current is not None` fires because we bypassed `set_attention_metadata_context()`. Dynamo refuses to graph-break (`fullgraph=True`) → compile aborts. |
+
+### Findings carried forward
+
+1. **The bug is the multimodal control-flow recompile.** Dynamo specialises `Qwen3LLMModel.forward` on `input_deepstack_embeds is None`; PCG warmup only ever feeds the `None` branch, so the first real image request forces a recompile of a brand-new fx graph whose piecewise submodules have no capture stream attached.
+2. **The defensive assertion at `cuda_piecewise_backend.py:171` is structurally unreachable from a recompiled instance.** `set_pcg_capture_stream()` is set only inside `capture_session()`; that session ends with server startup and the stream is `None` forever after.
+3. **Cross-comparison vs the existing non-PCG image baseline** (Stage 4.2 IMG_A_S0_ipc, 5×400 reps): TTFT p50 ≈ **64.8 ms** without PCG. With (X) PCG-on + eager fallback, TTFT p50 is **~104 ms** at n=32 / n=400 — i.e. PCG-on with the band-aid is **slower** than PCG-off, because the recompiled multimodal frame loses cudagraph replay benefit on every layer.
+
+### Why (X) is rejected for upstream
+
+The (X) eager-fallback patch defeats the point of `--enforce-piecewise-cuda-graph`
+on the multimodal path: it turns a hard crash into a silent ~38 ms TTFT
+regression vs the no-PCG baseline. Merging (X) upstream would mean shipping a
+known performance-negative path while still claiming PCG support for VLMs.
+
+(X) stays **in our local fork history** as a documented safety net and is the
+patch we'd recommend operators apply manually if they need to keep
+`--enforce-piecewise-cuda-graph` running before the real fix lands. **It does
+not get an upstream PR.**
+
+### Architectural lesson from R4.C
+
+The naive (Y) prototype bypassed `set_attention_metadata_context()`, which the
+attention backend asserts is in scope (`forward_context.py:59`). Any working
+(Y) **must reuse the same forward-context-wrapping path that the regular
+`_run_dummy_forward` uses** — we cannot call `self.model(...)` directly from a
+new entry point.
+
+The cleanest viable shape, given R3.A's source read of `general_mm_embed_routine`:
+
+- A **thread-local "force-multimodal-warmup" flag** read inside
+  `general_mm_embed_routine`. When set **and** `use_deepstack` is truthy for
+  the active modality, the routine synthesizes
+  `kwargs["input_deepstack_embeds"] = torch.zeros([num_tokens, hidden_size ×
+  num_deepstack_embeddings], dtype, device)` instead of (or alongside) the
+  real mm path, then routes through `language_model.forward(...)` as usual.
+- The warmup driver in `_run_compile_pass` enters this flag's `with` block,
+  then calls the existing `cuda_graph_runner._run_dummy_forward(num_tokens)`
+  — picking up `set_attention_metadata_context()` for free — once per
+  `capture_num_tokens` shape, alongside the existing text-only sweep.
+- Result: Dynamo traces both the `input_deepstack_embeds is None` branch
+  (text-only sweep) **and** the non-None branch (MM sweep) during warmup;
+  both branches' `CUDAPiecewiseBackend` instances get capture streams during
+  the subsequent `capture_session`; the first real image request hits an
+  already-captured graph and no recompile fires.
+
+### New R5 mandate
+
+R5 stops being "draft upstream handoff" and becomes **implement clean (Y) and
+verify** so we can submit a performance-positive PR. Specifically:
+
+1. **Design + implement a clean (Y)** on `/data/sglang-fork` branch
+   `fix/pcg-vlm-deepstack-warmup` (a new commit on top of the existing X +
+   broken-Y history). Use the thread-local flag in `general_mm_embed_routine`
+   approach above, or document why a different shape works better and adopt
+   it.
+2. **Local verification** on the same E2a recipe (image 720p, c=1, n=32,
+   warmup=30, PCG on, IPC on, GPU 0):
+   - Server starts; the MM warmup loop ("Compiling MM num tokens") runs to
+     completion without crashing.
+   - No `AssertionError`, no `Falling back to eager execution` warning, no
+     Dynamo recompile of `qwen3_vl.forward` observed at inference time
+     (re-enable `TORCH_LOGS=recompiles_verbose` for one confirmation run).
+   - All bench requests succeed.
+3. **Stretch verification** at the Stage 4.2 IMG_A_S2_ipc_pcg shape (n=400,
+   warmup=30, single rep) to confirm no regression at scale and to capture
+   headline-quality TTFT numbers.
+4. **Performance acceptance gate.** Clean (Y) must hit TTFT clearly **below**
+   the IMG_A_S0_ipc PCG-off baseline (p50 ≈ 64.8 ms) on Case-A-like image+text
+   workloads — otherwise the multimodal frame's cudagraphs aren't actually
+   being captured / replayed and we have to keep iterating. Order of magnitude
+   target: TTFT p50 within shouting distance of, or better than, the text-only
+   Case A `--enforce-piecewise-cuda-graph` result (14.04 ms from v2 #2),
+   bearing in mind image+text adds vision-tower work that is not PCG-covered
+   so a strict equality is not expected.
+5. **Then and only then** prepare the upstream PR description. R5 still does
+   not auto-file — filing remains a user-triggered step — but the PR is
+   gated on (Y) PASS, not on (X).
+
+Out of scope here:
+
+- v1 Phase 0–5 artifacts (never touched).
+- IMG-A non-PCG resume (`S0_ipc_repeat → V0_vllm → S0_noipc`) — remains queued
+  under `fixed_generator_plan.md`; orthogonal to this sub-track.
+- Changes to `--enforce-piecewise-cuda-graph` defaults or the
+  `is_multimodal_piecewise_cuda_graph_supported` table — that is Issue #5's
+  scope. The clean (Y) lands inside the existing override semantics; it does
+  not flip defaults.
+- Submitting (X) upstream — explicitly rejected; kept as local fork history
+  only.
 
 ## 6. Artifact Rules
 
