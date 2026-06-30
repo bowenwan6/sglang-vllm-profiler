@@ -1,0 +1,135 @@
+From a4ff0b181aa7b2d046ca2d920caa235d31517021 Mon Sep 17 00:00:00 2001
+From: Bowen Wang <wangbowen1001@yahoo.com>
+Date: Tue, 30 Jun 2026 15:18:52 +0000
+Subject: [PATCH] feat(pcg): clean Y capture-pass hook for VLM deepstack branch
+
+R5 first-attempt finding: 1f19ecd1a hooked only the compile pass
+(_run_compile_pass / 'Compiling num tokens') with
+force_warmup_deepstack_embeds() but not the capture pass
+(_capture_one_stream / 'Capturing num tokens'). Result: Dynamo
+correctly compiled the input_deepstack_embeds != None branch at
+warmup (recompile counts [0/3] and [0/4] both fired during the new
+'Compiling MM num tokens' loop), so there is NO runtime recompile at
+inference time. But the MM Dynamo frame's CUDAPiecewiseBackend
+instances never had their cuda graphs captured -- the
+PrefillCudaGraphRunner._capture_one_stream loop only iterated the
+text-only path -- so the first real image request still landed on a
+new CUDAPiecewiseBackend instance with entry.cudagraph=None and
+hit the 'about to capture; stream=None' codepath (now exercising the
+(X) eager fallback instead of asserting). Observed: 1x
+'Falling back to eager execution' warning at the warmup->inference
+boundary, classification OK_FALLBACK_TAKEN. No PCG speedup gained.
+
+This patch closes that gap:
+
+  PrefillCudaGraphRunner._capture_one_stream
+    After the existing per-shape capture loop completes, if the
+    backend opts in via `wants_mm_warmup_capture = True` AND the
+    language model exposes a truthy `use_deepstack`, opens
+    `with force_warmup_deepstack_embeds():` and re-iterates
+    self.capture_one_shape(num_tokens) for each captured shape.
+    The wrapping capture_session() is still active (we're inside
+    PrefillCudaGraphRunner.capture's `with self.backend.capture_session
+    (self.stream):` block), so the cuda graphs captured by the MM
+    frame's CUDAPiecewiseBackend instances correctly receive a valid
+    capture stream.
+
+    Adds _has_deepstack_branches() that mirrors the predicate already
+    in TcPiecewise._model_has_deepstack so the two driver sites stay
+    aligned.
+
+  TcPiecewiseCudaGraphBackend
+    Sets class-attribute wants_mm_warmup_capture = True. This is the
+    only backend that drives torch.compile / PCG; others (Breakable,
+    etc.) capture raw CUDA graphs without Dynamo specialization and
+    do not need the extra MM pass.
+
+Expected effect on R5 validation:
+  - Server startup shows BOTH 'Compiling MM num tokens' (compile
+    pass) AND 'Capturing MM num tokens' (capture pass) loops.
+  - classification = OK_NO_FALLBACK_NEEDED.
+  - fallback_warning_count = 0.
+  - bench TTFT clearly below the (X)-only ~104 ms.
+
+Non-deepstack models pay zero cost: _has_deepstack_branches() short-
+circuits and the second loop is skipped entirely.
+---
+ .../runner/prefill_cuda_graph_runner.py       | 43 +++++++++++++++++++
+ .../tc_piecewise_cuda_graph_backend.py        |  7 +++
+ 2 files changed, 50 insertions(+)
+
+diff --git a/python/sglang/srt/model_executor/runner/prefill_cuda_graph_runner.py b/python/sglang/srt/model_executor/runner/prefill_cuda_graph_runner.py
+index 43103b99d..ed9c6997e 100644
+--- a/python/sglang/srt/model_executor/runner/prefill_cuda_graph_runner.py
++++ b/python/sglang/srt/model_executor/runner/prefill_cuda_graph_runner.py
+@@ -684,6 +684,49 @@ class PrefillCudaGraphRunner(BaseCudaGraphRunner):
+                 )
+             self.capture_one_shape(num_tokens)
+ 
++        # Multimodal capture pass: backends that compiled the
++        # input_deepstack_embeds != None branch during their compile-pass
++        # (TcPiecewise driving general_mm_embed_routine inside
++        # force_warmup_deepstack_embeds()) must also capture that frame's
++        # CUDAPiecewiseBackend cuda graphs here, otherwise the first real
++        # image request still trips the missing-capture-stream path. Gated
++        # by `backend.wants_mm_warmup_capture` (only TcPiecewise opts in)
++        # and by the language model exposing `use_deepstack` truthy
++        # (general_mm_embed_routine's synthesis branch checks the same).
++        if (
++            getattr(self.backend, "wants_mm_warmup_capture", False)
++            and self._has_deepstack_branches()
++        ):
++            from sglang.srt.managers.mm_utils import force_warmup_deepstack_embeds
++
++            mm_capture_range = (
++                tqdm.tqdm(list(reversed(self.capture_num_tokens)))
++                if get_tensor_model_parallel_rank() == 0
++                else reversed(self.capture_num_tokens)
++            )
++            with force_warmup_deepstack_embeds():
++                for num_tokens in mm_capture_range:
++                    if get_tensor_model_parallel_rank() == 0:
++                        avail_mem = get_available_gpu_memory(
++                            self.model_runner.device,
++                            self.model_runner.gpu_id,
++                            empty_cache=False,
++                        )
++                        mm_capture_range.set_description(
++                            f"Capturing MM num tokens ({num_tokens=} {avail_mem=:.2f} GB)"
++                        )
++                    self.capture_one_shape(num_tokens)
++
++    def _has_deepstack_branches(self) -> bool:
++        """True if `model_runner.model.use_deepstack` is a non-empty mapping
++        with at least one truthy value. Mirrors the gate used in
++        TcPiecewiseCudaGraphBackend._model_has_deepstack so the two driver
++        sites (compile pass + capture pass) stay aligned."""
++        use_deepstack = getattr(self.model_runner.model, "use_deepstack", None)
++        if not use_deepstack:
++            return False
++        return any(bool(v) for v in use_deepstack.values())
++
+     def capture_one_shape(self, size: int) -> None:
+         """Per-shape capture: build dummy ForwardBatch + run_once,
+         delegate to backend. size is the prefill token count.
+diff --git a/python/sglang/srt/model_executor/runner_backend/tc_piecewise_cuda_graph_backend.py b/python/sglang/srt/model_executor/runner_backend/tc_piecewise_cuda_graph_backend.py
+index b0f499ad1..415542948 100644
+--- a/python/sglang/srt/model_executor/runner_backend/tc_piecewise_cuda_graph_backend.py
++++ b/python/sglang/srt/model_executor/runner_backend/tc_piecewise_cuda_graph_backend.py
+@@ -84,6 +84,13 @@ class TcPiecewiseCudaGraphBackend(BaseCudaGraphBackend):
+     recomputed at replay outside the compiled callable's sub-graphs.
+     """
+ 
++    # Opts this backend into the runner's per-shape multimodal capture
++    # loop (see PrefillCudaGraphRunner._capture_one_stream). Only meaningful
++    # for models whose `use_deepstack` is truthy; the runner gates on that
++    # separately. Other prefill backends (Breakable etc.) don't drive
++    # PCG / Dynamo and don't need this.
++    wants_mm_warmup_capture: bool = True
++
+     def __init__(self, cuda_graph_runner: BaseCudaGraphRunner) -> None:
+         model_runner = cuda_graph_runner.model_runner
+         self._pool = None
+-- 
+2.43.0
+

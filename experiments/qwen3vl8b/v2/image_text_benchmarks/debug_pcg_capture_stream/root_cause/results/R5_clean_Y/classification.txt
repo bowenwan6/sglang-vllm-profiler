@@ -1,0 +1,16 @@
+stage: R5
+purpose: validate clean (Y) eliminates inference-time Dynamo recompile
+snapshot: 0c351dd01ed87e9c1b53cbc748cba10e6187ff3b
+gpu: 0
+classification: OK_NO_FALLBACK_NEEDED
+gpu_used_mib_after_teardown: 0
+fork_head: a4ff0b181aa7b2d046ca2d920caa235d31517021  (clean Y)
+pcg_assert_count:                              0
+0
+fallback_warning_count:                        0
+0
+compiling_num_tokens_lines:                    3
+compiling_MM_num_tokens_lines:                 3
+total_dynamo_recompile_count:                  4
+startup_dynamo_recompile_count:                ?
+INFERENCE_dynamo_recompile_count_AFTER_BENCH:  ?  # must be 0 for clean Y PASS
