@@ -1,0 +1,231 @@
+From 1f19ecd1af965b5ccfddc0ff46266b68eaa9ed12 Mon Sep 17 00:00:00 2001
+From: Bowen Wang <wangbowen1001@yahoo.com>
+Date: Tue, 30 Jun 2026 15:11:46 +0000
+Subject: [PATCH] feat(pcg): clean Y for VLM deepstack via warmup context
+ manager
+
+R4.C lesson: a multimodal warmup pass cannot bypass
+set_attention_metadata_context() (which the regular _run_dummy_forward
+sets up via _run_forward); calling self.model(...) directly inside a
+torch.compile-traced region trips an in-trace data-dependent
+assertion at forward_context.py:59 and Dynamo aborts the compile
+under fullgraph=True. This patch implements the clean Y design from
+plan.md so the multimodal Dynamo branch is compiled at warmup with
+the forward context properly set up.
+
+Design:
+
+mm_utils.py:
+  - Module-local thread-local `_force_warmup_deepstack_tls` and a
+    `force_warmup_deepstack_embeds()` contextmanager that flips it
+    on inside `with`-blocks and restores the prior value.
+  - `general_mm_embed_routine` gains a new branch BETWEEN the
+    existing `contains_mm_inputs()` real-mm path and the text-only
+    `else`: when the gate is active AND `use_deepstack` is truthy
+    AND the multimodal_model exposes `config.hidden_size` and
+    `num_deepstack_embeddings`, the routine embed-tokens the
+    input_ids and synthesizes
+    `kwargs["input_deepstack_embeds"] = torch.zeros(
+        [num_tokens, hidden_size * num_deepstack_embeddings],
+        dtype, device)`.
+    The routine then calls `language_model(...)` exactly as before,
+    so the forward context plumbing (already established by the
+    surrounding _run_forward in the warmup driver) stays intact.
+
+tc_piecewise_cuda_graph_backend.py:
+  - Imports `force_warmup_deepstack_embeds` from mm_utils.
+  - Adds `_model_has_deepstack()` predicate that inspects the
+    language model's `use_deepstack` attribute. Models without that
+    attribute (or with all values falsy) pay zero cost.
+  - In `_run_compile_pass`, after the existing text-only
+    `Compile-num-tokens` loop, opens
+    `with force_warmup_deepstack_embeds():` and runs a second
+    per-shape `Compile MM num tokens` loop that calls the EXISTING
+    `cuda_graph_runner._run_dummy_forward(num_tokens)` -- so
+    `_run_forward` wraps the call with
+    `set_attention_metadata_context()` as it always has, and the
+    Dynamo compile inside fullgraph=True does NOT hit the
+    forward_context assert.
+
+Effect:
+  - During warmup, Dynamo traces BOTH branches of
+    `Qwen3LLMModel.forward` (input_deepstack_embeds=None and
+    input_deepstack_embeds=non-None). The piecewise CUDA graph
+    backend then captures cuda graphs for both Dynamo frames during
+    the subsequent capture_session.
+  - At inference, the first real image request hits a captured graph
+    rather than forcing a runtime recompile. No missing-capture-
+    stream fallback. No (X)-style eager regression.
+  - Text-only models and other VLMs without deepstack go through
+    the unmodified code path; no observable change.
+
+To be validated on the E2a recipe (image 720p, c=1, n=32, warmup=30,
+PCG on, IPC on, GPU 0) then stretched to n=400. Performance gate per
+plan.md: TTFT p50 must clearly beat the PCG-off baseline of 64.8 ms.
+---
+ python/sglang/srt/managers/mm_utils.py        | 65 +++++++++++++++++++
+ .../tc_piecewise_cuda_graph_backend.py        | 41 ++++++++++++
+ 2 files changed, 106 insertions(+)
+
+diff --git a/python/sglang/srt/managers/mm_utils.py b/python/sglang/srt/managers/mm_utils.py
+index b63bc5323..ff13bf4a8 100644
+--- a/python/sglang/srt/managers/mm_utils.py
++++ b/python/sglang/srt/managers/mm_utils.py
+@@ -2,9 +2,11 @@
+ Multi-modality utils
+ """
+ 
++import contextlib
+ import copy
+ import hashlib
+ import pickle
++import threading
+ from abc import abstractmethod
+ from collections import defaultdict
+ from multiprocessing import shared_memory
+@@ -32,6 +34,41 @@ from sglang.utils import logger
+ 
+ _is_npu = is_npu()
+ 
++# Thread-local "force-multimodal-warmup" gate.
++#
++# Read by general_mm_embed_routine. When set AND `use_deepstack` is truthy for
++# the active modality, the routine synthesizes a zero-valued
++# `input_deepstack_embeds` tensor instead of requiring real mm_inputs on the
++# forward_batch. Lets the PCG warmup driver compile the
++# `input_deepstack_embeds != None` Dynamo branch of the language model's
++# forward during torch.compile warmup, without bypassing
++# `set_attention_metadata_context()` (which is what broke the R4.C naive
++# prototype on the profiler debug branch).
++#
++# Production behavior is unchanged when the gate is off (the default).
++_force_warmup_deepstack_tls = threading.local()
++
++
++def _is_force_warmup_deepstack_active() -> bool:
++    return getattr(_force_warmup_deepstack_tls, "active", False)
++
++
++@contextlib.contextmanager
++def force_warmup_deepstack_embeds():
++    """Context manager that signals general_mm_embed_routine to synthesize
++    a zero `input_deepstack_embeds` for the duration of the block.
++
++    Intended for PCG warmup so the multimodal Dynamo branch is compiled
++    alongside the text-only branch. No-op for models whose
++    `use_deepstack` mapping is empty.
++    """
++    prev = getattr(_force_warmup_deepstack_tls, "active", False)
++    _force_warmup_deepstack_tls.active = True
++    try:
++        yield
++    finally:
++        _force_warmup_deepstack_tls.active = prev
++
+ # NOTE: Using the shared logger from sglang.utils instead of creating a module-specific logger
+ # to ensure consistent logging behavior across the codebase. This prevents issues with log
+ # propagation that can cause some log messages (like 'server is fired up') to not appear
+@@ -1127,6 +1164,34 @@ def general_mm_embed_routine(
+                                     )
+             forward_batch.mm_inputs = None
+             forward_batch.mm_input_embeds = input_embeds
++        elif _is_force_warmup_deepstack_active() and use_deepstack:
++            # PCG warmup-only branch (see force_warmup_deepstack_embeds).
++            # Synthesize a zero-valued input_deepstack_embeds at the same
++            # [num_tokens, hidden_size * num_deepstack_embeddings] shape the
++            # real mm path produces so Dynamo compiles the
++            # `input_deepstack_embeds != None` specialization of
++            # language_model.forward. Without this branch, every PCG warmup
++            # pass sees `input_deepstack_embeds=None` and the first real
++            # image request at inference forces a runtime recompile whose
++            # new CUDAPiecewiseBackend instances have no capture stream.
++            input_embeds = embed_tokens(input_ids)
++            hidden_size = getattr(
++                getattr(multimodal_model, "config", None), "hidden_size", None
++            )
++            num_deepstack_embeddings = getattr(
++                multimodal_model, "num_deepstack_embeddings", None
++            )
++            if (
++                hidden_size is not None
++                and num_deepstack_embeddings is not None
++                and num_deepstack_embeddings > 0
++            ):
++                kwargs["input_deepstack_embeds"] = torch.zeros(
++                    input_embeds.shape[0],
++                    hidden_size * num_deepstack_embeddings,
++                    dtype=input_embeds.dtype,
++                    device=input_embeds.device,
++                )
+         else:
+             input_embeds = embed_tokens(input_ids)
+         # Copy to pre-allocated buffer if available (for CUDA graph address stability)
+diff --git a/python/sglang/srt/model_executor/runner_backend/tc_piecewise_cuda_graph_backend.py b/python/sglang/srt/model_executor/runner_backend/tc_piecewise_cuda_graph_backend.py
+index 0054f0f2a..b0f499ad1 100644
+--- a/python/sglang/srt/model_executor/runner_backend/tc_piecewise_cuda_graph_backend.py
++++ b/python/sglang/srt/model_executor/runner_backend/tc_piecewise_cuda_graph_backend.py
+@@ -40,6 +40,7 @@ from sglang.srt.distributed.device_communicators.pynccl_allocator import (
+ )
+ from sglang.srt.layers.moe.utils import get_moe_a2a_backend
+ from sglang.srt.layers.utils import MultiPlatformOp
++from sglang.srt.managers.mm_utils import force_warmup_deepstack_embeds
+ from sglang.srt.model_executor.runner_backend.base_cuda_graph_backend import (
+     BaseCudaGraphBackend,
+ )
+@@ -142,6 +143,19 @@ class TcPiecewiseCudaGraphBackend(BaseCudaGraphBackend):
+             graph_pool=graph_pool,
+         )
+ 
++    def _model_has_deepstack(self) -> bool:
++        """True if this language model populates a non-empty `use_deepstack`
++        mapping. Multimodal models with deepstack-style embeddings (e.g.
++        Qwen3-VL) opt in by setting this attribute; text-only and other VLMs
++        without deepstack stay opted out. Used to gate the extra MM warmup
++        pass in `_run_compile_pass` so non-deepstack models pay no cost."""
++        use_deepstack = getattr(self._language_model, "use_deepstack", None)
++        if not use_deepstack:
++            return False
++        # `use_deepstack` is typically `{Modality.IMAGE: True, Modality.VIDEO: True}`;
++        # treat any truthy value as opt-in.
++        return any(bool(v) for v in use_deepstack.values())
++
+     def _run_compile_pass(self, cuda_graph_runner: BaseCudaGraphRunner) -> None:
+         """JIT-activate kernels at the smallest shape, install
+         torch.compile, then run one forward per shape inside
+@@ -195,6 +209,33 @@ class TcPiecewiseCudaGraphBackend(BaseCudaGraphBackend):
+                                     f"Compiling num tokens ({num_tokens=})"
+                                 )
+                             cuda_graph_runner._run_dummy_forward(num_tokens=num_tokens)
++                        # Multimodal warmup pass: routes through the same
++                        # _run_dummy_forward (so set_attention_metadata_context
++                        # is set up correctly) but with the
++                        # force_warmup_deepstack_embeds gate enabled. Inside
++                        # general_mm_embed_routine that gate synthesizes a
++                        # zero `input_deepstack_embeds` for models with
++                        # `use_deepstack`, so Dynamo compiles the
++                        # `input_deepstack_embeds != None` branch of the
++                        # language model's forward at warmup. Skipped for
++                        # models without `use_deepstack` (no extra cost).
++                        if self._model_has_deepstack():
++                            mm_range = (
++                                tqdm.tqdm(
++                                    list(reversed(cuda_graph_runner.capture_num_tokens))
++                                )
++                                if get_tensor_model_parallel_rank() == 0
++                                else reversed(cuda_graph_runner.capture_num_tokens)
++                            )
++                            with force_warmup_deepstack_embeds():
++                                for num_tokens in mm_range:
++                                    if get_tensor_model_parallel_rank() == 0:
++                                        mm_range.set_description(
++                                            f"Compiling MM num tokens ({num_tokens=})"
++                                        )
++                                    cuda_graph_runner._run_dummy_forward(
++                                        num_tokens=num_tokens
++                                    )
+             finally:
+                 _toggle_multi_platform_ops(
+                     language_model.model, reverse=True, num_tokens=16
+-- 
+2.43.0
+
