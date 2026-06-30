@@ -1,0 +1,8 @@
+stage: R5.B (n=400 stretch with clean Y)
+classification: OK_NO_FALLBACK_NEEDED
+gpu_used_mib_after_teardown: 0
+fork_head: a4ff0b181aa7b2d046ca2d920caa235d31517021
+pcg_assert_count:      0
+0
+fallback_warning_count: 0
+0
