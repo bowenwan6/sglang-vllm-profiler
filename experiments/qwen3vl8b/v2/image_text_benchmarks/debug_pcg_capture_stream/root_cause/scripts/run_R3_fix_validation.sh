@@ -103,8 +103,12 @@ pkill -9 -f "sglang.launch_server" 2>/dev/null
 sleep 3
 GPU_MIB=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | head -1)
 
-# Outcome classification
-if grep -q "PCG capture stream is not set" "$SERVER_LOG"; then
+# Outcome classification. Both the assert and the print_warning_once
+# message contain the substring 'PCG capture stream is not set'; the
+# assert's full text ends with 'please check if runtime recompilation
+# happened', while the warning ends with 'Falling back to eager
+# execution for this subgraph'. Match the precise tails.
+if grep -q "PCG capture stream is not set, please check if runtime recompilation" "$SERVER_LOG"; then
   CLASS="PCG_CAPTURE_STREAM_ASSERT_STILL_FIRES"
 elif grep -q "AssertionError" "$SERVER_LOG"; then
   CLASS="SERVER_ASSERTION_OTHER"

@@ -1,0 +1,44 @@
+============ Serving Benchmark Result ============
+Backend:                                 sglang-oai-chat
+Traffic request rate:                    inf       
+Max request concurrency:                 1         
+Successful requests:                     32        
+Benchmark duration (s):                  24.38     
+Total input tokens:                      32792     
+Total input text tokens:                 4568      
+Total input vision tokens:               28224     
+Total generated tokens:                  4096      
+Total generated tokens (retokenized):    4088      
+Request throughput (req/s):              1.31      
+Input token throughput (tok/s):          1345.23   
+Output token throughput (tok/s):         168.03    
+Peak output token throughput (tok/s):    176.00    
+Peak concurrent requests:                3         
+Total token throughput (tok/s):          1513.26   
+Concurrency:                             1.00      
+----------------End-to-End Latency----------------
+Mean E2E Latency (ms):                   761.06    
+Median E2E Latency (ms):                 760.28    
+P90 E2E Latency (ms):                    767.41    
+P95 E2E Latency (ms):                    770.54    
+P99 E2E Latency (ms):                    783.09    
+---------------Time to First Token----------------
+Mean TTFT (ms):                          104.81    
+Median TTFT (ms):                        103.05    
+P90 TTFT (ms):                           110.79    
+P95 TTFT (ms):                           111.96    
+P99 TTFT (ms):                           124.93    
+-----Time per Output Token (excl. 1st token)------
+Mean TPOT (ms):                          5.17      
+Median TPOT (ms):                        5.18      
+P90 TPOT (ms):                           5.19      
+P95 TPOT (ms):                           5.19      
+P99 TPOT (ms):                           5.19      
+---------------Inter-Token Latency----------------
+Mean ITL (ms):                           5.27      
+Median ITL (ms):                         5.19      
+P90 ITL (ms):                            5.23      
+P95 ITL (ms):                            5.36      
+P99 ITL (ms):                            10.37     
+Max ITL (ms):                            15.58     
+==================================================

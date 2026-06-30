@@ -1,0 +1,16 @@
+stage: R3.B
+snapshot: snapshots/0c351dd01ed87e9c1b53cbc748cba10e6187ff3b
+gpu: 0
+classification: OK_FALLBACK_TAKEN
+gpu_used_mib_after_teardown: 0
+fork_branch: fix/pcg-vlm-deepstack-warmup
+fork_head: 8a2dcb33a107424b34ddf3033bee66ba20ab9975
+pythonpath_prefix: /data/sglang-fork/python
+sglang_debug_pcg_call_trace: 1
+server_log: /data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R3_fix_feasibility/raw/server.log (NOT committed)
+bench_log:  /data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R3_fix_feasibility/raw/bench.log (NOT committed)
+bench_jsonl: /data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R3_fix_feasibility/raw/bench.jsonl (NOT committed)
+pcg_fallback_excerpt: /data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R3_fix_feasibility/pcg_fallback_excerpt.log (committed)
+bench_summary:        /data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R3_fix_feasibility/bench_summary.txt (committed)
+fallback_warning_lines_in_server_log: 1
+pcg_assert_lines_in_server_log:       1
