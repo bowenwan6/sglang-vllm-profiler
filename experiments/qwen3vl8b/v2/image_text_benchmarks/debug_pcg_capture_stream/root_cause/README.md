@@ -83,6 +83,30 @@ formal fix-value validation gate for the upstream PR.
 | R5 | Implement clean (Y) + verify | **Clean Y landed on fork** at branch `fix/pcg-vlm-deepstack-warmup` HEAD `986c89e69` (three-commit stack: `1f19ecd1a` warmup-gate CM → `a4ff0b181` capture-pass hook → `986c89e69` static deepstack buffer). Original R5 image-only TTFT gate **FAILED as stated** (fork-PCG ≈ 102–104 ms vs 64.8 ms). R5.A (n=32) and R5.B (n=400) recorded; **R5.B is pre-static-buffer (fork SHA `a4ff0b181`), historical only.** R5.C correctness audit reports OUTPUTS_DIFFER; static buffer improved but did not eliminate divergence — matched controls not yet run, so residual delta is **not** yet proven to be normal PCG-vs-eager bf16 noise. Results under `results/R5_clean_Y/`; patches `patches/R5_fix_Y_clean_deepstack_warmup_cm.patch`, `R5_fix_Y_clean_capture_pass_hook.patch`, `R5_fix_Y_static_deepstack_buffer.patch`. |
 | **R6** | **Fix-value validation for mixed-modality PCG.** Reframe R5's gate around what the fix actually provides: correctness / safety, retained text-only PCG benefit on VLM servers, mixed-modality operational safety, and workload characterization to find any winning cell. Detailed protocol in `plan.md` §5b. See §3.2 below for R6's directory layout and per-phase entry / exit conditions. | Verdict: **PASS / FAIL / R7_REQUIRED**. PR filing gated on PASS. **R6.0** ✅ provenance frozen 2026-07-28 (amendments A1 / A2 dated same, retiring "GPU 6 only" and tightening cleanup to PGID-scoped only) — [`results/R6_fix_value_validation/R6.0_provenance.md`](results/R6_fix_value_validation/R6.0_provenance.md). **R6.1a** ✅ correctness protocol + fixture + runner landed CPU-only 2026-07-28 — [`results/R6_fix_value_validation/R6.1_correctness/protocol.md`](results/R6_fix_value_validation/R6.1_correctness/protocol.md), `scripts/{run_R6_1_correctness.sh, R6_1_client.py, R6_1_verdict.py, R6_setsid_exec.py, monitor_idle_gpu.py}`. **R6.1b attempt 01** ⚠️ INFRA_FAILURE 2026-07-28T10:46 UTC — historical only. **R6.1b attempt 02** ❌ **FAIL** 2026-07-28T12:43 UTC on GPU 0. Full runner executed; 4 servers × 9 legs all served HTTP 200; 0 crashes / 0 assertions / 0 fallbacks / 0 request failures; 0 post-server-ready recompiles by phase-split evidence. Machine FAIL on the pre-declared bit-identical axes. **Forensic analysis** (see [`results/R6_fix_value_validation/R6.1_correctness/attempt_02_host_libcuda_595_gpu0/analysis.md`](results/R6_fix_value_validation/R6.1_correctness/attempt_02_host_libcuda_595_gpu0/analysis.md)) confirms the divergences are cache-state artefacts, not fix-induced corruption: cold-vs-cold cross-server (`a1_vs_c` fork-default vs stock-default) is bit-identical; warm-vs-cold same-server (`a1_vs_a2`) tok_lev=4 exceeds cold-vs-cold cross-config (`a1_vs_b`) tok_lev=2. Attempt 02 never sent an image to stock-PCG so the historical first-image failure was neither reproduced nor ruled out. Refined R6.1 protocol (three-tier: `SAFETY_SUPERIORITY` / `TEXT_NON_REGRESSION` / `WORKLOAD_PERFORMANCE_WIN`; cache-matched repeats; phase-scoped recompile markers; direct stock-PCG negative control) follows in the next commit; attempt 03 executes under it. |
 
+### 3.0.1 R6.1 Protocol Amendment A (2026-07-28)
+
+The historical `R6.1_correctness/protocol.md` remains the authority
+for attempts 01 and 02. **Attempts 03+ execute under
+[`R6.1_correctness/protocol_amendment_A_direct_fix_comparison.md`](results/R6_fix_value_validation/R6.1_correctness/protocol_amendment_A_direct_fix_comparison.md)**,
+which adds:
+
+- Phase-scoped recompile markers (`SERVER_READY`, `<LEG>_START`,
+  `<LEG>_END`); only recompiles inside a leg-interval after
+  server-ready may fail the safety gate.
+- Cache-matched cold-cache repeats on fresh servers; radix cache
+  remains enabled on the primary path (matches production).
+- Direct `neg_stock_pcg_image` negative-control leg classified
+  as `EXPECTED_STOCK_FAILURE` / `STOCK_NOW_SURVIVES` /
+  `UNRELATED_FAILURE`. Expected stock crash isolated to its PGID.
+- Three-tier verdict: `SAFETY_SUPERIORITY_PASS` (stock-PCG
+  historical failure reproduced ∧ fork-PCG completes cleanly),
+  `CORRECTNESS_PASS` (cross-config divergences fit inside
+  matched-repeat determinism envelopes), overall PASS = both.
+  Fallback: `SAFETY_PASS_CORRECTNESS_AMBIGUOUS` if only
+  safety passes. Performance claims (R6.3) require overall PASS.
+- Token-level metrics (token IDs, common-prefix tokens,
+  normalized Levenshtein) supplement exact-equality.
+
 ### 3.1 Fix shape outcome (R4 / R5)
 
 - **(X) defensive CUDA fallback** at `cuda_piecewise_backend.py:163-169` —

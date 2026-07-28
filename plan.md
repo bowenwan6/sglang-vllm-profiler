@@ -339,6 +339,41 @@ Numbers from any earlier HEAD — v2 #2 Case A `21.94 / 14.04 ms` on
 only** and do **not** carry forward as R6 baselines. R6 measures everything
 fresh on the frozen (stock, fork) SHA pair.
 
+### R6.1 Protocol Amendment A (2026-07-28, authoritative for attempts 03+)
+
+R6.1 attempts 01 / 02 exposed two protocol-level gaps that R6.1
+Protocol Amendment A closes for attempts 03+:
+
+1. **Phase-scoped recompile markers** — startup/warmup recompiles
+   are reported and never fail the safety gate; only recompiles
+   between `SERVER_READY` and the last `LEG_END` inside a
+   `[LEG_START, LEG_END]` interval may fail the safety gate.
+2. **Cache-matched correctness controls** — matched cold-cache
+   repeats on fresh servers replace the same-server sequential
+   pattern that produced the attempt-02 cache-state confound.
+   Radix caching stays enabled for the primary path;
+   `--disable-radix-cache` is a diagnostic ablation only.
+3. **Direct stock-PCG image negative control** — a fresh
+   stock-PCG server serves the exact fixture / prompts of leg
+   b; classified as `EXPECTED_STOCK_FAILURE`,
+   `STOCK_NOW_SURVIVES`, or `UNRELATED_FAILURE`. An expected
+   stock crash is isolated to its PGID.
+4. **Three-tier verdict**: `SAFETY_SUPERIORITY_PASS` (stock-PCG
+   reproduces the historical failure AND fork-PCG completes the
+   same sequence cleanly), `CORRECTNESS_PASS` (all cross-config
+   divergences fit inside matched-repeat determinism envelopes),
+   overall R6.1 PASS = both, `SAFETY_PASS_CORRECTNESS_AMBIGUOUS`
+   if only safety passes, `FAIL` if safety fails. Performance
+   claims (R6.3) require overall PASS.
+5. **Token-level metrics** (token IDs, common-prefix tokens,
+   normalized token Levenshtein, envelope-based inside/outside
+   test) supplement exact-equality; semantic evaluation is
+   supplementary only, not verdict-authoritative.
+
+Full text: [`results/R6_fix_value_validation/R6.1_correctness/protocol_amendment_A_direct_fix_comparison.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.1_correctness/protocol_amendment_A_direct_fix_comparison.md).
+Attempts 01 / 02 stand as recorded under the original protocol;
+attempt 03 executes under Amendment A.
+
 ### R6 phases
 
 | Phase | Purpose | Exit / verdict |
