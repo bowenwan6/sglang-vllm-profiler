@@ -1,0 +1,8 @@
+*.jsonl
+*.json
+*.log
+*.txt
+*.dump
+*.pid
+*.lock
+!.gitignore
