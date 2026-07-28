@@ -81,7 +81,7 @@ formal fix-value validation gate for the upstream PR.
 | R3 | 2–3 ranked hypotheses + minimal differential experiments | (X) defensive CUDA fallback validated at `cuda_piecewise_backend.py:163-169`; (X) PASSES safety but degrades perf ≈ −38 ms vs PCG-off. Results under `results/R3_fix_feasibility/`; patch `patches/R3_fix_X_cuda_eager_fallback.patch`. |
 | R4 | Fix (X) validation at scale + first (Y) attempt | (X) PASS n=32 (R4.A) and n=400 (R4.B). (X) rejected for upstream per §5a of `plan.md` (documented perf regression). Naive (Y) prototype (R4.C) crashed on `forward_context.py:59` assert — bypassed `set_attention_metadata_context()`. Patch `patches/R4_fix_Y_prototype_deepstack_warmup.patch`. |
 | R5 | Implement clean (Y) + verify | **Clean Y landed on fork** at branch `fix/pcg-vlm-deepstack-warmup` HEAD `986c89e69` (three-commit stack: `1f19ecd1a` warmup-gate CM → `a4ff0b181` capture-pass hook → `986c89e69` static deepstack buffer). Original R5 image-only TTFT gate **FAILED as stated** (fork-PCG ≈ 102–104 ms vs 64.8 ms). R5.A (n=32) and R5.B (n=400) recorded; **R5.B is pre-static-buffer (fork SHA `a4ff0b181`), historical only.** R5.C correctness audit reports OUTPUTS_DIFFER; static buffer improved but did not eliminate divergence — matched controls not yet run, so residual delta is **not** yet proven to be normal PCG-vs-eager bf16 noise. Results under `results/R5_clean_Y/`; patches `patches/R5_fix_Y_clean_deepstack_warmup_cm.patch`, `R5_fix_Y_clean_capture_pass_hook.patch`, `R5_fix_Y_static_deepstack_buffer.patch`. |
-| **R6** | **Fix-value validation for mixed-modality PCG.** Reframe R5's gate around what the fix actually provides: correctness / safety, retained text-only PCG benefit on VLM servers, mixed-modality operational safety, and workload characterization to find any winning cell. Detailed protocol in `plan.md` §5b. See §3.2 below for R6's directory layout and per-phase entry / exit conditions. | Verdict: **PASS / FAIL / R7_REQUIRED**. PR filing gated on PASS. **R6.0** ✅ provenance frozen 2026-07-28 — [`results/R6_fix_value_validation/R6.0_provenance.md`](results/R6_fix_value_validation/R6.0_provenance.md). **R6.1a** ✅ correctness protocol + fixture + runner landed CPU-only 2026-07-28 — [`results/R6_fix_value_validation/R6.1_correctness/protocol.md`](results/R6_fix_value_validation/R6.1_correctness/protocol.md), `scripts/{run_R6_1_correctness.sh, R6_1_client.py, R6_1_verdict.py}`. **R6.1b** 🔒 blocked on user approval + GPU ID. R6.2–R6.5 pending. |
+| **R6** | **Fix-value validation for mixed-modality PCG.** Reframe R5's gate around what the fix actually provides: correctness / safety, retained text-only PCG benefit on VLM servers, mixed-modality operational safety, and workload characterization to find any winning cell. Detailed protocol in `plan.md` §5b. See §3.2 below for R6's directory layout and per-phase entry / exit conditions. | Verdict: **PASS / FAIL / R7_REQUIRED**. PR filing gated on PASS. **R6.0** ✅ provenance frozen 2026-07-28 (amendments A1 / A2 dated same, retiring "GPU 6 only" and tightening cleanup to PGID-scoped only) — [`results/R6_fix_value_validation/R6.0_provenance.md`](results/R6_fix_value_validation/R6.0_provenance.md). **R6.1a** ✅ correctness protocol + fixture + runner landed CPU-only 2026-07-28 — [`results/R6_fix_value_validation/R6.1_correctness/protocol.md`](results/R6_fix_value_validation/R6.1_correctness/protocol.md), `scripts/{run_R6_1_correctness.sh, R6_1_client.py, R6_1_verdict.py, R6_setsid_exec.py, monitor_idle_gpu.py}`. **R6.1b** 🔒 authorized to auto-run once `scripts/monitor_idle_gpu.py` observes 600 s continuous idle on one GPU (all GPUs currently occupied by other tenants). R6.2–R6.5 pending. |
 
 ### 3.1 Fix shape outcome (R4 / R5)
 
@@ -155,11 +155,15 @@ R6 conclusion is a `docs(v2): ...` commit.
   (or referenced by absolute path with SHA-256 recorded) with clearly
   interpretable content (subject, background, expected caption). No
   `--image-content random` in the correctness gate.
-- **R6.2** — GPU 6 only per user directive; pre-check `0 MiB used / 0%
-  util / no compute apps` on GPU 6 before every server launch (canonical
-  incantation in [`results/R6_fix_value_validation/R6.0_provenance.md`](results/R6_fix_value_validation/R6.0_provenance.md)).
-  If the pre-check fails the run is deferred, not silently relocated to
-  another GPU.
+- **R6.2** — GPU is selected by `scripts/monitor_idle_gpu.py` after
+  600 s continuous idle on ONE GPU (0 compute PIDs AND mem ≤ 500 MiB
+  AND util ≤ 5 %, polled every 30 s; foreign residual memory treated
+  as busy; no GPU reset ever issued). Monitor holds an
+  `fcntl.flock`-based lock on `raw/monitor.lock` to prevent concurrent
+  copies. Runner remains the single point of GPU use and refuses to
+  launch without an explicit ID. Foreign compute PIDs on the selected
+  GPU during execution abort R6.1b with exit 71 without signalling
+  the foreign process. See R6.0 Amendment A1 for authorization.
 - **R6.3a** — must be a fresh run on `da802ddca` / `986c89e69`;
   symlinking to `results/R5_clean_Y/R5B_n400_stretch/` is explicitly
   disallowed (wrong fork SHA).

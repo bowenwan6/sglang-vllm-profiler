@@ -3,4 +3,6 @@
 *.log
 *.txt
 *.dump
+*.pid
+*.lock
 !.gitignore

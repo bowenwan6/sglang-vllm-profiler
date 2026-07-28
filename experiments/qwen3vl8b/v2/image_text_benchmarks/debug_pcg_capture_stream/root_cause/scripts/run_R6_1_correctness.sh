@@ -5,25 +5,25 @@
 #   results/R6_fix_value_validation/R6.1_correctness/protocol.md
 # Verdict rules pre-declared in protocol.md and enforced by
 #   scripts/R6_1_verdict.py
+# Safe-cleanup + PGID-scoped signalling design documented in
+#   scripts/R6_setsid_exec.py and the amendment section of
+#   results/R6_fix_value_validation/R6.0_provenance.md
 #
-# This script:
-#   * Refuses to run without an explicit approved GPU ID (safety).
-#   * Re-verifies stock/fork SHAs still match R6.0 provenance.
-#   * Runs each server variant serialized (no co-residency).
-#   * Pre-checks GPU idle before every server launch.
-#   * Ensures teardown on every exit path (trap EXIT).
-#   * Collects only aggregated summary artifacts under
-#       results/R6_fix_value_validation/R6.1_correctness/raw/
-#     (which is .gitignore'd). Nothing raw is committed.
+# Safety invariants (never violated):
+#   * Never invoke `pkill`, `pkill -f`, `killall`, `fuser -k`, or any
+#     kill-by-name / kill-by-port command.
+#   * Never issue `nvidia-smi --gpu-reset`.
+#   * Never signal a PID unless (i) we launched it, (ii) its current
+#     PGID still equals the PGID we recorded at launch, and
+#     (iii) its `comm` starts with "python" (defense-in-depth).
+#   * `kill -TERM -<PGID>` is scoped to a single process group we
+#     created (with new-session helper) and can only reach processes
+#     that inherited that PGID from our own launch.
+#   * If ownership cannot be re-proven at teardown, we log and STOP,
+#     never signal.
 #
-# Usage:
-#   R6_GPU_ID=<id> ./run_R6_1_correctness.sh
-#     or
-#   ./run_R6_1_correctness.sh <id>
-#
-# Halt on any tooling error. Correctness legs may still record ERR
-# rows in their JSON without aborting the whole script; that is a data
-# point, not a failure of the orchestrator.
+# Refuses to run without an explicit approved GPU_ID (safety: never
+# infer from R6.0, current availability, or any default).
 
 set -euo pipefail
 
@@ -36,12 +36,14 @@ if [[ -z "${GPU_ID}" ]]; then
 [R6.1] REFUSING TO RUN — no GPU ID provided.
 
 Pass explicitly, either via env var or first argument:
-  R6_GPU_ID=6 ./run_R6_1_correctness.sh
-  ./run_R6_1_correctness.sh 6
+  R6_GPU_ID=<id> ./run_R6_1_correctness.sh
+  ./run_R6_1_correctness.sh <id>
 
 R6 protocol requires the caller to provide the approved GPU; the
-runner never assumes a default. See R6.0 provenance and the R6.1
-protocol for the safety rationale.
+runner never assumes a default. See the R6.0 provenance and the R6.1
+protocol for the safety rationale. In autonomous execution, the
+monitor script (scripts/monitor_idle_gpu.py) selects the GPU after
+observing 600 s of continuous idle and passes it in.
 EOF
   exit 64
 fi
@@ -63,6 +65,7 @@ FIXTURE_SHA="$FIX_DIR/R6.1_fixture.sha256"
 PROMPTS_JSON="$FIX_DIR/prompts.json"
 CLIENT_PY="$ROOT/scripts/R6_1_client.py"
 VERDICT_PY="$ROOT/scripts/R6_1_verdict.py"
+SETSID_HELPER="$ROOT/scripts/R6_setsid_exec.py"
 
 SNAP=/root/.cache/huggingface/hub/models--Qwen--Qwen3-VL-8B-Instruct/snapshots/0c351dd01ed87e9c1b53cbc748cba10e6187ff3b
 FORK_PY=/data/sglang-fork/python
@@ -90,134 +93,299 @@ if [[ "$FIX_SHA" != "$FIX_SHA_EXPECTED" ]]; then
   echo "[R6.1] fixture SHA drift: expected $FIX_SHA_EXPECTED got $FIX_SHA" >&2
   exit 65
 fi
+if [[ ! -x "$SETSID_HELPER" ]]; then
+  echo "[R6.1] setsid helper not executable: $SETSID_HELPER" >&2
+  exit 65
+fi
 echo "[R6.1] provenance OK (stock=$STOCK_HEAD fork=$FORK_HEAD fixture=$FIX_SHA)"
 
 # --------------------------------------------------------------------------
-# 2. GPU idle pre-check helper
+# 2. Per-process tracking (only signal what we launched)
 # --------------------------------------------------------------------------
-gpu_idle_check () {
-  local mem util procs
+declare -a TRACKED_PGIDS=()
+SRV_PID=""
+SRV_PGID=""
+
+record_pgid () {
+  local pgid="$1"
+  # Idempotent record; ignore empty.
+  [[ -z "$pgid" ]] && return 0
+  for existing in "${TRACKED_PGIDS[@]}"; do
+    [[ "$existing" == "$pgid" ]] && return 0
+  done
+  TRACKED_PGIDS+=("$pgid")
+}
+
+verify_ownership () {
+  # Args: PID PGID. Returns 0 iff:
+  #   * PID exists
+  #   * ps -o pgid= matches the recorded PGID
+  #   * comm starts with "python"
+  local pid="$1" recorded_pgid="$2"
+  [[ -z "$pid" || -z "$recorded_pgid" ]] && return 1
+  kill -0 "$pid" 2>/dev/null || return 1
+  local cur_pgid cur_comm
+  cur_pgid=$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ')
+  cur_comm=$(ps -o comm= -p "$pid" 2>/dev/null | tr -d ' ')
+  [[ "$cur_pgid" == "$recorded_pgid" ]] || return 1
+  [[ "$cur_comm" =~ ^python ]] || return 1
+  return 0
+}
+
+signal_owned_pgid () {
+  # Args: PGID SIGNAL. Verifies at least one live process has the
+  # recorded PGID before signalling. Never signals a foreign PGID.
+  local pgid="$1" sig="$2"
+  [[ -z "$pgid" ]] && return 0
+  # Is there any live process whose PGID == our recorded pgid?
+  local live_owned=0
+  # ps -o pid,pgid = all processes
+  while IFS= read -r line; do
+    local pp pg
+    pp=$(echo "$line" | awk '{print $1}')
+    pg=$(echo "$line" | awk '{print $2}')
+    if [[ "$pg" == "$pgid" ]] && kill -0 "$pp" 2>/dev/null; then
+      local cm
+      cm=$(ps -o comm= -p "$pp" 2>/dev/null | tr -d ' ')
+      if [[ "$cm" =~ ^python ]]; then
+        live_owned=1
+        break
+      fi
+    fi
+  done < <(ps -eo pid,pgid --no-headers 2>/dev/null)
+  if [[ "$live_owned" -eq 0 ]]; then
+    return 0
+  fi
+  # Signal by negative PGID (targets whole process group).
+  kill "-${sig}" "-${pgid}" 2>/dev/null || true
+}
+
+# --------------------------------------------------------------------------
+# 3. GPU idle / foreign-PID checks (read-only)
+# --------------------------------------------------------------------------
+gpu_state () {
+  # echoes: "mem_mib util_pct pids_csv"
+  local mem util pids
   mem=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits -i "$GPU_ID" | tr -d ' ')
   util=$(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits -i "$GPU_ID" | tr -d ' ')
-  procs=$(nvidia-smi --query-compute-apps=pid --format=csv,noheader -i "$GPU_ID" | wc -l | tr -d ' ')
-  echo "[R6.1] GPU $GPU_ID: mem=${mem}MiB util=${util}% procs=${procs}"
-  if [[ "$mem" -gt 500 || "$util" -gt 5 || "$procs" -gt 0 ]]; then
-    echo "[R6.1] GPU $GPU_ID not idle enough (mem>${mem} util=${util} procs=${procs}); aborting." >&2
+  pids=$(nvidia-smi --query-compute-apps=pid --format=csv,noheader,nounits -i "$GPU_ID" | grep -v '^$' | tr '\n' ',' | sed 's/,$//')
+  echo "$mem $util $pids"
+}
+
+pre_launch_idle_check () {
+  local st mem util pids
+  st=$(gpu_state)
+  mem=$(echo "$st" | awk '{print $1}')
+  util=$(echo "$st" | awk '{print $2}')
+  pids=$(echo "$st" | awk '{print $3}')
+  echo "[R6.1] GPU $GPU_ID pre-launch: mem=${mem}MiB util=${util}% pids=[${pids}]"
+  if [[ "$mem" -gt 500 || "$util" -gt 5 || -n "$pids" ]]; then
+    echo "[R6.1] GPU $GPU_ID no longer idle at pre-launch; aborting attempt" >&2
     return 1
   fi
   return 0
 }
 
-# --------------------------------------------------------------------------
-# 3. Cleanup trap
-# --------------------------------------------------------------------------
-SRV_PID=""
-cleanup () {
-  local rc=$?
-  if [[ -n "$SRV_PID" ]] && kill -0 "$SRV_PID" 2>/dev/null; then
-    echo "[R6.1] cleanup: SIGTERM $SRV_PID"
-    kill -TERM "$SRV_PID" 2>/dev/null || true
-    sleep 5
-    kill -0 "$SRV_PID" 2>/dev/null && kill -KILL "$SRV_PID" 2>/dev/null || true
+check_no_foreign_gpu_procs () {
+  # Any compute PID on GPU_ID that is NOT part of a TRACKED PGID
+  # (either == pgid or descendant of it) is foreign. Foreign presence
+  # is classified as resource contention; we return 71 and let the
+  # main flow tear down our own servers gracefully.
+  local pids pid pgid_of foreign=()
+  pids=$(nvidia-smi --query-compute-apps=pid --format=csv,noheader,nounits -i "$GPU_ID" | grep -v '^$')
+  for pid in $pids; do
+    pgid_of=$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ')
+    if [[ -z "$pgid_of" ]]; then
+      # PID disappeared between nvidia-smi and ps — ignore.
+      continue
+    fi
+    local is_ours=0 our_pgid
+    for our_pgid in "${TRACKED_PGIDS[@]:-}"; do
+      [[ -z "$our_pgid" ]] && continue
+      if [[ "$pgid_of" == "$our_pgid" ]]; then
+        is_ours=1
+        break
+      fi
+    done
+    if [[ "$is_ours" -eq 0 ]]; then
+      foreign+=("pid=$pid pgid=$pgid_of")
+    fi
+  done
+  if [[ ${#foreign[@]} -gt 0 ]]; then
+    echo "[R6.1] FOREIGN COMPUTE PIDS on GPU $GPU_ID: ${foreign[*]}" >&2
+    {
+      echo "gpu=$GPU_ID at=$(date -u -Iseconds)"
+      for f in "${foreign[@]}"; do echo "  $f"; done
+    } > "$RAW_DIR/foreign_pid_detected.txt"
+    return 71
   fi
-  pkill -TERM -f "sglang.launch_server" 2>/dev/null || true
-  sleep 3
-  pkill -KILL -f "sglang.launch_server" 2>/dev/null || true
-  return $rc
+  return 0
 }
-trap cleanup EXIT INT TERM
 
 # --------------------------------------------------------------------------
-# 4. Server launch / wait / teardown helpers
+# 4. Server lifecycle
 # --------------------------------------------------------------------------
 launch_server () {
   local LABEL="$1"    # e.g. "stock-default"
   local USE_FORK="$2" # "yes" | "no"
   local EXTRA="$3"    # extra sglang flags string (may be empty)
   local LOG="$RAW_DIR/${LABEL}_server.log"
+  local PIDFILE="$RAW_DIR/${LABEL}_server.pid"
 
-  gpu_idle_check || return 1
+  pre_launch_idle_check || return 1
 
-  rm -f "$LOG"
+  rm -f "$LOG" "$PIDFILE"
   local ENV_PREFIX=""
   if [[ "$USE_FORK" == "yes" ]]; then
     ENV_PREFIX="PYTHONPATH=${FORK_PY}"
   fi
 
-  # Ensure any KAPI / profiler env is off (protocol §6.0).
+  # Correctness gate: capture Dynamo recompiles. Unset KAPI / profiler
+  # env vars per protocol §2.
   unset SGLANG_KERNEL_API_LOGLEVEL SGLANG_KERNEL_API_LOGDEST SGLANG_DEBUG_PCG_CALL_TRACE
-
-  # Correctness gate always captures Dynamo recompile events.
   export TORCH_LOGS=recompiles
-
-  # CUDA IPC is on for image legs by protocol convention.
   export SGLANG_USE_CUDA_IPC_TRANSPORT=1
 
   echo "[R6.1] launching ${LABEL} (fork=${USE_FORK} extra='${EXTRA}')"
+  # Use the setsid helper so the launched python3 is a new session
+  # leader (PID == PGID == SID). The helper writes its own PID to
+  # $PIDFILE BEFORE exec, so we know exactly which PID to trust.
   # shellcheck disable=SC2086
   env $ENV_PREFIX \
-    python3 -m sglang.launch_server \
-      --model-path "$SNAP" --dtype bfloat16 --port "$PORT" --tp 1 \
-      --attention-backend flashinfer $EXTRA \
-      > "$LOG" 2>&1 &
-  SRV_PID=$!
+    python3 "$SETSID_HELPER" "$PIDFILE" \
+      python3 -m sglang.launch_server \
+        --model-path "$SNAP" --dtype bfloat16 --port "$PORT" --tp 1 \
+        --attention-backend flashinfer $EXTRA \
+    > "$LOG" 2>&1 &
 
-  local READY=0
-  for _ in $(seq 1 600); do
+  # Wait for pidfile to appear (up to 10 s).
+  local waited=0
+  while [[ ! -s "$PIDFILE" && $waited -lt 100 ]]; do
+    sleep 0.1
+    waited=$((waited + 1))
+  done
+  if [[ ! -s "$PIDFILE" ]]; then
+    echo "[R6.1] ${LABEL}: pidfile never populated" >&2
+    SRV_PID=""
+    SRV_PGID=""
+    return 3
+  fi
+  SRV_PID=$(cat "$PIDFILE")
+  SRV_PGID=$(ps -o pgid= -p "$SRV_PID" 2>/dev/null | tr -d ' ')
+  if [[ -z "$SRV_PGID" ]]; then
+    echo "[R6.1] ${LABEL}: server PID $SRV_PID has no PGID (died instantly?)" >&2
+    SRV_PID=""
+    SRV_PGID=""
+    return 3
+  fi
+  if [[ "$SRV_PGID" != "$SRV_PID" ]]; then
+    echo "[R6.1] ${LABEL}: PGID $SRV_PGID != PID $SRV_PID; setsid helper failed; refusing to proceed (will not signal)" >&2
+    SRV_PID=""
+    SRV_PGID=""
+    return 3
+  fi
+  record_pgid "$SRV_PGID"
+  echo "[R6.1]   ${LABEL} PID=$SRV_PID PGID=$SRV_PGID"
+
+  # Wait for HTTP readiness.
+  local READY=0 i
+  for i in $(seq 1 600); do
     if curl -s -o /dev/null -w "%{http_code}" \
         "http://127.0.0.1:$PORT/get_model_info" 2>/dev/null | grep -q 200; then
       READY=1
-      echo "[R6.1] ${LABEL} ready"
+      echo "[R6.1]   ${LABEL} ready after ~$((i * 2)) s"
       break
     fi
     if ! kill -0 "$SRV_PID" 2>/dev/null; then
-      echo "[R6.1] ${LABEL} DIED during startup — see $LOG" >&2
+      echo "[R6.1]   ${LABEL} DIED during startup — see $LOG" >&2
+      # Server died on its own; nothing to signal.
       SRV_PID=""
+      SRV_PGID=""
       return 2
     fi
     sleep 2
   done
   if [[ "$READY" -ne 1 ]]; then
-    echo "[R6.1] ${LABEL} did not become ready" >&2
-    cleanup || true
+    echo "[R6.1]   ${LABEL} did not become ready" >&2
+    teardown_server "$LABEL"
     return 2
   fi
-  # Verify which sglang the server ended up importing (belt-and-braces).
-  local IMPORT_LINE
-  IMPORT_LINE=$(env $ENV_PREFIX python3 -c 'import sglang; print(sglang.__file__)' 2>/dev/null || echo "IMPORT_FAILED")
-  echo "[R6.1]   sglang.__file__ = $IMPORT_LINE"
   return 0
 }
 
 teardown_server () {
   local LABEL="$1"
-  if [[ -n "$SRV_PID" ]] && kill -0 "$SRV_PID" 2>/dev/null; then
-    echo "[R6.1] teardown ${LABEL}: SIGTERM $SRV_PID"
-    kill -TERM "$SRV_PID" 2>/dev/null || true
-    sleep 5
-    kill -0 "$SRV_PID" 2>/dev/null && kill -KILL "$SRV_PID" 2>/dev/null || true
+  if [[ -z "${SRV_PID:-}" || -z "${SRV_PGID:-}" ]]; then
+    return 0
   fi
-  pkill -TERM -f "sglang.launch_server" 2>/dev/null || true
-  sleep 5
-  pkill -KILL -f "sglang.launch_server" 2>/dev/null || true
+  echo "[R6.1] teardown ${LABEL} PID=$SRV_PID PGID=$SRV_PGID"
+  if verify_ownership "$SRV_PID" "$SRV_PGID"; then
+    signal_owned_pgid "$SRV_PGID" TERM
+    local i
+    for i in $(seq 1 30); do
+      if ! kill -0 "$SRV_PID" 2>/dev/null; then
+        break
+      fi
+      sleep 1
+    done
+    if kill -0 "$SRV_PID" 2>/dev/null; then
+      # Re-verify ownership before SIGKILL.
+      if verify_ownership "$SRV_PID" "$SRV_PGID"; then
+        echo "[R6.1]   SIGKILL group $SRV_PGID after grace"
+        signal_owned_pgid "$SRV_PGID" KILL
+        sleep 2
+      else
+        echo "[R6.1]   ownership drift during teardown; NOT SIGKILL; investigation required" >&2
+      fi
+    fi
+  else
+    # Cannot prove ownership — do NOT signal.
+    if kill -0 "${SRV_PID:-0}" 2>/dev/null; then
+      echo "[R6.1]   ownership cannot be proven for PID $SRV_PID PGID $SRV_PGID; NOT signaling; investigation required" >&2
+    fi
+  fi
   SRV_PID=""
-  # Wait for GPU memory to drain.
+  SRV_PGID=""
+  # Read-only wait for GPU memory to drain (best effort; DO NOT signal anything).
+  local mem
   for _ in $(seq 1 30); do
-    local mem
     mem=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits -i "$GPU_ID" | tr -d ' ')
     [[ "$mem" -lt 500 ]] && break
     sleep 2
   done
-  echo "[R6.1] teardown ${LABEL} done"
+  echo "[R6.1]   teardown ${LABEL} done (post-teardown mem=${mem}MiB)"
 }
+
+cleanup_on_exit () {
+  local rc=$?
+  echo "[R6.1] cleanup_on_exit rc=$rc; tracked pgids=[${TRACKED_PGIDS[*]:-}]"
+  # First pass: SIGTERM every tracked PGID (only if still live and PGID matches).
+  local pg
+  for pg in "${TRACKED_PGIDS[@]:-}"; do
+    signal_owned_pgid "$pg" TERM
+  done
+  sleep 5
+  # Second pass: SIGKILL any tracked PGID that is still alive.
+  for pg in "${TRACKED_PGIDS[@]:-}"; do
+    signal_owned_pgid "$pg" KILL
+  done
+  return $rc
+}
+trap cleanup_on_exit EXIT INT TERM
 
 # --------------------------------------------------------------------------
 # 5. Client invocation helper
 # --------------------------------------------------------------------------
 run_client () {
-  local LABEL="$1"   # leg name
-  local MODE="$2"    # image | text | interleaved
+  local LABEL="$1"
+  local MODE="$2"
   local OUT="$RAW_DIR/${LABEL}.json"
+  # Foreign-PID check: any compute PID on GPU_ID that is not a
+  # descendant of our tracked PGIDs is contention.
+  if ! check_no_foreign_gpu_procs; then
+    echo "[R6.1] foreign PID detected before ${LABEL}; aborting" >&2
+    return 71
+  fi
   echo "[R6.1] client: leg=${LABEL} mode=${MODE}"
   python3 "$CLIENT_PY" \
     --base-url "http://127.0.0.1:$PORT" \
@@ -236,20 +404,12 @@ tally_safety () {
   local LABEL="$1"
   local LOG="$RAW_DIR/${LABEL}_server.log"
   local OUT="$RAW_DIR/safety_summary.json"
-  local INTERLEAVED_CLIENT_LOG="$RAW_DIR/leg_e_fork_pcg_interleaved.client.log"
   local INTERLEAVED_JSON="$RAW_DIR/leg_e_fork_pcg_interleaved.json"
 
   local assertions fallbacks recompiles req_fail
   assertions=$(grep -c -E 'AssertionError: PCG capture stream is not set' "$LOG" 2>/dev/null || echo 0)
   fallbacks=$(grep -c -E 'Falling back to eager execution' "$LOG" 2>/dev/null || echo 0)
-  # Dynamo `TORCH_LOGS=recompiles` prints lines like:
-  #   "torch._dynamo.convert_frame: [WARNING] Recompiling function forward in .../qwen3_vl.py"
-  # We count only recompiles that happen after the model-runner has finished
-  # capture; there's no perfect marker for "inference-time", so we count
-  # any recompile line mentioning qwen3_vl in the second half of the log
-  # as a proxy. Refine in R7 if needed.
   recompiles=$(grep -c -E 'Recompiling function.*qwen3_vl' "$LOG" 2>/dev/null || echo 0)
-  # Client-side failures for the interleaved run:
   req_fail=$(python3 - <<PYEOF
 import json, sys, pathlib
 p = pathlib.Path("$INTERLEAVED_JSON")
@@ -277,15 +437,12 @@ PYEOF
 }
 
 # --------------------------------------------------------------------------
-# 7. Legs
+# 7. Legs (serialized; one server at a time; PGID-scoped teardown)
 # --------------------------------------------------------------------------
-# Leg A + C + F1: stock-default (single server, run image + text)
-# Leg A x2 + D': fork-default (single server, run image twice + text)
-# Leg D + F2: stock-PCG (single server, run text only — never image, would crash)
-# Leg B + E: fork-PCG (single server, run image + text + interleaved)
-#
-# Serialization: one server up at a time. Each variant torn down fully
-# before the next launches, with GPU-memory-drain wait.
+if ! check_no_foreign_gpu_procs; then
+  echo "[R6.1] foreign compute PID present on GPU $GPU_ID at start; aborting" >&2
+  exit 71
+fi
 
 # ---- variant 1: stock-default ---------------------------------------------
 launch_server "stock-default"  "no"  ""

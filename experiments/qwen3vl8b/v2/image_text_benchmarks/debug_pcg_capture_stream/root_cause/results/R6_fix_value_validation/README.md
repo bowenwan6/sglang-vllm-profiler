@@ -8,9 +8,9 @@ protocol; this directory holds the recorded artifacts.
 
 | Phase | Status | Artifact |
 |---|---|---|
-| **R6.0** — Provenance freeze | ✅ COMPLETE | [`R6.0_provenance.md`](R6.0_provenance.md) |
-| **R6.1a** — Correctness protocol + runner + fixture (CPU-only, no GPU workload) | ✅ COMPLETE | [`R6.1_correctness/protocol.md`](R6.1_correctness/protocol.md), [`R6.1_correctness/fixtures/`](R6.1_correctness/fixtures/), `scripts/{run_R6_1_correctness.sh, R6_1_client.py, R6_1_verdict.py}` |
-| **R6.1b** — Correctness gate execution + verdict | 🔒 BLOCKED on explicit user approval of a GPU ID | (executes runner; produces `R6.1_correctness/{verdict.md, verdict.json}`) |
+| **R6.0** — Provenance freeze + amendments A1 / A2 (2026-07-28: dynamic GPU selection via monitor; PGID-scoped cleanup only) | ✅ COMPLETE | [`R6.0_provenance.md`](R6.0_provenance.md) |
+| **R6.1a** — Correctness protocol + runner + fixture (CPU-only, no GPU workload); safety-scoped teardown + idle-GPU monitor | ✅ COMPLETE | [`R6.1_correctness/protocol.md`](R6.1_correctness/protocol.md), [`R6.1_correctness/fixtures/`](R6.1_correctness/fixtures/), `scripts/{run_R6_1_correctness.sh, R6_1_client.py, R6_1_verdict.py, R6_setsid_exec.py, monitor_idle_gpu.py}` |
+| **R6.1b** — Correctness gate execution + verdict (GPU is auto-selected by `monitor_idle_gpu.py` after 600 s continuous idle) | 🔒 authorized to auto-run once one GPU has been continuously idle for 10 min (all GPUs currently occupied) | executes runner; produces `R6.1_correctness/{verdict.md, verdict.json}` with the selected GPU + qualification interval embedded |
 | **R6.2** — Text-only Case A matched control (4 variants × 5 reps) | ⏳ NOT STARTED | — |
 | **R6.3** — Fresh image cost + workload sweep + mixed-safety subtest | ⏳ NOT STARTED | — |
 | **R6.4** — Analytical crossover (means, bootstrap CI) | ⏳ NOT STARTED | — |

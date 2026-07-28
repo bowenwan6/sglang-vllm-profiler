@@ -40,13 +40,31 @@ R6.2 / R6.3 / R6.4 / R6.5 are blocked on this gate passing.
 - **Prompt set**: [`fixtures/prompts.json`](fixtures/prompts.json)
   — 3 image prompts, 3 text-only prompts, sampling
   `{temperature: 0, top_p: 1, seed: 42, max_tokens: 128}` (greedy).
-- **GPU**: R6.1a does not select a GPU. R6.1b receives an explicit
-  approved GPU ID from the user; the runner refuses to launch
-  without it and re-checks idle (`memory.used ≤ 500 MiB`,
-  `utilization.gpu ≤ 5%`, `compute-apps == 0`) before every server.
-- **Servers**: `python3 -m sglang.launch_server`, one at a time
-  (never co-resident), fully torn down between variants with
-  GPU-memory-drain wait.
+- **GPU** (amended 2026-07-28, see R6.0 Amendment A1): R6.1a does
+  not select a GPU. R6.1b's GPU is chosen by
+  [`scripts/monitor_idle_gpu.py`](../../../scripts/monitor_idle_gpu.py)
+  after observing 600 s of continuous idle (`memory.used ≤ 500 MiB`
+  AND `utilization.gpu ≤ 5 %` AND 0 compute PIDs) on the same GPU.
+  The monitor passes the selected ID to the runner as
+  `R6_GPU_ID=<id>`; the runner still refuses to launch without an
+  explicit ID and re-checks idle immediately before each server
+  launch. Only one GPU is used for the whole R6.1b execution. The
+  selected GPU + full qualification interval are embedded in the
+  R6.1 verdict.
+- **Servers** (amended 2026-07-28, see R6.0 Amendment A2):
+  `python3 -m sglang.launch_server`, launched through
+  [`scripts/R6_setsid_exec.py`](../../../scripts/R6_setsid_exec.py)
+  so the launched python process is a new session leader
+  (PID == PGID == SID). One server at a time, never co-resident,
+  torn down PGID-scoped between variants with GPU-memory-drain wait.
+  Teardown signals only PGIDs the runner recorded and only after
+  re-verifying `kill -0`, `ps -o pgid=`, and `ps -o comm=~ ^python`
+  ownership. `pkill`, `killall`, `fuser -k`, kill-by-name,
+  kill-by-port, and `nvidia-smi --gpu-reset` are prohibited
+  anywhere in the runner. Foreign compute PIDs (any PID on the
+  selected GPU whose PGID is outside our tracked set) are treated
+  as resource contention: the runner tears down its own servers
+  and exits 71 without signalling the foreign process.
 - **Flags per variant** (canonical, from R6.0):
 
   | Variant | Extra flags | Import path |

@@ -178,6 +178,9 @@ def main() -> int:
     leg_f1 = load_leg(ind / "leg_f_stock_default_text.json")
     leg_f2 = load_leg(ind / "leg_f_stock_pcg_text.json")
     safety = load_safety(ind / "safety_summary.json")
+    selection_path = ind / "monitor_selection.json"
+    selection = (json.loads(selection_path.read_text())
+                 if selection_path.exists() else None)
 
     per_leg_errs = {
         "a1": any_request_error(leg_a1), "a2": any_request_error(leg_a2),
@@ -231,6 +234,31 @@ def main() -> int:
         "and the safety-log tally under `raw/safety_summary.json`.",
         "",
     ]
+    if selection is not None:
+        md_lines.extend([
+            "## GPU selection (from `raw/monitor_selection.json`)",
+            "",
+            f"- **Selected GPU ID:** {selection.get('selected_gpu_id')}",
+            f"- Idle streak start (UTC): `{selection.get('idle_start_utc')}`",
+            f"- Qualified (UTC): `{selection.get('qualified_utc')}`",
+            f"- Idle hold requirement: {selection.get('idle_hold_s')} s "
+            f"(mem ≤ {selection.get('mem_threshold_mib')} MiB, "
+            f"util ≤ {selection.get('util_threshold_pct')} %, "
+            f"0 compute PIDs, polled every "
+            f"{selection.get('poll_interval_s')} s)",
+            f"- Final pre-launch check (UTC): `{selection.get('prelaunch_utc')}` "
+            f"→ `{selection.get('prelaunch_state')}`",
+            "",
+        ])
+    else:
+        md_lines.extend([
+            "## GPU selection",
+            "",
+            "- `raw/monitor_selection.json` not found — this run was "
+            "not driven by `monitor_idle_gpu.py`. Selected GPU is "
+            f"whatever was passed via `R6_GPU_ID`.",
+            "",
+        ])
     if reasons:
         md_lines.append("**Reasons for non-PASS:**")
         for r in reasons:
@@ -291,6 +319,7 @@ def main() -> int:
                     "f_diagnostic": f_ok},
         "leg_errors": per_leg_errs,
         "safety": safety,
+        "selection": selection,
     }, indent=2, sort_keys=True))
     print(f"VERDICT={verdict}")
     for r in reasons:
