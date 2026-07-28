@@ -68,37 +68,104 @@ untouched. Verified: with the prefix prepended,
   (`server_args.py:3145-3146`). The defensive HIP fallback at
   `cuda_piecewise_backend.py:163-169` still exists; CUDA still asserts.
 
-## 3. Phases R0–R5
+## 3. Phases R0–R6
 
-Phase R0 (this commit): record plan + rebuilt-env repro context. No
-sglang source edits. No bench runs beyond Step E of the env rebuild
-(already reported in conversation; raw log lives in scratchpad only,
-not committed).
+Phases R0–R5 are complete on the profiler side. R6 is active and is the
+formal fix-value validation gate for the upstream PR.
 
-| Phase | Goal | Exit condition |
+| Phase | Goal | Actual outcome + evidence |
 |---|---|---|
-| R0 | Plan + record findings to date | This README + `plan.md` §5a updated, committed. |
-| R1 | Capture exact Dynamo recompile reason via `TORCH_LOGS=recompiles_verbose,dynamic,guards` (env-vars only, no source patch) | Raw recompile-reason excerpt + analysis under `results/R1_dynamo_recompile_log/`. |
-| R2 | Source-level instrumentation in `cuda_piecewise_backend.py.__call__` to log per-call shapes/dtypes/capture-stream-state | Edits committed to `/data/sglang-fork` branch `fix/pcg-vlm-deepstack-warmup`; runs use `PYTHONPATH=/data/sglang-fork/python` so `/sgl-workspace/sglang` stays clean. Trace under `results/R2_pcg_call_trace/`. A regenerated `patches/R2_piecewise_call_logging.patch` is committed in the profiler repo for reproducibility. |
-| R3 | 2–3 ranked hypotheses + minimal differential experiments (one axis flipped per experiment) | Per-experiment result under `results/R3_<id>/`. |
-| R4 | Fix proposal X / Y / Z + validation via E2a PASS, stretch IMG-A `S2_ipc_pcg` | Fix patch under `patches/R4_fix_<choice>.patch`, validation results under `results/R4_fix_<choice>/`. |
-| R5 | Upstream issue / PR draft only — filing is user-triggered | Draft under `upstream_handoff.md`. |
+| R0 | Plan + record findings to date | This README + `plan.md` §5a. Done. |
+| R1 | Capture exact Dynamo recompile reason via `TORCH_LOGS=recompiles_verbose,dynamic,guards` (env-vars only, no source patch) | Recompile trigger identified: `input_deepstack_embeds is None` guard failure at `qwen3_vl.py:1129`. Multimodal control-flow recompile (not a shape recompile). Excerpts under `results/R1_dynamo_recompile_log/`. |
+| R2 | Source-level instrumentation in `cuda_piecewise_backend.py.__call__` to log per-call shapes/dtypes/capture-stream-state | Recompiled `CUDAPiecewiseBackend` instance identified as a distinct Python object from the warmup-frame layer-0 instance; `set_pcg_capture_stream()` fires only inside `capture_session()` and never re-runs at inference. Trace under `results/R2_pcg_call_trace/`. Patch `patches/R2_piecewise_call_logging.patch`. |
+| R3 | 2–3 ranked hypotheses + minimal differential experiments | (X) defensive CUDA fallback validated at `cuda_piecewise_backend.py:163-169`; (X) PASSES safety but degrades perf ≈ −38 ms vs PCG-off. Results under `results/R3_fix_feasibility/`; patch `patches/R3_fix_X_cuda_eager_fallback.patch`. |
+| R4 | Fix (X) validation at scale + first (Y) attempt | (X) PASS n=32 (R4.A) and n=400 (R4.B). (X) rejected for upstream per §5a of `plan.md` (documented perf regression). Naive (Y) prototype (R4.C) crashed on `forward_context.py:59` assert — bypassed `set_attention_metadata_context()`. Patch `patches/R4_fix_Y_prototype_deepstack_warmup.patch`. |
+| R5 | Implement clean (Y) + verify | **Clean Y landed on fork** at branch `fix/pcg-vlm-deepstack-warmup` HEAD `986c89e69` (three-commit stack: `1f19ecd1a` warmup-gate CM → `a4ff0b181` capture-pass hook → `986c89e69` static deepstack buffer). Original R5 image-only TTFT gate **FAILED as stated** (fork-PCG ≈ 102–104 ms vs 64.8 ms). R5.A (n=32) and R5.B (n=400) recorded; **R5.B is pre-static-buffer (fork SHA `a4ff0b181`), historical only.** R5.C correctness audit reports OUTPUTS_DIFFER; static buffer improved but did not eliminate divergence — matched controls not yet run, so residual delta is **not** yet proven to be normal PCG-vs-eager bf16 noise. Results under `results/R5_clean_Y/`; patches `patches/R5_fix_Y_clean_deepstack_warmup_cm.patch`, `R5_fix_Y_clean_capture_pass_hook.patch`, `R5_fix_Y_static_deepstack_buffer.patch`. |
+| **R6** | **Fix-value validation for mixed-modality PCG.** Reframe R5's gate around what the fix actually provides: correctness / safety, retained text-only PCG benefit on VLM servers, mixed-modality operational safety, and workload characterization to find any winning cell. Detailed protocol in `plan.md` §5b. See §3.2 below for R6's directory layout and per-phase entry / exit conditions. | Verdict: **PASS / FAIL / R7_REQUIRED**. PR filing gated on PASS. |
 
-### 3.1 Fix shapes considered for R4
+### 3.1 Fix shape outcome (R4 / R5)
 
-- **(X) defensive CUDA fallback** at `cuda_piecewise_backend.py:163-169`
-  — mirror the existing HIP path so a missing capture stream degrades
-  to eager execution + warning instead of asserting. Smallest change;
-  matches existing precedent.
-- **(Y) broaden warmup capture** — ensure the failing guard signature
-  (likely a small-batch prefix-cache-hit prefill) is captured during
-  warmup so the recompile is unnecessary.
-- **(Z) per-model PCG opt-in** — wire Qwen3-VL into
-  `is_multimodal_piecewise_cuda_graph_supported` once R3 shows the
-  offending path is bounded. Lower-risk than (X) for production, but
-  partly overlaps Issue #5 scope; would be coordinated with #5.
+- **(X) defensive CUDA fallback** at `cuda_piecewise_backend.py:163-169` —
+  mirror of the existing HIP path. Validated in R3.B / R4.A / R4.B.
+  **Rejected for upstream** (silently degrades PCG-on VLM path by ~38 ms
+  vs PCG-off; defeats the point of `--enforce-piecewise-cuda-graph`).
+  Kept as local fork history + patch `patches/R3_fix_X_cuda_eager_fallback.patch`
+  for operators who need a manual band-aid before the real fix lands.
+- **(Y) broaden warmup capture** — implemented as clean-Y on fork HEAD
+  `986c89e69`. Approach: thread-local `force_warmup_deepstack_embeds`
+  gate read by `general_mm_embed_routine` (synthesises zero
+  `input_deepstack_embeds` for `use_deepstack` models during PCG
+  warmup); mirrored compile-pass hook in `TcPiecewiseCudaGraphBackend`
+  and capture-pass hook in `PrefillCudaGraphRunner`; model-attached
+  static deepstack buffer so captured cuda-graph replay reads from a
+  stable address at inference. Bug-fix layer (crash / assertion /
+  eager fallback / inference-time recompile) is eliminated; correctness
+  and mixed-modality perf are R6's job.
+- **(Z) per-model PCG opt-in** via
+  `is_multimodal_piecewise_cuda_graph_supported` — remains Issue #5's
+  scope; not implemented in R4 / R5 / R6. R6 evaluates within the
+  existing override semantics only.
 
-R4 picks one of X / Y / Z based on R3 evidence, not in advance.
+### 3.2 R6 protocol summary
+
+Full protocol in `plan.md` §5b (do not duplicate here). This section
+records the directory layout and phase entry conditions specific to
+this sub-track.
+
+#### Directory layout (`results/R6_fix_value_validation/`)
+
+```
+R6_fix_value_validation/
+├── README.md                          — R6 headline + current verdict pointer
+├── R6.0_provenance.md                 — frozen (stock, fork, snapshot, dataset SHA) tuple
+├── R6.1_correctness/
+│   ├── protocol.md                    — matched controls + fixed image + prompt list
+│   ├── raw/                           — .gitignore'd
+│   ├── summary.md
+│   └── verdict.md                     — PASS / FAIL / AMBIGUOUS
+├── R6.2_text_only_caseA/
+│   ├── protocol.md                    — 4-way variant matrix + drift bracket
+│   ├── R6.2a_stock_default/           — bench summaries only, raw gitignored
+│   ├── R6.2b_stock_pcg/
+│   ├── R6.2c_fork_pcg/
+│   ├── R6.2d_stock_default_repeat/
+│   └── summary.md
+├── R6.3_image_cost_and_sweep/
+│   ├── protocol.md
+│   ├── R6.3a_fresh_baseline/          — IMG-A rebaseline on final SHAs
+│   ├── R6.3b_workload_sweep/          — matrix cells, one dir per cell
+│   ├── R6.3c_mixed_safety/            — interleaved text→image→text log
+│   └── summary.md
+├── R6.4_analytical_crossover/
+│   ├── mix_analysis.py                — means-based p* + bootstrap CI
+│   └── mix_table.md
+└── R6.5_empirical_mixed/              — optional; created only if R6.1 = PASS
+```
+
+Runner scripts land under `scripts/run_R6_*.sh` and are `feat(v2): ...`
+commits. Result recording is `test(v2): ...` per experiment. The final
+R6 conclusion is a `docs(v2): ...` commit.
+
+#### Phase entry conditions
+
+- **R6.0** — requires §5b provenance freeze table filled in
+  `R6.0_provenance.md` with actual dataset SHA-256 (compute at write
+  time; no assumed values).
+- **R6.1** — requires a fixed real PNG committed to the profiler repo
+  (or referenced by absolute path with SHA-256 recorded) with clearly
+  interpretable content (subject, background, expected caption). No
+  `--image-content random` in the correctness gate.
+- **R6.2** — requires GPU with ≥ 38 GiB free confirmed at run start; not
+  GPU 0 (known leak).
+- **R6.3a** — must be a fresh run on `da802ddca` / `986c89e69`;
+  symlinking to `results/R5_clean_Y/R5B_n400_stretch/` is explicitly
+  disallowed (wrong fork SHA).
+- **R6.3c** — mixed-modality safety subtest is **mandatory**, not
+  optional; must be recorded even if perf legs are deferred.
+- **R6.4** — must operate on means, not p50; bootstrap CI from
+  rep-level data; historical estimates are illustrative only.
+- **R6.5** — gated on R6.1 = PASS; sweep ≥ 3 mix ratios; identical
+  fixed request order for stock-default vs fork-PCG.
 
 ## 4. Out of scope here
 
@@ -107,23 +174,48 @@ R4 picks one of X / Y / Z based on R3 evidence, not in advance.
   the parent `fixed_generator_plan.md` work and stays queued.
 - Changes to `--enforce-piecewise-cuda-graph` defaults or the
   `is_multimodal_piecewise_cuda_graph_supported` table without explicit
-  user approval. That is Issue #5's scope.
-- Filing the upstream issue / PR. R5 produces the draft only.
+  user approval. That is Issue #5's scope; R6 evaluates within the
+  existing override semantics.
+- Filing the upstream issue / PR. R6 gates it; user triggers filing.
+- Retroactively rewriting `results/R5_clean_Y/R5C_correctness_audit/audit_report.md`.
+  R5.C stands as recorded; R6.1 supersedes it as the correctness
+  authority. A local uncommitted edit to that file is preserved under
+  user control until user directs otherwise.
 
 ## 5. Artifact rules
 
 - All sglang source modifications kept as revertable `.patch` files
   under `patches/`. The actual `/sgl-workspace/sglang` working tree
-  must be clean between commits in this repo.
+  must be clean between commits in this repo. All actual fork changes
+  land in `/data/sglang-fork` branch `fix/pcg-vlm-deepstack-warmup`
+  and are committed / pushed there independently — never mixed into a
+  profiler commit.
 - Raw per-run server logs go under `results/<R-id>/raw/` and are
   **NOT committed** unless explicitly approved. Aggregate summaries
   + trimmed excerpts are committed.
 - Bench JSONLs are not committed; trimmed summaries only.
 - `.claude/settings.local.json` is never staged.
+- No empty `results/<R-id>/` directories are pre-created; each
+  sub-phase directory is created only when its first artifact is
+  written.
 
 ## 6. Commit cadence
 
 Per `CLAUDE.md`: Conventional Commits `type(scope): action target/context`,
 no `Co-Authored-By` trailers, no mention of Claude / Anthropic / AI in
-any subject / body / scope / trailer. Commit before each phase milestone
-and after each experiment result is recorded.
+any subject / body / scope / trailer. Prefix conventions for this
+sub-track:
+
+- `docs(v2): ...` — plan and status revisions, final R6 conclusion.
+- `feat(v2): ...` — new runners / generators / analysis tooling.
+- `test(v2): ...` — recorded experiment results, including recorded
+  failures (a failed R6.1 or R6.2 result is a `test` commit, not a
+  `fix`).
+- `perf(v2): ...` — only when the commit itself is a perf
+  implementation change; never for merely reporting perf numbers.
+- `fix(v2): ...` — profiler repo bugfixes.
+
+Every runner spec, every recorded experiment, and the final R6
+conclusion are each an independent focused commit, pushed
+immediately. Any SGLang fork changes commit + push in the fork
+repository only.
