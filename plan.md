@@ -339,6 +339,37 @@ Numbers from any earlier HEAD — v2 #2 Case A `21.94 / 14.04 ms` on
 only** and do **not** carry forward as R6 baselines. R6 measures everything
 fresh on the frozen (stock, fork) SHA pair.
 
+### R6.1 Protocol Amendment B (2026-07-28, authoritative for attempts 04+)
+
+Amendment A's negative control (§2.3) used 3 image prompts with
+distinct prefill runtime shapes, so it never exercised the
+second-same-shape post-recompile call that triggers the historical
+assertion. Amendment B replaces just that negative-control
+definition with the exact historical R1/E2a sustained-workload
+recipe (720p image, `--random-input-len 128 --random-range-ratio
+1.0`, `--num-prompts 32 --warmup-requests 30`, `--max-concurrency
+1`), identical for stock-PCG and fork-PCG. All other Amendment A
+rules (phase markers, cache-matched correctness, PGID-scoped
+cleanup, three-tier verdict shape) remain in force.
+
+Predeclared verdicts:
+
+- `SAFETY_SUPERIORITY_PASS`: stock reproduces the exact
+  `AssertionError: PCG capture stream is not set` after the
+  multimodal recompile cascade AND fork completes all warmup +
+  measured requests with 0 crashes / 0 assertions / 0 fallbacks /
+  0 post-ready inflight recompiles.
+- `STOCK_TRIGGER_NOT_REPRODUCED` (`AMBIGUOUS`): stock completes
+  the historical workload — record all runtime shapes and
+  investigate environment differences; do NOT claim upstream fix.
+- `FORK_FAIL`: fork regressed.
+- `INFRA_FAILURE`: unrelated environment problem.
+
+Attempt 03 correctness PASS may combine with Attempt 04's safety
+result only if Attempt 04 = SAFETY_SUPERIORITY_PASS.
+
+Full text: [`results/R6_fix_value_validation/R6.1_correctness/protocol_amendment_B_repeated_shape_safety.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.1_correctness/protocol_amendment_B_repeated_shape_safety.md).
+
 ### R6.1 Protocol Amendment A (2026-07-28, authoritative for attempts 03+)
 
 R6.1 attempts 01 / 02 exposed two protocol-level gaps that R6.1

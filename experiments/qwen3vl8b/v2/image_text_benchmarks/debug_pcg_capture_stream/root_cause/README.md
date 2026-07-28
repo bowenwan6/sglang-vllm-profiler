@@ -83,6 +83,20 @@ formal fix-value validation gate for the upstream PR.
 | R5 | Implement clean (Y) + verify | **Clean Y landed on fork** at branch `fix/pcg-vlm-deepstack-warmup` HEAD `986c89e69` (three-commit stack: `1f19ecd1a` warmup-gate CM → `a4ff0b181` capture-pass hook → `986c89e69` static deepstack buffer). Original R5 image-only TTFT gate **FAILED as stated** (fork-PCG ≈ 102–104 ms vs 64.8 ms). R5.A (n=32) and R5.B (n=400) recorded; **R5.B is pre-static-buffer (fork SHA `a4ff0b181`), historical only.** R5.C correctness audit reports OUTPUTS_DIFFER; static buffer improved but did not eliminate divergence — matched controls not yet run, so residual delta is **not** yet proven to be normal PCG-vs-eager bf16 noise. Results under `results/R5_clean_Y/`; patches `patches/R5_fix_Y_clean_deepstack_warmup_cm.patch`, `R5_fix_Y_clean_capture_pass_hook.patch`, `R5_fix_Y_static_deepstack_buffer.patch`. |
 | **R6** | **Fix-value validation for mixed-modality PCG.** Reframe R5's gate around what the fix actually provides: correctness / safety, retained text-only PCG benefit on VLM servers, mixed-modality operational safety, and workload characterization to find any winning cell. Detailed protocol in `plan.md` §5b. See §3.2 below for R6's directory layout and per-phase entry / exit conditions. | Verdict: **PASS / FAIL / R7_REQUIRED**. PR filing gated on PASS. **R6.0** ✅ provenance frozen 2026-07-28 (amendments A1 / A2 dated same, retiring "GPU 6 only" and tightening cleanup to PGID-scoped only) — [`results/R6_fix_value_validation/R6.0_provenance.md`](results/R6_fix_value_validation/R6.0_provenance.md). **R6.1a** ✅ correctness protocol + fixture + runner landed CPU-only 2026-07-28 — [`results/R6_fix_value_validation/R6.1_correctness/protocol.md`](results/R6_fix_value_validation/R6.1_correctness/protocol.md), `scripts/{run_R6_1_correctness.sh, R6_1_client.py, R6_1_verdict.py, R6_setsid_exec.py, monitor_idle_gpu.py}`. **R6.1b attempt 01** ⚠️ INFRA_FAILURE 2026-07-28T10:46 UTC — historical only. **R6.1b attempt 02** ❌ FAIL 2026-07-28T12:43 UTC. Superseded by attempt 03. **R6.1b attempt 03** machine verdict: ❌ **FAIL / NONE** (stands). **Interpretation corrected 2026-07-28** (see [`attempt_03_.../interpretation_addendum.md`](results/R6_fix_value_validation/R6.1_correctness/attempt_03_amended_A_gpu0/interpretation_addendum.md)): safety negative control was under-powered — 3 distinct image prompts → 3 distinct prefill runtime shapes, so the second-same-shape post-recompile trigger was never exercised. R1 crashed on the **same** stock SHA `da802ddca`, and `cuda_piecewise_backend.py:172` still contains the assertion. Corrected classification: **`INCONCLUSIVE_TRIGGER_NOT_REPRODUCED`**. Prior "upstream fixed it" claim withdrawn. Tier 2 CORRECTNESS PASS remains valid. R6.2–R6.5 blocked. Amendment B (repeated-shape safety, replicating historical E2a/R1/R2 recipe) + Attempt 04 follow. |
 
+### 3.0.2 R6.1 Protocol Amendment B (2026-07-28)
+
+Amendment B **replaces Amendment A §2.3** (the 3-prompt image
+negative control that produced 3 distinct prefill shapes and
+therefore never exercised the historical trigger) with a
+**repeated-shape negative control** that uses the exact historical
+R1/E2a recipe: 720p image, `--random-input-len 128
+--random-range-ratio 1.0`, `--num-prompts 32 --warmup-requests
+30`, `--max-concurrency 1`. Identical bench recipe for stock-PCG
+and fork-PCG; both under `--enforce-piecewise-cuda-graph`. All
+other Amendment A rules (phase markers, cache-matched correctness,
+PGID-scoped cleanup) remain in force. See
+[`results/R6_fix_value_validation/R6.1_correctness/protocol_amendment_B_repeated_shape_safety.md`](results/R6_fix_value_validation/R6.1_correctness/protocol_amendment_B_repeated_shape_safety.md).
+
 ### 3.0.1 R6.1 Protocol Amendment A (2026-07-28)
 
 The historical `R6.1_correctness/protocol.md` remains the authority
