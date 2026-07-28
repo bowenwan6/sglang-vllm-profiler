@@ -54,18 +54,41 @@ fi
 export CUDA_VISIBLE_DEVICES="${GPU_ID}"
 
 # --------------------------------------------------------------------------
+# 0b. Host-libcuda LD_PRELOAD (see R6.0 Amendment A3)
+# --------------------------------------------------------------------------
+# This container's `cuda-compat-13-0` package installs
+# `/usr/local/cuda-13.0/compat/libcuda.so.580.82.07` which is older
+# than the host driver (595.71.05). Torch 2.11.0+cu130 loaded against
+# the compat lib fails `cudaGetDeviceCount()` with Error 803. We fix
+# the loader precedence by LD_PRELOAD-ing the host driver library.
+R6_HOST_LIBCUDA=/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05
+if [[ ! -s "$R6_HOST_LIBCUDA" ]]; then
+  echo "[R6.1] Missing or empty host libcuda: $R6_HOST_LIBCUDA" >&2
+  exit 65
+fi
+export LD_PRELOAD="${R6_HOST_LIBCUDA}${LD_PRELOAD:+ ${LD_PRELOAD}}"
+export R6_HOST_LIBCUDA
+
+# --------------------------------------------------------------------------
 # 1. Fixed paths + provenance re-verification
 # --------------------------------------------------------------------------
 ROOT=/data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause
 FIX_DIR="$ROOT/results/R6_fix_value_validation/R6.1_correctness/fixtures"
-RAW_DIR="$ROOT/results/R6_fix_value_validation/R6.1_correctness/raw"
-SUMMARY_DIR="$ROOT/results/R6_fix_value_validation/R6.1_correctness"
+# ATTEMPT allows a rerun to write into a fresh directory without
+# overwriting an earlier attempt's raw/ or verdict/. Default is
+# attempt_02_host_libcuda_595_gpu2 (see R6.0 Amendment A3). Attempt
+# 01's artifacts remain at R6.1_correctness/{verdict.md,verdict.json}
+# and R6.1_correctness/raw/, untouched.
+ATTEMPT="${R6_ATTEMPT_DIR:-attempt_02_host_libcuda_595_gpu2}"
+RAW_DIR="$ROOT/results/R6_fix_value_validation/R6.1_correctness/$ATTEMPT/raw"
+SUMMARY_DIR="$ROOT/results/R6_fix_value_validation/R6.1_correctness/$ATTEMPT"
 FIXTURE_PNG="$FIX_DIR/R6.1_fixture.png"
 FIXTURE_SHA="$FIX_DIR/R6.1_fixture.sha256"
 PROMPTS_JSON="$FIX_DIR/prompts.json"
 CLIENT_PY="$ROOT/scripts/R6_1_client.py"
 VERDICT_PY="$ROOT/scripts/R6_1_verdict.py"
 SETSID_HELPER="$ROOT/scripts/R6_setsid_exec.py"
+PREFLIGHT_PY="$ROOT/scripts/R6_preflight_libcuda.py"
 
 SNAP=/root/.cache/huggingface/hub/models--Qwen--Qwen3-VL-8B-Instruct/snapshots/0c351dd01ed87e9c1b53cbc748cba10e6187ff3b
 FORK_PY=/data/sglang-fork/python
@@ -97,7 +120,81 @@ if [[ ! -x "$SETSID_HELPER" ]]; then
   echo "[R6.1] setsid helper not executable: $SETSID_HELPER" >&2
   exit 65
 fi
+if [[ ! -x "$PREFLIGHT_PY" ]]; then
+  echo "[R6.1] preflight script not executable: $PREFLIGHT_PY" >&2
+  exit 65
+fi
 echo "[R6.1] provenance OK (stock=$STOCK_HEAD fork=$FORK_HEAD fixture=$FIX_SHA)"
+echo "[R6.1] attempt dir: $ATTEMPT"
+echo "[R6.1] LD_PRELOAD=$LD_PRELOAD"
+
+# --------------------------------------------------------------------------
+# 1b. Libcuda preflight + minimal CUDA smoke on the approved GPU
+# --------------------------------------------------------------------------
+# Fails hard if libcuda.so.1 does not resolve to the pinned host lib,
+# or if a compat libcuda is loaded, or if a minimal CUDA tensor op
+# fails. This is the R6.1 defence against the R6.0 Amendment A3 issue
+# recurring.
+echo "[R6.1] running host-libcuda preflight on GPU $GPU_ID ..."
+if ! python3 "$PREFLIGHT_PY" --gpu "$GPU_ID" 2>&1 | tee "$RAW_DIR/preflight.log"; then
+  # tee makes the pipe status the exit of tee (0), so we check the
+  # preflight's captured output for FAIL and also inspect PIPESTATUS.
+  pf_rc="${PIPESTATUS[0]}"
+  echo "[R6.1] preflight FAILED (rc=$pf_rc) — see $RAW_DIR/preflight.log" >&2
+  exit 65
+fi
+# Confirm memory returned to a low baseline (context may hold a
+# small allocation until process exit; the preflight process has
+# already exited so mem should be near-baseline).
+sleep 3
+mem_after=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits -i "$GPU_ID" | tr -d ' ')
+echo "[R6.1] post-preflight GPU $GPU_ID mem=${mem_after}MiB"
+if [[ "$mem_after" -gt 500 ]]; then
+  echo "[R6.1] post-preflight memory ($mem_after MiB) > 500 MiB baseline; refusing to proceed" >&2
+  exit 65
+fi
+
+# Write launch_context.json so verdict.py can embed launch identity
+# (used when the runner is invoked directly instead of via the
+# idle-GPU monitor's monitor_selection.json).
+GPU_ID_ARG="$GPU_ID" ATTEMPT_ARG="$ATTEMPT" \
+  python3 - > "$RAW_DIR/launch_context.json" <<'PYEOF'
+import json, os, socket, subprocess
+from datetime import datetime, timezone
+GPU_ID = os.environ["GPU_ID_ARG"]
+ATTEMPT = os.environ["ATTEMPT_ARG"]
+
+def cmd(args):
+    r = subprocess.run(args, capture_output=True, text=True, timeout=10)
+    return r.stdout.strip()
+
+pids_raw = cmd(["nvidia-smi", "--query-compute-apps=pid",
+                "--format=csv,noheader,nounits", "-i", GPU_ID])
+print(json.dumps({
+    "launched_by": "direct_runner",
+    "attempt_dir": ATTEMPT,
+    "selected_gpu_id": int(GPU_ID),
+    "host_libcuda": os.environ.get("R6_HOST_LIBCUDA"),
+    "ld_preload": os.environ.get("LD_PRELOAD"),
+    "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
+    "prelaunch_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    "prelaunch_state": {
+        "mem_mib": int(cmd(["nvidia-smi", "--query-gpu=memory.used",
+                            "--format=csv,noheader,nounits", "-i", GPU_ID])),
+        "util_pct": int(cmd(["nvidia-smi", "--query-gpu=utilization.gpu",
+                             "--format=csv,noheader,nounits", "-i", GPU_ID])),
+        "compute_pids": [x for x in pids_raw.splitlines() if x],
+    },
+    "nvidia_driver": cmd(["nvidia-smi", "--query-gpu=driver_version",
+                          "--format=csv,noheader", "-i", GPU_ID]),
+    "sglang_stock_head": cmd(["git", "-C", "/sgl-workspace/sglang",
+                              "rev-parse", "HEAD"]),
+    "sglang_fork_head": cmd(["git", "-C", "/data/sglang-fork",
+                             "rev-parse", "HEAD"]),
+    "hostname": socket.gethostname(),
+}, indent=2, sort_keys=True))
+PYEOF
+echo "[R6.1] launch context written to $RAW_DIR/launch_context.json"
 
 # --------------------------------------------------------------------------
 # 2. Per-process tracking (only signal what we launched)

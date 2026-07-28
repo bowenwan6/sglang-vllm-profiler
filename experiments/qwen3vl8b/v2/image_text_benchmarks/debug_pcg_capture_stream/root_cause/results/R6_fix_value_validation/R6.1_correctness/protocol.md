@@ -65,6 +65,24 @@ R6.2 / R6.3 / R6.4 / R6.5 are blocked on this gate passing.
   selected GPU whose PGID is outside our tracked set) are treated
   as resource contention: the runner tears down its own servers
   and exits 71 without signalling the foreign process.
+- **Host libcuda** (amended 2026-07-28, see R6.0 Amendment A3):
+  The runner unconditionally prepends
+  `LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05`
+  before any Python invocation and calls
+  [`scripts/R6_preflight_libcuda.py`](../../../scripts/R6_preflight_libcuda.py)
+  after provenance verification. The preflight refuses to proceed
+  unless `libcuda.so.1` resolves exactly to the pinned host lib
+  (no `/usr/local/cuda-*/compat/*` path may appear), then runs a
+  minimal CUDA tensor smoke on the target GPU. All server / client
+  subprocesses inherit the `LD_PRELOAD`. Attempt 01's failure
+  (commit `703ff69`) was caused by the compat lib
+  `libcuda.so.580.82.07` taking precedence over the host lib;
+  the environment fix here defends against that recurrence.
+- **Attempt directory** (amended 2026-07-28, see R6.0 Amendment A3):
+  The runner supports an `R6_ATTEMPT_DIR` env var that isolates
+  each rerun's `raw/` and `verdict.{md,json}` into a subdirectory
+  so that a prior attempt's artifacts are never overwritten.
+  Default: `attempt_02_host_libcuda_595_gpu2`.
 - **Flags per variant** (canonical, from R6.0):
 
   | Variant | Extra flags | Import path |

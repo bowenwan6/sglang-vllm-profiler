@@ -178,7 +178,12 @@ def main() -> int:
     leg_f1 = load_leg(ind / "leg_f_stock_default_text.json")
     leg_f2 = load_leg(ind / "leg_f_stock_pcg_text.json")
     safety = load_safety(ind / "safety_summary.json")
+    # Prefer monitor_selection.json when the run was driven by
+    # monitor_idle_gpu.py; fall back to launch_context.json for
+    # direct-invocation runs.
     selection_path = ind / "monitor_selection.json"
+    if not selection_path.exists():
+        selection_path = ind / "launch_context.json"
     selection = (json.loads(selection_path.read_text())
                  if selection_path.exists() else None)
 
@@ -235,28 +240,46 @@ def main() -> int:
         "",
     ]
     if selection is not None:
-        md_lines.extend([
-            "## GPU selection (from `raw/monitor_selection.json`)",
-            "",
-            f"- **Selected GPU ID:** {selection.get('selected_gpu_id')}",
-            f"- Idle streak start (UTC): `{selection.get('idle_start_utc')}`",
-            f"- Qualified (UTC): `{selection.get('qualified_utc')}`",
-            f"- Idle hold requirement: {selection.get('idle_hold_s')} s "
-            f"(mem ≤ {selection.get('mem_threshold_mib')} MiB, "
-            f"util ≤ {selection.get('util_threshold_pct')} %, "
-            f"0 compute PIDs, polled every "
-            f"{selection.get('poll_interval_s')} s)",
-            f"- Final pre-launch check (UTC): `{selection.get('prelaunch_utc')}` "
-            f"→ `{selection.get('prelaunch_state')}`",
-            "",
-        ])
+        if "launched_by" in selection and selection.get("launched_by") == "direct_runner":
+            md_lines.extend([
+                "## Launch context (from `raw/launch_context.json`)",
+                "",
+                f"- **Launched by:** direct runner invocation (no idle-GPU monitor)",
+                f"- **Selected GPU ID:** {selection.get('selected_gpu_id')}",
+                f"- Attempt dir: `{selection.get('attempt_dir')}`",
+                f"- Host libcuda pinned: `{selection.get('host_libcuda')}`",
+                f"- LD_PRELOAD: `{selection.get('ld_preload')}`",
+                f"- CUDA_VISIBLE_DEVICES: `{selection.get('cuda_visible_devices')}`",
+                f"- Pre-launch UTC: `{selection.get('prelaunch_utc')}`",
+                f"- Pre-launch state: `{selection.get('prelaunch_state')}`",
+                f"- NVIDIA driver: `{selection.get('nvidia_driver')}`",
+                f"- Stock SGLang HEAD: `{selection.get('sglang_stock_head')}`",
+                f"- Fork SGLang HEAD: `{selection.get('sglang_fork_head')}`",
+                f"- Hostname: `{selection.get('hostname')}`",
+                "",
+            ])
+        else:
+            md_lines.extend([
+                "## GPU selection (from `raw/monitor_selection.json`)",
+                "",
+                f"- **Selected GPU ID:** {selection.get('selected_gpu_id')}",
+                f"- Idle streak start (UTC): `{selection.get('idle_start_utc')}`",
+                f"- Qualified (UTC): `{selection.get('qualified_utc')}`",
+                f"- Idle hold requirement: {selection.get('idle_hold_s')} s "
+                f"(mem ≤ {selection.get('mem_threshold_mib')} MiB, "
+                f"util ≤ {selection.get('util_threshold_pct')} %, "
+                f"0 compute PIDs, polled every "
+                f"{selection.get('poll_interval_s')} s)",
+                f"- Final pre-launch check (UTC): `{selection.get('prelaunch_utc')}` "
+                f"→ `{selection.get('prelaunch_state')}`",
+                "",
+            ])
     else:
         md_lines.extend([
             "## GPU selection",
             "",
-            "- `raw/monitor_selection.json` not found — this run was "
-            "not driven by `monitor_idle_gpu.py`. Selected GPU is "
-            f"whatever was passed via `R6_GPU_ID`.",
+            "- No `raw/monitor_selection.json` or `raw/launch_context.json` "
+            "found — launch identity not recorded.",
             "",
         ])
     if reasons:
