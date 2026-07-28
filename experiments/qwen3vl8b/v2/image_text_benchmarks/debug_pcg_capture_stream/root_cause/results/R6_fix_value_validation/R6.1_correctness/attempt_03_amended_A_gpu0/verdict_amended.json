@@ -1,0 +1,307 @@
+{
+  "correctness": {
+    "cross_comparisons": [
+      {
+        "all_inside_envelope": true,
+        "envelope_key": "stock_default_image",
+        "key_a": "stock_default_image",
+        "key_b": "fork_default_image",
+        "missing": false,
+        "name": "stock_default_vs_fork_default__image_cold",
+        "per_prompt": [
+          {
+            "char_len_a": 194,
+            "char_len_b": 194,
+            "envelope_max": 2,
+            "exact_equal": true,
+            "inside_envelope": true,
+            "tok_common_prefix": 39,
+            "tok_first_diff": null,
+            "tok_len_a": 39,
+            "tok_len_b": 39,
+            "tok_levenshtein": 0,
+            "token_equal": true,
+            "union_envelope_max": 2
+          },
+          {
+            "char_len_a": 267,
+            "char_len_b": 267,
+            "envelope_max": 2,
+            "exact_equal": true,
+            "inside_envelope": true,
+            "tok_common_prefix": 63,
+            "tok_first_diff": null,
+            "tok_len_a": 63,
+            "tok_len_b": 63,
+            "tok_levenshtein": 0,
+            "token_equal": true,
+            "union_envelope_max": 2
+          },
+          {
+            "char_len_a": 298,
+            "char_len_b": 298,
+            "envelope_max": 2,
+            "exact_equal": true,
+            "inside_envelope": true,
+            "tok_common_prefix": 71,
+            "tok_first_diff": null,
+            "tok_len_a": 71,
+            "tok_len_b": 71,
+            "tok_levenshtein": 0,
+            "token_equal": true,
+            "union_envelope_max": 2
+          }
+        ]
+      },
+      {
+        "all_inside_envelope": true,
+        "envelope_key": "stock_pcg_text",
+        "key_a": "stock_pcg_text",
+        "key_b": "fork_pcg_text",
+        "missing": false,
+        "name": "stock_pcg_vs_fork_pcg__text_cold",
+        "per_prompt": [
+          {
+            "char_len_a": 107,
+            "char_len_b": 107,
+            "envelope_max": 2,
+            "exact_equal": true,
+            "inside_envelope": true,
+            "tok_common_prefix": 21,
+            "tok_first_diff": null,
+            "tok_len_a": 21,
+            "tok_len_b": 21,
+            "tok_levenshtein": 0,
+            "token_equal": true,
+            "union_envelope_max": 2
+          },
+          {
+            "char_len_a": 372,
+            "char_len_b": 387,
+            "envelope_max": 2,
+            "exact_equal": false,
+            "inside_envelope": true,
+            "tok_common_prefix": 15,
+            "tok_first_diff": 15,
+            "tok_len_a": 83,
+            "tok_len_b": 84,
+            "tok_levenshtein": 42,
+            "token_equal": false,
+            "union_envelope_max": 42
+          },
+          {
+            "char_len_a": 2,
+            "char_len_b": 2,
+            "envelope_max": 2,
+            "exact_equal": true,
+            "inside_envelope": true,
+            "tok_common_prefix": 2,
+            "tok_first_diff": null,
+            "tok_len_a": 2,
+            "tok_len_b": 2,
+            "tok_levenshtein": 0,
+            "token_equal": true,
+            "union_envelope_max": 2
+          }
+        ]
+      },
+      {
+        "all_inside_envelope": true,
+        "envelope_key": "fork_default_image",
+        "key_a": "fork_default_image",
+        "key_b": "fork_pcg_image",
+        "missing": false,
+        "name": "fork_default_vs_fork_pcg__image_cold",
+        "per_prompt": [
+          {
+            "char_len_a": 194,
+            "char_len_b": 194,
+            "envelope_max": 2,
+            "exact_equal": true,
+            "inside_envelope": true,
+            "tok_common_prefix": 39,
+            "tok_first_diff": null,
+            "tok_len_a": 39,
+            "tok_len_b": 39,
+            "tok_levenshtein": 0,
+            "token_equal": true,
+            "union_envelope_max": 2
+          },
+          {
+            "char_len_a": 267,
+            "char_len_b": 267,
+            "envelope_max": 2,
+            "exact_equal": true,
+            "inside_envelope": true,
+            "tok_common_prefix": 63,
+            "tok_first_diff": null,
+            "tok_len_a": 63,
+            "tok_len_b": 63,
+            "tok_levenshtein": 0,
+            "token_equal": true,
+            "union_envelope_max": 2
+          },
+          {
+            "char_len_a": 298,
+            "char_len_b": 298,
+            "envelope_max": 2,
+            "exact_equal": true,
+            "inside_envelope": true,
+            "tok_common_prefix": 71,
+            "tok_first_diff": null,
+            "tok_len_a": 71,
+            "tok_len_b": 71,
+            "tok_levenshtein": 0,
+            "token_equal": true,
+            "union_envelope_max": 2
+          }
+        ]
+      }
+    ],
+    "envelopes": {
+      "fork_default_image": {
+        "missing": false,
+        "n_prompts": 3,
+        "per_prompt_envelope_max": [
+          2,
+          2,
+          2
+        ],
+        "per_prompt_repeat_lev": [
+          0,
+          0,
+          0
+        ]
+      },
+      "fork_pcg_image": {
+        "missing": false,
+        "n_prompts": 3,
+        "per_prompt_envelope_max": [
+          2,
+          2,
+          2
+        ],
+        "per_prompt_repeat_lev": [
+          0,
+          0,
+          0
+        ]
+      },
+      "fork_pcg_text": {
+        "missing": false,
+        "n_prompts": 3,
+        "per_prompt_envelope_max": [
+          2,
+          42,
+          2
+        ],
+        "per_prompt_repeat_lev": [
+          0,
+          42,
+          0
+        ]
+      },
+      "stock_default_image": {
+        "missing": false,
+        "n_prompts": 3,
+        "per_prompt_envelope_max": [
+          2,
+          2,
+          2
+        ],
+        "per_prompt_repeat_lev": [
+          0,
+          0,
+          0
+        ]
+      },
+      "stock_pcg_text": {
+        "missing": false,
+        "n_prompts": 3,
+        "per_prompt_envelope_max": [
+          2,
+          2,
+          2
+        ],
+        "per_prompt_repeat_lev": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "reasons": [],
+    "verdict": "PASS"
+  },
+  "evidence_tier_claimed": "NONE",
+  "launch_context": {
+    "attempt_dir": "attempt_03_amended_A_gpu0",
+    "cuda_visible_devices": "0",
+    "host_libcuda": "/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05",
+    "hostname": "17b86cda54f9",
+    "launched_by": "run_R6_1_amended",
+    "ld_preload": "/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05",
+    "nvidia_driver": "595.71.05",
+    "prelaunch_state": {
+      "compute_pids": [
+        "3143511"
+      ],
+      "mem_mib": 31,
+      "util_pct": 0
+    },
+    "prelaunch_utc": "2026-07-28T13:34:15+00:00",
+    "selected_gpu_id": 0,
+    "sglang_fork_head": "986c89e69c25882ab6f3d396f8eb306f38f2c8d2",
+    "sglang_stock_head": "da802ddcafe55e25b3e1db86b1e0444afc3e05bc"
+  },
+  "overall_verdict": "FAIL",
+  "safety_superiority": {
+    "fpi_no_inflight_recompile": true,
+    "fpi_reqs_ok": true,
+    "fpi_safety": {
+      "assertions": 0,
+      "fallbacks": 0,
+      "markers": [
+        {
+          "kind": "SERVER_READY",
+          "label": "fork_pcg_interleaved",
+          "ts": "2026-07-28T13:49:14.549Z"
+        },
+        {
+          "kind": "LEG_START",
+          "label": "fork_pcg_interleaved",
+          "ts": "2026-07-28T13:49:14.678Z"
+        },
+        {
+          "kind": "LEG_END",
+          "label": "fork_pcg_interleaved",
+          "ts": "2026-07-28T13:49:17.208Z"
+        }
+      ],
+      "notes": "post_ready_recompiles conservatively attributed to the last recorded LEG_START; refine in R7 if needed.",
+      "per_leg_recompiles": {
+        "fork_pcg_interleaved": 0
+      },
+      "phase_markers": "/data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.1_correctness/attempt_03_amended_A_gpu0/raw/fork_pcg_interleaved_phase_markers.txt",
+      "post_ready_recompile_lines": [],
+      "post_ready_recompiles": 0,
+      "request_failures": 0,
+      "server_log": "/data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.1_correctness/attempt_03_amended_A_gpu0/raw/fork_pcg_interleaved_server.log",
+      "server_log_total_lines": 591,
+      "server_ready_line": 575,
+      "startup_warmup_recompile_lines": [
+        30,
+        53,
+        160,
+        195
+      ],
+      "startup_warmup_recompiles": 4
+    },
+    "fpi_safety_ok": true,
+    "negative_control_result": "STOCK_NOW_SURVIVES",
+    "reasons": [
+      "negative_control.result=STOCK_NOW_SURVIVES (need EXPECTED_STOCK_FAILURE)"
+    ],
+    "verdict": "FAIL"
+  }
+}
