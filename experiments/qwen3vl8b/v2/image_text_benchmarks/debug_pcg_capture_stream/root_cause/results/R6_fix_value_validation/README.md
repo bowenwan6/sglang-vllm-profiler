@@ -10,13 +10,13 @@ protocol; this directory holds the recorded artifacts.
 |---|---|---|
 | **R6.0** — Provenance freeze + amendments A1 / A2 (2026-07-28: dynamic GPU selection via monitor; PGID-scoped cleanup only) | ✅ COMPLETE | [`R6.0_provenance.md`](R6.0_provenance.md) |
 | **R6.1a** — Correctness protocol + runner + fixture (CPU-only, no GPU workload); safety-scoped teardown + idle-GPU monitor | ✅ COMPLETE | [`R6.1_correctness/protocol.md`](R6.1_correctness/protocol.md), [`R6.1_correctness/fixtures/`](R6.1_correctness/fixtures/), `scripts/{run_R6_1_correctness.sh, R6_1_client.py, R6_1_verdict.py, R6_setsid_exec.py, monitor_idle_gpu.py}` |
-| **R6.1b** — Correctness gate execution + verdict (GPU is auto-selected by `monitor_idle_gpu.py` after 600 s continuous idle) | 🔒 authorized to auto-run once one GPU has been continuously idle for 10 min (all GPUs currently occupied) | executes runner; produces `R6.1_correctness/{verdict.md, verdict.json}` with the selected GPU + qualification interval embedded |
+| **R6.1b** — Correctness gate execution + verdict (GPU is auto-selected by `monitor_idle_gpu.py` after 600 s continuous idle) | ⚠️ **R7_REQUIRED / INFRA_FAILURE** on 2026-07-28T10:46 UTC — NVIDIA driver silently upgraded during the 3.4 h monitor wait (R6.0: `570.172.08` → runner-time: `595.71.05`); torch 2.11.0+cu130 fails `cudaGetDeviceCount()` with Error 803; stock-default server exited before HTTP readiness; no leg executed. Runner exited 2. No process outside our launch was signalled. See [`R6.1_correctness/verdict.md`](R6.1_correctness/verdict.md). Retry requires (a) resolving the driver/torch ABI mismatch and (b) a `docs(v2): update R6 provenance` commit — not attempted here. | [`R6.1_correctness/verdict.md`](R6.1_correctness/verdict.md), [`R6.1_correctness/verdict.json`](R6.1_correctness/verdict.json) |
 | **R6.2** — Text-only Case A matched control (4 variants × 5 reps) | ⏳ NOT STARTED | — |
 | **R6.3** — Fresh image cost + workload sweep + mixed-safety subtest | ⏳ NOT STARTED | — |
 | **R6.4** — Analytical crossover (means, bootstrap CI) | ⏳ NOT STARTED | — |
 | **R6.5** — Optional empirical mixed validation | ⏳ NOT STARTED | — |
 
-**R6 overall verdict:** ⏳ pending — awaiting R6.1 through R6.5.
+**R6 overall verdict:** ⚠️ **R7_REQUIRED (INFRA_FAILURE at R6.1b, driver drift)** — see R6.1b row and [`R6.1_correctness/verdict.md`](R6.1_correctness/verdict.md). Downstream phases R6.2 – R6.5 remain blocked until R6.1b is retried under an amended R6.0 provenance tuple.
 
 Final verdict shape (populated after R6.5 / R6.4 decision):
 `PASS` · `SAFETY_ONLY` · `R7_REQUIRED` · `INCONCLUSIVE`.
