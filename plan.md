@@ -320,12 +320,17 @@ Three independent claims, each with its own gate:
 | Item | Value | Source |
 |---|---|---|
 | Stock SGLang SHA | `da802ddcafe55e25b3e1db86b1e0444afc3e05bc` | `/sgl-workspace/sglang` HEAD (rebuilt 2026-06-28) |
-| Final fork SHA | `986c89e69` | `/data/sglang-fork` branch `fix/pcg-vlm-deepstack-warmup` |
+| Final fork SHA | `986c89e69c25882ab6f3d396f8eb306f38f2c8d2` (branch base = stock HEAD → binary-compatible with installed `sgl_kernel`) | `/data/sglang-fork` branch `fix/pcg-vlm-deepstack-warmup` |
 | Model snapshot | `0c351dd01ed87e9c1b53cbc748cba10e6187ff3b` | HF `Qwen/Qwen3-VL-8B-Instruct` |
-| Profiling env | `/opt/miniconda3/envs/profiling` — torch 2.11.0+cu130, flashinfer 0.6.8+, sgl_kernel 0.4.3, vLLM 0.21.0 | rebuild 2026-06-28 |
-| Text dataset | `datasets/qwen3vl8b/caseA_short.jsonl` (600 prompts; R6.0 records SHA) | v2 #2 provenance |
+| System python (server) | `python 3.12.3` + torch 2.11.0+cu130 + flashinfer 0.6.12 + sgl_kernel 0.4.4 | `/usr/bin/python3`, installed sglang path |
+| Profiling env (bench client, vLLM anchor) | `/opt/miniconda3/envs/profiling` — torch 2.11.0+cu130, vLLM 0.21.0 | rebuild 2026-06-28 |
+| Text dataset | `datasets/qwen3vl8b/caseA_short.jsonl` (600 prompts, SHA-256 `fab4917772e087447d7c33d53ada63340b126088c1f195f118b9488d5f5b619e`) | v2 #2 provenance |
 | Correctness image | Fixed real PNG chosen and recorded in R6.1 protocol (no `--image-content random`) | new for R6 |
-| GPU | ≥ 38 GiB free at run start; **avoid GPU 0** (~124 GiB leaked context, no reset available) | dynamic; recorded per run |
+| GPU | **GPU 6 only** (`CUDA_VISIBLE_DEVICES=6`); pre-check idle (0 MiB, 0% util, no compute apps) before every server launch | must not silently relocate |
+
+Full frozen provenance table, verification commands, and historical /
+reference numbers live in
+[`.../results/R6_fix_value_validation/R6.0_provenance.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.0_provenance.md).
 
 Numbers from any earlier HEAD — v2 #2 Case A `21.94 / 14.04 ms` on
 `0c8049d9b`; IMG_A_S0_ipc `64.8 ms` on `62c505a196`; R5.A/B/C on fork SHAs
@@ -337,7 +342,7 @@ fresh on the frozen (stock, fork) SHA pair.
 
 | Phase | Purpose | Exit / verdict |
 |---|---|---|
-| **R6.0** | Provenance freeze + protocol writeup; dataset SHA recorded; commit + push. | This §5b + `root_cause/results/R6_fix_value_validation/README.md` committed. |
+| **R6.0** | Provenance freeze + protocol writeup; dataset SHA recorded; commit + push. | ✅ COMPLETE 2026-07-28 — `results/R6_fix_value_validation/{README.md, R6.0_provenance.md}` committed. |
 | **R6.1** | Correctness gate. Matched controls: (a) fork-default vs fork-PCG on the fixed real image (isolates PCG-vs-eager numerical delta from fix-introduced corruption); (b) stock-default vs fork-default on the same image (fix must be a no-op when PCG is off); (c) stock-PCG vs fork-PCG on text-only Case A (fix must not perturb the text-only PCG path). Fixed real image with clearly interpretable content (not random noise); fixed prompts; greedy sampling; `TORCH_LOGS=recompiles` on. Deterministic same-backend repeat first, to rule out sampling non-determinism before cross-backend comparison. | **Verdict: PASS / FAIL / AMBIGUOUS.** PASS = fork-default vs fork-PCG differ only in ways matched by stock's own eager-vs-PCG delta on a non-VLM control (or bitwise identical); FAIL = fork-default vs fork-default cross-run divergence, or fork disturbs the text-only PCG path; AMBIGUOUS = residual divergence not explained by controls → **R7_REQUIRED**, upstream PR blocked. |
 | **R6.2** | Text-only Case A on Qwen3-VL server. Same recipe as v2 #2 Case A: `caseA_short.jsonl`, 128→128, c=1, n=400, warmup=30, seed=1, 5 reps. Variants: **(2a)** stock-default, **(2b)** stock-PCG (`--enforce-piecewise-cuda-graph`), **(2c)** fork-PCG, **(2d)** stock-default_repeat (drift bracket). Pre-declared thresholds: fork-PCG mean TTFT ≤ stock-PCG mean TTFT × 1.05 AND CV ≤ 6% AND drift bracket 2a↔2d ≤ 3%. | Datapoint = *retained* PCG benefit (2a → 2c). Do not present as fix-created speedup. |
 | **R6.3** | Fresh image cost + workload characterization on final fork SHA. **R6.3a** — rebaseline IMG-A `S0_ipc` and fork-PCG at the R5.B recipe (720p, 128 text, c=1, n=400) on `da802ddca` / `986c89e69`. Do **not** reuse or symlink R5.B (wrong SHA). 3 reps each; report mean TTFT + CV. **R6.3b** — workload sweep to locate any cell where fork-PCG mean TTFT ≤ stock-default mean TTFT: matrix over text tokens ∈ {128, 512, 2048}, image resolution ∈ {224p, 720p}, concurrency ∈ {1, 4}, single rep per cell (n=100). Every cell reported, positive and negative. **R6.3c (mandatory)** — mixed-modality safety subtest: interleaved text → image → text → image on one fork-PCG server, ≥ 50 requests each modality, log recompiles + assertions + fallbacks. This is *not* optional and does not require perf conclusions. | R6.3a = cost datapoint on final SHA. R6.3b = winning-cell identification (if any). R6.3c = binary operational-safety verdict. |
