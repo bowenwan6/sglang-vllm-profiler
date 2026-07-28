@@ -1,0 +1,18 @@
+{
+  "image_prompts": [
+    "Describe this image in one sentence.",
+    "What colors are visible in the image?",
+    "How many distinct regions of solid color are present, and what colors are they?"
+  ],
+  "text_only_prompts": [
+    "In one sentence, what is the color red typically associated with in western cultural symbolism?",
+    "List three primary additive colors used in digital displays.",
+    "What is 12 multiplied by 8? Give only the numeric answer."
+  ],
+  "sampling": {
+    "temperature": 0,
+    "top_p": 1,
+    "seed": 42,
+    "max_tokens": 128
+  }
+}
