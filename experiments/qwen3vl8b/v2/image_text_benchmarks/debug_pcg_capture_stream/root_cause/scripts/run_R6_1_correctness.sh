@@ -503,10 +503,23 @@ tally_safety () {
   local OUT="$RAW_DIR/safety_summary.json"
   local INTERLEAVED_JSON="$RAW_DIR/leg_e_fork_pcg_interleaved.json"
 
-  local assertions fallbacks recompiles req_fail
-  assertions=$(grep -c -E 'AssertionError: PCG capture stream is not set' "$LOG" 2>/dev/null || echo 0)
-  fallbacks=$(grep -c -E 'Falling back to eager execution' "$LOG" 2>/dev/null || echo 0)
-  recompiles=$(grep -c -E 'Recompiling function.*qwen3_vl' "$LOG" 2>/dev/null || echo 0)
+  # grep -c always prints a number to stdout AND exits with 1 when
+  # zero matches are found. Combining that exit with `|| echo 0`
+  # produced a two-line "0\n0" for the empty case, which broke the
+  # python heredoc below with 'unterminated string literal'. Guard
+  # explicitly: require the log to exist, then take grep -c's single-
+  # line output and treat non-zero exit (no match) as still-valid.
+  local assertions=0 fallbacks=0 recompiles=0 req_fail=-1
+  if [[ -f "$LOG" ]]; then
+    assertions=$(grep -c -E 'AssertionError: PCG capture stream is not set' "$LOG" 2>/dev/null || true)
+    fallbacks=$(grep -c -E 'Falling back to eager execution' "$LOG" 2>/dev/null || true)
+    recompiles=$(grep -c -E 'Recompiling function.*qwen3_vl' "$LOG" 2>/dev/null || true)
+  fi
+  # Belt-and-braces: if any of the greps somehow emitted nothing or
+  # multiple lines, coerce to a single non-negative integer.
+  [[ -z "$assertions" || ! "$assertions" =~ ^[0-9]+$ ]] && assertions=0
+  [[ -z "$fallbacks"  || ! "$fallbacks"  =~ ^[0-9]+$ ]] && fallbacks=0
+  [[ -z "$recompiles" || ! "$recompiles" =~ ^[0-9]+$ ]] && recompiles=0
   req_fail=$(python3 - <<PYEOF
 import json, sys, pathlib
 p = pathlib.Path("$INTERLEAVED_JSON")
