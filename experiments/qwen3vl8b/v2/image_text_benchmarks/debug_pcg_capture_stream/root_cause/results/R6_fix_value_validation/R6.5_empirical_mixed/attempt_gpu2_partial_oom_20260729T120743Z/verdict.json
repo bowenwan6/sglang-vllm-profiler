@@ -1,0 +1,81 @@
+{
+  "launch_context": {
+    "attempt_dir": "attempt_gpu2",
+    "host_libcuda": "/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05",
+    "hostname": "17b86cda54f9",
+    "launched_by": "run_R6_5_empirical_mixed",
+    "ld_preload": "/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05",
+    "nvidia_driver": "595.71.05",
+    "prelaunch_utc": "2026-07-29T12:06:13+00:00",
+    "selected_gpu_id": 2,
+    "sglang_fork_head": "986c89e69c25882ab6f3d396f8eb306f38f2c8d2",
+    "sglang_stock_head": "da802ddcafe55e25b3e1db86b1e0444afc3e05bc"
+  },
+  "p_star": -3.9120377283468675,
+  "ratios": {
+    "ratio_0p2": {
+      "agreement": null,
+      "empirical_fork_wins": false,
+      "empirical_ratio_fork_over_stock": null,
+      "mean_lat_fork": null,
+      "mean_lat_stock": null,
+      "per_variant": {
+        "fork_pcg": {
+          "safety": {
+            "missing": true
+          },
+          "summary": null
+        },
+        "stock_default": {
+          "safety": {
+            "assertions": 0,
+            "fallbacks": 0,
+            "missing": false,
+            "post_ready_recompiles": 0,
+            "ready_line": null,
+            "startup_recompiles": 0,
+            "total_lines": 50
+          },
+          "summary": null
+        }
+      },
+      "predicted_fork_wins": null,
+      "text_ratio": null
+    },
+    "ratio_0p5": {
+      "agreement": null,
+      "empirical_fork_wins": false,
+      "empirical_ratio_fork_over_stock": null,
+      "mean_lat_fork": null,
+      "mean_lat_stock": null,
+      "per_variant": {
+        "fork_pcg": {
+          "safety": {
+            "missing": true
+          },
+          "summary": null
+        },
+        "stock_default": {
+          "safety": {
+            "assertions": 0,
+            "fallbacks": 0,
+            "missing": false,
+            "post_ready_recompiles": 0,
+            "ready_line": null,
+            "startup_recompiles": 0,
+            "total_lines": 38
+          },
+          "summary": null
+        }
+      },
+      "predicted_fork_wins": null,
+      "text_ratio": null
+    }
+  },
+  "reasons": [
+    "ratio_0p2/fork_pcg: server.log missing",
+    "ratio_0p5/fork_pcg: server.log missing",
+    "only 2 ratios recorded, require >=3"
+  ],
+  "verdict": "AMBIGUOUS"
+}
