@@ -40,7 +40,7 @@ CLIENT=$ROOT/scripts/R6_5_mixed_client.py
 VERDICT=$ROOT/scripts/R6_5_verdict.py
 FIXTURE=$ROOT/results/R6_fix_value_validation/R6.1_correctness/fixtures/R6.1_fixture.png
 CASEA=/data/sglang-vllm-profiler/datasets/qwen3vl8b/caseA_short.jsonl
-R64_JSON=$ROOT/results/R6_fix_value_validation/R6.4_analytical_crossover/verdict.json
+R64_JSON=$ROOT/results/R6_fix_value_validation/R6.4_analytical_crossover/crossover.json
 
 SNAP=/root/.cache/huggingface/hub/models--Qwen--Qwen3-VL-8B-Instruct/snapshots/0c351dd01ed87e9c1b53cbc748cba10e6187ff3b
 FORK_PY=/data/sglang-fork/python
