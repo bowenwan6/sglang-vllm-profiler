@@ -1,0 +1,479 @@
+{
+  "fork": {
+    "assertion_context": [],
+    "assertion_count": 0,
+    "assertion_lines": [],
+    "bench": {
+      "aggregate_completed": 32,
+      "aggregate_generated_texts_count": 32,
+      "aggregate_num_prompts": null,
+      "jsonl": "/data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.1_correctness/attempt_04_repeated_shape_gpu0/raw/fork/bench.jsonl",
+      "log": "/data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.1_correctness/attempt_04_repeated_shape_gpu0/raw/fork/bench.log",
+      "n_lines": 1
+    },
+    "deepstack_recompile_lines": [
+      172,
+      8914,
+      17647,
+      26294,
+      26299,
+      26302,
+      26307,
+      26475,
+      26476,
+      35055,
+      35060,
+      35087,
+      35088,
+      35244,
+      35245,
+      43774
+    ],
+    "fallback_count": 0,
+    "fallback_lines": [],
+    "post_ready_recompile_count": 0,
+    "post_ready_recompile_lines": [],
+    "prefill_batches": [
+      {
+        "cached_token": 0,
+        "line": 44377,
+        "new_seq": 1,
+        "new_token": 78
+      },
+      {
+        "cached_token": 4,
+        "line": 44384,
+        "new_seq": 1,
+        "new_token": 1019
+      },
+      {
+        "cached_token": 4,
+        "line": 44385,
+        "new_seq": 1,
+        "new_token": 1019
+      },
+      {
+        "cached_token": 2044,
+        "line": 44386,
+        "new_seq": 2,
+        "new_token": 2
+      },
+      {
+        "cached_token": 5110,
+        "line": 44391,
+        "new_seq": 5,
+        "new_token": 5
+      },
+      {
+        "cached_token": 9198,
+        "line": 44397,
+        "new_seq": 9,
+        "new_token": 9
+      },
+      {
+        "cached_token": 12264,
+        "line": 44407,
+        "new_seq": 12,
+        "new_token": 12
+      },
+      {
+        "cached_token": 1022,
+        "line": 44421,
+        "new_seq": 1,
+        "new_token": 1
+      },
+      {
+        "cached_token": 4,
+        "line": 44426,
+        "new_seq": 1,
+        "new_token": 1019
+      },
+      {
+        "cached_token": 4,
+        "line": 44431,
+        "new_seq": 1,
+        "new_token": 1017
+      },
+      {
+        "cached_token": 4,
+        "line": 44436,
+        "new_seq": 1,
+        "new_token": 1017
+      },
+      {
+        "cached_token": 4,
+        "line": 44441,
+        "new_seq": 1,
+        "new_token": 1020
+      },
+      {
+        "cached_token": 4,
+        "line": 44447,
+        "new_seq": 1,
+        "new_token": 1023
+      },
+      {
+        "cached_token": 4,
+        "line": 44452,
+        "new_seq": 1,
+        "new_token": 1025
+      },
+      {
+        "cached_token": 4,
+        "line": 44457,
+        "new_seq": 1,
+        "new_token": 1017
+      },
+      {
+        "cached_token": 4,
+        "line": 44462,
+        "new_seq": 1,
+        "new_token": 1024
+      },
+      {
+        "cached_token": 4,
+        "line": 44467,
+        "new_seq": 1,
+        "new_token": 1023
+      },
+      {
+        "cached_token": 4,
+        "line": 44473,
+        "new_seq": 1,
+        "new_token": 1018
+      },
+      {
+        "cached_token": 4,
+        "line": 44478,
+        "new_seq": 1,
+        "new_token": 1025
+      },
+      {
+        "cached_token": 4,
+        "line": 44483,
+        "new_seq": 1,
+        "new_token": 1022
+      },
+      {
+        "cached_token": 4,
+        "line": 44488,
+        "new_seq": 1,
+        "new_token": 1023
+      },
+      {
+        "cached_token": 4,
+        "line": 44493,
+        "new_seq": 1,
+        "new_token": 1021
+      },
+      {
+        "cached_token": 4,
+        "line": 44499,
+        "new_seq": 1,
+        "new_token": 1019
+      },
+      {
+        "cached_token": 4,
+        "line": 44504,
+        "new_seq": 1,
+        "new_token": 1016
+      },
+      {
+        "cached_token": 4,
+        "line": 44509,
+        "new_seq": 1,
+        "new_token": 1022
+      },
+      {
+        "cached_token": 4,
+        "line": 44514,
+        "new_seq": 1,
+        "new_token": 1021
+      },
+      {
+        "cached_token": 4,
+        "line": 44519,
+        "new_seq": 1,
+        "new_token": 1016
+      },
+      {
+        "cached_token": 4,
+        "line": 44525,
+        "new_seq": 1,
+        "new_token": 1019
+      },
+      {
+        "cached_token": 4,
+        "line": 44530,
+        "new_seq": 1,
+        "new_token": 1017
+      },
+      {
+        "cached_token": 4,
+        "line": 44535,
+        "new_seq": 1,
+        "new_token": 1019
+      },
+      {
+        "cached_token": 4,
+        "line": 44540,
+        "new_seq": 1,
+        "new_token": 1025
+      },
+      {
+        "cached_token": 4,
+        "line": 44545,
+        "new_seq": 1,
+        "new_token": 1018
+      },
+      {
+        "cached_token": 4,
+        "line": 44551,
+        "new_seq": 1,
+        "new_token": 1025
+      },
+      {
+        "cached_token": 4,
+        "line": 44556,
+        "new_seq": 1,
+        "new_token": 1023
+      },
+      {
+        "cached_token": 4,
+        "line": 44561,
+        "new_seq": 1,
+        "new_token": 1020
+      },
+      {
+        "cached_token": 4,
+        "line": 44566,
+        "new_seq": 1,
+        "new_token": 1016
+      },
+      {
+        "cached_token": 4,
+        "line": 44571,
+        "new_seq": 1,
+        "new_token": 1019
+      },
+      {
+        "cached_token": 4,
+        "line": 44577,
+        "new_seq": 1,
+        "new_token": 1021
+      },
+      {
+        "cached_token": 4,
+        "line": 44582,
+        "new_seq": 1,
+        "new_token": 1021
+      }
+    ],
+    "recompile_lines": [
+      8752,
+      17476,
+      26291,
+      35049
+    ],
+    "server_log": "/data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.1_correctness/attempt_04_repeated_shape_gpu0/raw/fork/server.log",
+    "server_log_missing": false,
+    "server_log_total_lines": 44594,
+    "server_ready_line": 44379,
+    "shape_first_seen_line": {
+      "total=1020,new_seq=1": 44504,
+      "total=1021,new_seq=1": 44431,
+      "total=1022,new_seq=1": 44473,
+      "total=1023,new_seq=1": 44384,
+      "total=1024,new_seq=1": 44441,
+      "total=1025,new_seq=1": 44493,
+      "total=1026,new_seq=1": 44483,
+      "total=1027,new_seq=1": 44447,
+      "total=1028,new_seq=1": 44462,
+      "total=1029,new_seq=1": 44452,
+      "total=12276,new_seq=12": 44407,
+      "total=2046,new_seq=2": 44386,
+      "total=5115,new_seq=5": 44391,
+      "total=78,new_seq=1": 44377,
+      "total=9207,new_seq=9": 44397
+    },
+    "shape_occurrence_counts": {
+      "total=1020,new_seq=1": 3,
+      "total=1021,new_seq=1": 4,
+      "total=1022,new_seq=1": 2,
+      "total=1023,new_seq=1": 8,
+      "total=1024,new_seq=1": 2,
+      "total=1025,new_seq=1": 4,
+      "total=1026,new_seq=1": 2,
+      "total=1027,new_seq=1": 4,
+      "total=1028,new_seq=1": 1,
+      "total=1029,new_seq=1": 4,
+      "total=12276,new_seq=12": 1,
+      "total=2046,new_seq=2": 1,
+      "total=5115,new_seq=5": 1,
+      "total=78,new_seq=1": 1,
+      "total=9207,new_seq=9": 1
+    },
+    "startup_warmup_recompile_count": 4,
+    "startup_warmup_recompile_lines": [
+      8752,
+      17476,
+      26291,
+      35049
+    ],
+    "unique_prefill_shapes": [
+      "total=1020,new_seq=1",
+      "total=1021,new_seq=1",
+      "total=1022,new_seq=1",
+      "total=1023,new_seq=1",
+      "total=1024,new_seq=1",
+      "total=1025,new_seq=1",
+      "total=1026,new_seq=1",
+      "total=1027,new_seq=1",
+      "total=1028,new_seq=1",
+      "total=1029,new_seq=1",
+      "total=12276,new_seq=12",
+      "total=2046,new_seq=2",
+      "total=5115,new_seq=5",
+      "total=78,new_seq=1",
+      "total=9207,new_seq=9"
+    ]
+  },
+  "launch_context": {
+    "attempt_dir": "attempt_04_repeated_shape_gpu0",
+    "cuda_visible_devices": "0",
+    "host_libcuda": "/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05",
+    "hostname": "17b86cda54f9",
+    "launched_by": "run_R6_1_repeated_shape",
+    "ld_preload": "/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05",
+    "nvidia_driver": "595.71.05",
+    "prelaunch_state": {
+      "compute_pids": [],
+      "mem_mib": 4,
+      "util_pct": 0
+    },
+    "prelaunch_utc": "2026-07-28T14:36:04+00:00",
+    "selected_gpu_id": 0,
+    "sglang_fork_head": "986c89e69c25882ab6f3d396f8eb306f38f2c8d2",
+    "sglang_stock_head": "da802ddcafe55e25b3e1db86b1e0444afc3e05bc"
+  },
+  "overall_verdict": "SAFETY_SUPERIORITY_PASS",
+  "reasons": [],
+  "safety_conditions": {
+    "fork_assertion_count": 0,
+    "fork_completed_bench": true,
+    "fork_fallback_count": 0,
+    "fork_ok_for_safety_pass": true,
+    "fork_post_ready_recompile_count": 0,
+    "stock_assertion_seen": true,
+    "stock_deepstack_recompile_seen": true,
+    "stock_ok_for_safety_pass": true
+  },
+  "stock": {
+    "assertion_context": [
+      {
+        "assertion_line": 44322,
+        "prev_prefill_batch": {
+          "cached_token": 1022,
+          "line": 44229,
+          "new_seq": 1,
+          "new_token": 1
+        }
+      }
+    ],
+    "assertion_count": 1,
+    "assertion_lines": [
+      44322
+    ],
+    "bench": {
+      "jsonl_missing": true,
+      "log": "/data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.1_correctness/attempt_04_repeated_shape_gpu0/raw/stock/bench.log"
+    },
+    "deepstack_recompile_lines": [
+      172,
+      8914,
+      17647,
+      26674,
+      26679,
+      26850,
+      26851,
+      35435,
+      35440,
+      35467,
+      35621,
+      35622,
+      44151
+    ],
+    "fallback_count": 0,
+    "fallback_lines": [],
+    "post_ready_recompile_count": 1,
+    "post_ready_recompile_lines": [
+      35429
+    ],
+    "prefill_batches": [
+      {
+        "cached_token": 0,
+        "line": 35422,
+        "new_seq": 1,
+        "new_token": 78
+      },
+      {
+        "cached_token": 4,
+        "line": 44195,
+        "new_seq": 1,
+        "new_token": 1019
+      },
+      {
+        "cached_token": 36,
+        "line": 44197,
+        "new_seq": 9,
+        "new_token": 8192
+      },
+      {
+        "cached_token": 20440,
+        "line": 44206,
+        "new_seq": 21,
+        "new_token": 999
+      },
+      {
+        "cached_token": 1022,
+        "line": 44229,
+        "new_seq": 1,
+        "new_token": 1
+      }
+    ],
+    "recompile_lines": [
+      8752,
+      17476,
+      26671,
+      35429
+    ],
+    "server_log": "/data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.1_correctness/attempt_04_repeated_shape_gpu0/raw/stock/server.log",
+    "server_log_missing": false,
+    "server_log_total_lines": 44328,
+    "server_ready_line": 35424,
+    "shape_first_seen_line": {
+      "total=1023,new_seq=1": 44195,
+      "total=21439,new_seq=21": 44206,
+      "total=78,new_seq=1": 35422,
+      "total=8228,new_seq=9": 44197
+    },
+    "shape_occurrence_counts": {
+      "total=1023,new_seq=1": 2,
+      "total=21439,new_seq=21": 1,
+      "total=78,new_seq=1": 1,
+      "total=8228,new_seq=9": 1
+    },
+    "startup_warmup_recompile_count": 3,
+    "startup_warmup_recompile_lines": [
+      8752,
+      17476,
+      26671
+    ],
+    "unique_prefill_shapes": [
+      "total=1023,new_seq=1",
+      "total=21439,new_seq=21",
+      "total=78,new_seq=1",
+      "total=8228,new_seq=9"
+    ]
+  }
+}

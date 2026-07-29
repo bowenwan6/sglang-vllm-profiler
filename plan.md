@@ -55,7 +55,7 @@ Dependency order: **#2 → {#4, #3 parallel} → #5 → report restructure**.
 |---|---|---|---|---|
 | 1 | Tracking: next-round follow-ups | meta | Umbrella; final deliverable separates baseline / ablation / Qwen3.5 / image+text / PR proposal | open (tracking) |
 | **2** | **Default-overlap Qwen3-VL rebaseline** | **P0 (foundational)** | Production-default overlap-ON Case A/C baseline; does PCG still help? | **✅ COMPLETE / PASS** (results under `v2/caseAC_rebaseline/results/`) |
-| **4** | **Qwen3-VL image+text + CUDA IPC** | **P1 — PCG path closed; non-PCG IMG-A resume pending** | Image+text behavior + `SGLANG_USE_CUDA_IPC_TRANSPORT=1`; separate from text-only conclusions | Generator `<\|video_pad\|>` bug merged upstream as `07f326c184` (#26864). Profiler uses `/data/sglang-pr` on `main` (HEAD `62c505a196`). Stage 4.1 smoke ✅. Stage 4.2 IMG-A: S0_ipc 5/5 reps clean (TTFT p50 64.8 ms); S2_ipc_pcg deterministically crashes with `AssertionError: PCG capture stream is not set`. PCG debug (`debug_pcg_capture_stream/conclusion.md`) shows E1 text-only PCG OK, E2a image+IPC+PCG+n=32 ASSERT, E3 image+noIPC+PCG+n=32 ASSERT → **fault is VLM image + PCG**, **IPC not required**. Upstream auto-disables PCG for VLMs (`server_args.py:1374-1376`); `--enforce-piecewise-cuda-graph` is a "for testing" override and crashes deterministically on Qwen3-VL. **PCG benefit (Q2) cannot be measured on this HEAD without an upstream change.** Next: file informational upstream SGLang issue with the n=32 minimal repro; resume IMG-A with non-PCG variants only (`S0_ipc_repeat → V0_vllm → S0_noipc`) to recover Q1/Q3 + bracket drift. No SGLang PR. |
+| **4** | **Qwen3-VL image+text + CUDA IPC** | **P1 — PCG crash root-caused; clean fix on fork; R6 fix-value validation pending** | Image+text behavior + `SGLANG_USE_CUDA_IPC_TRANSPORT=1`; separate from text-only conclusions | Generator `<\|video_pad\|>` bug merged upstream as `07f326c184` (#26864). PCG capture-stream crash root-caused (§5a) → Dynamo recompile of `Qwen3LLMModel.forward` on `input_deepstack_embeds is None` guard failure at first image request; recompiled `CUDAPiecewiseBackend` instance has no capture stream. Clean (Y) fix implemented on fork `bowenwan6/sglang` branch `fix/pcg-vlm-deepstack-warmup` HEAD `986c89e69`: thread-local warmup gate synthesizes zero deepstack embeds so Dynamo traces both branches at warmup + model-attached static deepstack buffer for capture/replay address stability. **R5 outcome:** crash / capture-stream assertion / inference-time recompile all eliminated on fork; original R5 image-only TTFT gate (p50 clearly < 64.8 ms) **FAILED as stated** — fork-PCG image+text ≈ 103 ms vs default ≈ 65 ms; R5.C correctness audit shows outputs diverge but no matched control has yet proven this is normal bf16 PCG-vs-eager noise rather than residual corruption. Next: **R6 fix-value validation** (see §5b) reframes acceptance around mixed-modality operational safety + retained text-only PCG benefit + workload characterization to locate any cell where fork-PCG > default; upstream PR gated on R6 PASS. Non-PCG IMG-A resume (`S0_ipc_repeat → V0_vllm → S0_noipc`) remains queued. |
 | 3 | Qwen3.5 VL-model profiling | P1 | Same clean methodology on Qwen3.5; does the PCG finding transfer? | next candidate (parallel/after #2; transfer check) |
 | 5 | Selective/default-on PCG PR plan | P2 | Minimum safe exception in VLM auto-disable + guards + fallback | planned (needs #4) |
 
@@ -64,7 +64,20 @@ Dependency order: **#2 → {#4, #3 parallel} → #5 → report restructure**.
 **Issue #2 is COMPLETE** (clean run, GPU 1, 0 failures; results under
 `experiments/qwen3vl8b/v2/caseAC_rebaseline/results/`).
 
-**Issue #4 is PARTIAL — generator unblocked, PCG path blocked by upstream
+**Issue #4** — active on branch `debug/v2-imgA-pcg-capture-stream-fix`. The PCG
+capture-stream crash has been root-caused (§5a) and fixed on the user fork
+(`bowenwan6/sglang` branch `fix/pcg-vlm-deepstack-warmup` HEAD `986c89e69`).
+The original R5 image-only performance gate FAILED as stated; the hypothesis
+has been revised and formal fix-value validation is planned under **§5b R6**
+(reframes acceptance around mixed-modality operational safety + retained
+text-only PCG benefit on VLM servers + workload characterization sweep for
+any cell where fork-PCG > default). **Upstream PR is gated on R6 PASS** —
+not filed until then.
+
+The following context (historical narrative on the pre-fix `62c505a196` HEAD)
+is preserved for provenance:
+
+**Issue #4 was PARTIAL — generator unblocked, PCG path blocked by upstream
 SGLang capture-stream assertion.** The benchmark-generator `<|video_pad|>` bug is
 merged upstream as `07f326c184` (#26864); profiler runs use `/data/sglang-pr` on
 `main` (HEAD `62c505a196`, 2026-06-08). V1 audit + V2 serving repro both PASS;
@@ -118,6 +131,420 @@ remains the source of truth for the IMG-A resume.
 
 Then: **#3** (Qwen3.5 transfer check, parallel/after) → **#5** (selective/default-on PCG PR, needs #4's
 image evidence).
+
+## 5a. Sub-track — PCG capture-stream root-cause (active, branch `debug/v2-imgA-pcg-capture-stream-fix`)
+
+Server was rebuilt on 2026-06-28; environment re-set up from scratch (system sglang
+at `/sgl-workspace/sglang` HEAD `da802dd`, profiling conda env at
+`/opt/miniconda3/envs/profiling`, Qwen3-VL-8B-Instruct snapshot `0c351dd`
+re-downloaded). Source-of-truth for sglang edits: user fork
+`git@github.com:bowenwan6/sglang.git` cloned to `/data/sglang-fork` on branch
+`fix/pcg-vlm-deepstack-warmup`, started from upstream `da802ddca` so patched
+python files stay binary-compatible with the installed `sgl_kernel`. Runs source
+the fork via `PYTHONPATH=/data/sglang-fork/python`.
+
+Sub-track artifacts and full per-phase writeups under
+[`v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/README.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/README.md).
+All sglang source modifications are kept as revertable `.patch` files under
+`root_cause/patches/`. Raw per-run server / bench logs stay under
+`results/<R-id>/raw/` and are **not committed** unless explicitly approved.
+
+### What we did (R1 → R4)
+
+| Phase | What was run | Outcome |
+|---|---|---|
+| **R1** | Env-var-only Dynamo verbose tracing (`TORCH_LOGS=recompiles_verbose,dynamic,guards,graph_breaks`, `TORCHDYNAMO_VERBOSE=1`) on the E2a recipe (image 720p, c=1, n=32, warmup=30, PCG on, IPC on, GPU 0). | **Recompile trigger identified.** Four recompiles of `Qwen3LLMModel.forward` before the assertion. The decisive one (`[0/3]`) fail-reason: `input_deepstack_embeds is None` guard failure at `qwen3_vl.py:1129`. Failing token counts (80, 1024) are inside the captured 1..8192 range → **not** a shape recompile, it's a multimodal control-flow recompile. |
+| **R2** | Source-level patch to `cuda_piecewise_backend.__call__` (`SGLANG_DEBUG_PCG_CALL_TRACE=1`) emitting per-call instance id / layer idx / warmup state / runtime_shape / capture-stream state. Patch saved as `R2_piecewise_call_logging.patch`. | **Mechanism confirmed.** The asserting `CUDAPiecewiseBackend` instance (`id=0x702f42eba060`, `sym_shape_indices=[1,4,9,10]`) is a **distinct Python object** from the warmup-frame layer-0 instance (which had `sym_shape_indices=[1,8]`). The recompiled instance never gets a capture stream because `set_pcg_capture_stream()` is only set inside `PiecewiseCudaGraphRunner.capture_session()`, which never re-runs at inference time. |
+| **R3.A** | Source read of the warmup driver, dummy-batch builder, multimodal embed routine, and Qwen3-VL `forward`. | **Architecture mapped.** `_run_compile_pass` → `_run_dummy_forward(num_tokens)` → `capture_prepare` which **never sets `mm_inputs`** → `general_mm_embed_routine` gates `input_deepstack_embeds` on `contains_mm_inputs()` → therefore Dynamo only ever sees `input_deepstack_embeds = None` during warmup. |
+| **R3.B** | Patch (X) on fork: extend the existing HIP eager fallback in `cuda_piecewise_backend.py:163` to CUDA (drop the `_is_hip and` guard so missing-stream falls back to `entry.runnable` instead of asserting). ~9-line change. Re-fired E2a. | **(X) PASS for safety.** 32 / 32 requests, no `AssertionError`, single `print_warning_once` fallback warning. TTFT median **103.05 ms**. |
+| **R4.A** | Re-ran E2a with `SGLANG_DEBUG_PCG_CALL_TRACE` unset (production shape). | **(X) PASS without diagnostic gate.** TTFT median 106.25 ms; consistent with R3.B. |
+| **R4.B** | Stretched (X) to the original Stage 4.2 IMG_A_S2_ipc_pcg recipe (n=400, warmup=30, single rep). | **(X) PASS at scale.** 400 / 400 requests, TTFT median **104.62 ms**, no regression. |
+| **R4.C** | Naive (Y) prototype on fork: added `Qwen3VLForConditionalGeneration.pcg_warmup_multimodal_branch()` synthesizing `torch.zeros([num_tokens, hidden_size × num_deepstack_embeddings])` and calling `self.model(...)` directly; called from `_run_compile_pass` as a second per-shape loop. | **(Y) FAILURE (documented, instructive).** Server crashes on the first MM warmup call inside the torch.compile-traced model forward: `forward_context.py:59 assert _current is not None` fires because we bypassed `set_attention_metadata_context()`. Dynamo refuses to graph-break (`fullgraph=True`) → compile aborts. |
+
+### Findings carried forward
+
+1. **The bug is the multimodal control-flow recompile.** Dynamo specialises `Qwen3LLMModel.forward` on `input_deepstack_embeds is None`; PCG warmup only ever feeds the `None` branch, so the first real image request forces a recompile of a brand-new fx graph whose piecewise submodules have no capture stream attached.
+2. **The defensive assertion at `cuda_piecewise_backend.py:171` is structurally unreachable from a recompiled instance.** `set_pcg_capture_stream()` is set only inside `capture_session()`; that session ends with server startup and the stream is `None` forever after.
+3. **Cross-comparison vs the existing non-PCG image baseline** (Stage 4.2 IMG_A_S0_ipc, 5×400 reps): TTFT p50 ≈ **64.8 ms** without PCG. With (X) PCG-on + eager fallback, TTFT p50 is **~104 ms** at n=32 / n=400 — i.e. PCG-on with the band-aid is **slower** than PCG-off, because the recompiled multimodal frame loses cudagraph replay benefit on every layer.
+
+### Why (X) is rejected for upstream
+
+The (X) eager-fallback patch defeats the point of `--enforce-piecewise-cuda-graph`
+on the multimodal path: it turns a hard crash into a silent ~38 ms TTFT
+regression vs the no-PCG baseline. Merging (X) upstream would mean shipping a
+known performance-negative path while still claiming PCG support for VLMs.
+
+(X) stays **in our local fork history** as a documented safety net and is the
+patch we'd recommend operators apply manually if they need to keep
+`--enforce-piecewise-cuda-graph` running before the real fix lands. **It does
+not get an upstream PR.**
+
+### Architectural lesson from R4.C
+
+The naive (Y) prototype bypassed `set_attention_metadata_context()`, which the
+attention backend asserts is in scope (`forward_context.py:59`). Any working
+(Y) **must reuse the same forward-context-wrapping path that the regular
+`_run_dummy_forward` uses** — we cannot call `self.model(...)` directly from a
+new entry point.
+
+The cleanest viable shape, given R3.A's source read of `general_mm_embed_routine`:
+
+- A **thread-local "force-multimodal-warmup" flag** read inside
+  `general_mm_embed_routine`. When set **and** `use_deepstack` is truthy for
+  the active modality, the routine synthesizes
+  `kwargs["input_deepstack_embeds"] = torch.zeros([num_tokens, hidden_size ×
+  num_deepstack_embeddings], dtype, device)` instead of (or alongside) the
+  real mm path, then routes through `language_model.forward(...)` as usual.
+- The warmup driver in `_run_compile_pass` enters this flag's `with` block,
+  then calls the existing `cuda_graph_runner._run_dummy_forward(num_tokens)`
+  — picking up `set_attention_metadata_context()` for free — once per
+  `capture_num_tokens` shape, alongside the existing text-only sweep.
+- Result: Dynamo traces both the `input_deepstack_embeds is None` branch
+  (text-only sweep) **and** the non-None branch (MM sweep) during warmup;
+  both branches' `CUDAPiecewiseBackend` instances get capture streams during
+  the subsequent `capture_session`; the first real image request hits an
+  already-captured graph and no recompile fires.
+
+### New R5 mandate
+
+R5 stops being "draft upstream handoff" and becomes **implement clean (Y) and
+verify** so we can submit a performance-positive PR. Specifically:
+
+1. **Design + implement a clean (Y)** on `/data/sglang-fork` branch
+   `fix/pcg-vlm-deepstack-warmup` (a new commit on top of the existing X +
+   broken-Y history). Use the thread-local flag in `general_mm_embed_routine`
+   approach above, or document why a different shape works better and adopt
+   it.
+2. **Local verification** on the same E2a recipe (image 720p, c=1, n=32,
+   warmup=30, PCG on, IPC on, GPU 0):
+   - Server starts; the MM warmup loop ("Compiling MM num tokens") runs to
+     completion without crashing.
+   - No `AssertionError`, no `Falling back to eager execution` warning, no
+     Dynamo recompile of `qwen3_vl.forward` observed at inference time
+     (re-enable `TORCH_LOGS=recompiles_verbose` for one confirmation run).
+   - All bench requests succeed.
+3. **Stretch verification** at the Stage 4.2 IMG_A_S2_ipc_pcg shape (n=400,
+   warmup=30, single rep) to confirm no regression at scale and to capture
+   headline-quality TTFT numbers.
+4. **Performance acceptance gate.** Clean (Y) must hit TTFT clearly **below**
+   the IMG_A_S0_ipc PCG-off baseline (p50 ≈ 64.8 ms) on Case-A-like image+text
+   workloads — otherwise the multimodal frame's cudagraphs aren't actually
+   being captured / replayed and we have to keep iterating. Order of magnitude
+   target: TTFT p50 within shouting distance of, or better than, the text-only
+   Case A `--enforce-piecewise-cuda-graph` result (14.04 ms from v2 #2),
+   bearing in mind image+text adds vision-tower work that is not PCG-covered
+   so a strict equality is not expected.
+5. **Then and only then** prepare the upstream PR description. R5 still does
+   not auto-file — filing remains a user-triggered step — but the PR is
+   gated on (Y) PASS, not on (X).
+
+Out of scope here:
+
+- v1 Phase 0–5 artifacts (never touched).
+- IMG-A non-PCG resume (`S0_ipc_repeat → V0_vllm → S0_noipc`) — remains queued
+  under `fixed_generator_plan.md`; orthogonal to this sub-track.
+- Changes to `--enforce-piecewise-cuda-graph` defaults or the
+  `is_multimodal_piecewise_cuda_graph_supported` table — that is Issue #5's
+  scope. The clean (Y) lands inside the existing override semantics; it does
+  not flip defaults.
+- Submitting (X) upstream — explicitly rejected; kept as local fork history
+  only.
+
+### R5 actual outcome (recorded 2026-07-28)
+
+- **Clean (Y) landed on fork** at branch `fix/pcg-vlm-deepstack-warmup` HEAD
+  `986c89e69` (`fix(pcg): use stable model-attached deepstack buffer for
+  capture+replay`), built on `1f19ecd1a` (warmup context manager) +
+  `a4ff0b181` (capture-pass hook). At inference under `--enforce-piecewise-
+  cuda-graph`: no `AssertionError`, no `Falling back to eager execution`
+  warning, no Dynamo recompile of `qwen3_vl.forward` (R5.A n=32, R5.B n=400).
+- **Original R5 performance gate FAILED as stated.** Gate 4 required TTFT p50
+  "clearly below" the IMG_A_S0_ipc PCG-off baseline of 64.8 ms. Measured
+  fork-PCG image+text TTFT p50 ≈ 102–104 ms (R5.A / R5.B) — well *above* the
+  baseline. Not retroactively re-labelled as PASS. The gate itself was
+  mis-framed: image+text prefill on Qwen3-VL is vision-tower-dominated
+  (~40 ms eager either way), leaving too small a PCG-covered LM fraction
+  for graph-launch savings to overcome capture/launch overhead — this is a
+  workload property, not a fix bug, but it must be handled by re-framing
+  R6's acceptance, not by silently rewriting R5's.
+- **Correctness NOT formally closed.** R5.C audit reports OUTPUTS_DIFFER
+  between fork-PCG-on and fork-default on 2 prompts (first differing offset
+  4 / 126). The static-buffer fix reduced Prompt 1's first-diff offset from
+  41 → 126 characters, which is evidence that some address-stability
+  corruption existed and was mitigated, but does **not** prove the residual
+  divergence is normal bf16 PCG-vs-eager noise (H2). No matched control
+  (e.g. fork-default vs stock-default on the same image, or fork-eager vs
+  fork-PCG on a non-multimodal workload) has yet been run to attribute the
+  residual delta. Prior "H2 residual noise" language in this file and in
+  the audit report was a hypothesis, not a measurement.
+- **R5.B provenance caveat.** R5.B (n=400) was recorded 2026-06-30 15:37 UTC
+  on fork SHA `a4ff0b181` (capture-pass hook), **21 min before** the
+  static-buffer fix at `986c89e69` (15:58 UTC). R5.B is a historical
+  datapoint only; it is **not** a valid comparator for the final fork SHA
+  and must not be reused as R6's fork-PCG headline.
+- **Hypothesis revised** for R6: the fix's value proposition is **not**
+  "faster image+text prefill on the IMG-A recipe" but **"safe use of
+  `--enforce-piecewise-cuda-graph` on a Qwen3-VL server that serves mixed
+  text-only and image traffic, preserving the text-only PCG benefit
+  measured on non-VLM Case A."** R6 (§5b) formally validates this reframe.
+
+## 5b. R6 — Fix-value validation for mixed-modality PCG (active)
+
+> Reframe of R5's acceptance around what the fix actually provides. Does
+> **not** presume the fix passes — R6 must be able to conclude **PASS**,
+> **FAIL**, or **R7_REQUIRED**. Filing the upstream PR is gated on R6 PASS.
+>
+> **Audited conclusion (2026-07-29):**
+> ✅ `CORRECTNESS_AND_SAFETY_FIX_PASS`
+> + ⚠️ `PERFORMANCE_VALUE_PROMISING_BUT_NOT_FINAL`.
+> **Overall performance dominance is NOT established.**
+> An earlier version of this note claimed an unqualified `R6 PASS` —
+> that framing is retracted. The R6.4 `STRICTLY_DOMINANT` reading
+> and the R6.5 machine-generated `PASS` (which combined stale
+> ratio_0p5 / ratio_0p8 artifacts predating the attempt_gpu2
+> launch context) are both withdrawn. R6.1 stands as PASS
+> (safety-superiority + correctness). R6.2 is `PASS_WITH_CAVEAT —
+> TEXT_NON_REGRESSION_SUPPORTED` under Amendment C (original
+> machine FAIL on 3.050 % drift preserved; fork_pcg/stock_pcg =
+> 0.9617 supports non-regression, not a proven speedup). R6.3
+> mixed safety is PASS (0/0/0/0); the cleanest performance signal
+> is `cell_t512_r360p_c1` at ~8.6 % with CV ~4 % on each side.
+> R6.4 is AMBIGUOUS (bootstrap 95 % CI on p* is [−12.39, +15.44]).
+> R6.5 is `INVALID_MIXED_PROVENANCE / AMBIGUOUS`. Full evidence
+> chain in [`results/R6_fix_value_validation/R6_FINAL_CONCLUSION.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6_FINAL_CONCLUSION.md);
+> runtime provenance correction (flashinfer `0.6.12`, sgl_kernel
+> `0.4.4`) and current SGLang upstream status (**PR #30868** merged
+> 2026-07-19 addresses the same root cause; local fork branch
+> likely superseded) documented there.
+
+### R6 goal
+
+Three independent claims, each with its own gate:
+
+1. **Correctness / safety.** Fork clean-Y is correctness-preserving on
+   mixed-modality workloads, or the residual output divergence is
+   *demonstrably* attributable to normal PCG-vs-eager bf16 noise (with a
+   matched control) rather than silent corruption.
+2. **Retained PCG benefit.** On text-only Case A running on a Qwen3-VL
+   server, fork-PCG delivers the same mean TTFT as stock-PCG (fix does not
+   regress the text path), and both are clearly below stock-default. The
+   fix does **not** *create* the text-only PCG speedup — that already
+   exists on stock for pure text-only traffic — it *preserves* it on a
+   server that must also accept image traffic without crashing.
+3. **Mixed-modality operational safety.** Interleaved text → image → text
+   traffic on the same fork-PCG server produces 0 request failures, 0
+   capture-stream assertions, 0 eager-fallback warnings, 0 inference-time
+   Dynamo recompiles of `qwen3_vl.forward`. This is the *only* claim on
+   which stock has no equivalent (stock crashes on the first image under
+   `--enforce-piecewise-cuda-graph`).
+
+### R6 entry gate: provenance freeze
+
+| Item | Value | Source |
+|---|---|---|
+| Stock SGLang SHA | `da802ddcafe55e25b3e1db86b1e0444afc3e05bc` | `/sgl-workspace/sglang` HEAD (rebuilt 2026-06-28) |
+| Final fork SHA | `986c89e69c25882ab6f3d396f8eb306f38f2c8d2` (branch base = stock HEAD → binary-compatible with installed `sgl_kernel`) | `/data/sglang-fork` branch `fix/pcg-vlm-deepstack-warmup` |
+| Model snapshot | `0c351dd01ed87e9c1b53cbc748cba10e6187ff3b` | HF `Qwen/Qwen3-VL-8B-Instruct` |
+| System python (server) | `python 3.12.3` + torch 2.11.0+cu130 + flashinfer 0.6.12 + sgl_kernel 0.4.4 | `/usr/bin/python3`, installed sglang path |
+| Profiling env (bench client, vLLM anchor) | `/opt/miniconda3/envs/profiling` — torch 2.11.0+cu130, vLLM 0.21.0 | rebuild 2026-06-28 |
+| Text dataset | `datasets/qwen3vl8b/caseA_short.jsonl` (600 prompts, SHA-256 `fab4917772e087447d7c33d53ada63340b126088c1f195f118b9488d5f5b619e`) | v2 #2 provenance |
+| Correctness image | Fixed real PNG chosen and recorded in R6.1 protocol (no `--image-content random`) | new for R6 |
+| GPU | R6.1b attempt 02: **GPU 2 only** (user-authorized after attempt 01 INFRA_FAILURE). Runner enforces via `R6_GPU_ID=2`; may not silently substitute. R6.0 amendment A1 dynamic-selection rule (via `monitor_idle_gpu.py`) still applies to any future attempt where the caller does not pass a fixed GPU. Foreign compute PIDs abort the run with exit 71 (foreign process never signalled). | must not silently relocate; runner still requires explicit ID |
+| Runtime libcuda (Amendment A3, 2026-07-28) | `LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05` (91,501,576 bytes; driver 595.71.05). Fixes loader precedence where `cuda-compat-13-0` was putting `libcuda.so.580.82.07` first. Torch 2.11.0+cu130 initializes CUDA cleanly against the host lib. Never `LD_LIBRARY_PATH` under `/usr/local/cuda-*/compat`. | preflight `scripts/R6_preflight_libcuda.py` refuses to proceed unless the loaded libcuda is exactly the pinned host path |
+
+Full frozen provenance table, verification commands, and historical /
+reference numbers live in
+[`.../results/R6_fix_value_validation/R6.0_provenance.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.0_provenance.md).
+
+Numbers from any earlier HEAD — v2 #2 Case A `21.94 / 14.04 ms` on
+`0c8049d9b`; IMG_A_S0_ipc `64.8 ms` on `62c505a196`; R5.A/B/C on fork SHAs
+`1f19ecd1a` / `a4ff0b181` (pre-static-buffer) — are **historical reference
+only** and do **not** carry forward as R6 baselines. R6 measures everything
+fresh on the frozen (stock, fork) SHA pair.
+
+### R6.1 Protocol Amendment B (2026-07-28, authoritative for attempts 04+)
+
+Amendment A's negative control (§2.3) used 3 image prompts with
+distinct prefill runtime shapes, so it never exercised the
+second-same-shape post-recompile call that triggers the historical
+assertion. Amendment B replaces just that negative-control
+definition with the exact historical R1/E2a sustained-workload
+recipe (720p image, `--random-input-len 128 --random-range-ratio
+1.0`, `--num-prompts 32 --warmup-requests 30`, `--max-concurrency
+1`), identical for stock-PCG and fork-PCG. All other Amendment A
+rules (phase markers, cache-matched correctness, PGID-scoped
+cleanup, three-tier verdict shape) remain in force.
+
+Predeclared verdicts:
+
+- `SAFETY_SUPERIORITY_PASS`: stock reproduces the exact
+  `AssertionError: PCG capture stream is not set` after the
+  multimodal recompile cascade AND fork completes all warmup +
+  measured requests with 0 crashes / 0 assertions / 0 fallbacks /
+  0 post-ready inflight recompiles.
+- `STOCK_TRIGGER_NOT_REPRODUCED` (`AMBIGUOUS`): stock completes
+  the historical workload — record all runtime shapes and
+  investigate environment differences; do NOT claim upstream fix.
+- `FORK_FAIL`: fork regressed.
+- `INFRA_FAILURE`: unrelated environment problem.
+
+Attempt 03 correctness PASS may combine with Attempt 04's safety
+result only if Attempt 04 = SAFETY_SUPERIORITY_PASS.
+
+### R6.2 Protocol Amendment C (2026-07-29, prospective for R6.2+)
+
+Amendment C reclassifies the R6.2 drift bracket as a **nuisance-control
+on shared-GPU stability**, not a fix gate. The R6.2 original machine
+verdict (FAIL @ drift 3.050 %) is preserved verbatim; Amendment C is a
+reinterpretation, not a re-run.
+
+Amended drift buckets (apply to R6.2 and any analogous shared-GPU
+drift bracket in R6.3–R6.5):
+
+| drift | classification |
+|---|---|
+| ≤ 3.0 % | clean PASS — absolute latencies quotable without caveat |
+| 3.0 % < drift ≤ 5.0 % | `PASS_WITH_CAVEAT` — relative fork-vs-stock non-regression stands; absolute stock-default numbers require shared-GPU caveat |
+| > 5.0 % | rerun on a clean GPU window, else `AMBIGUOUS` |
+
+**Unchanged (Amendment C does NOT touch these):**
+
+- Primary non-regression: `fork_pcg / stock_pcg` mean TTFT ratio
+  `≤ 1.05` — **unchanged**.
+- Per-variant `mean_ttft_ms` `CV%` `≤ 6.0 %` — **unchanged**.
+- All safety hard-FAIL conditions (assertions, fallbacks, post-ready
+  inference recompiles, request failures, per-rep completion count)
+  — **unchanged**.
+
+Under Amendment C, R6.2 is classified `PASS_WITH_CAVEAT —
+TEXT_NON_REGRESSION_SUPPORTED` (fork/stock_pcg = 0.9617; all safety
+zeros; all CVs ≤ 5.91 %; every variant 5/5 × 400/400). Absolute
+`stock_default = 26.86 ms` must carry a shared-GPU caveat in
+downstream reports and must not be reused as R6.3a's baseline —
+R6.3a takes fresh matched measurements on current SHAs.
+
+Full text: [`results/R6_fix_value_validation/R6.2_text_only_caseA/protocol_amendment_C_shared_gpu_drift_gate.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.2_text_only_caseA/protocol_amendment_C_shared_gpu_drift_gate.md).
+
+Full text: [`results/R6_fix_value_validation/R6.1_correctness/protocol_amendment_B_repeated_shape_safety.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.1_correctness/protocol_amendment_B_repeated_shape_safety.md).
+
+### R6.1 Protocol Amendment A (2026-07-28, authoritative for attempts 03+)
+
+R6.1 attempts 01 / 02 exposed two protocol-level gaps that R6.1
+Protocol Amendment A closes for attempts 03+:
+
+1. **Phase-scoped recompile markers** — startup/warmup recompiles
+   are reported and never fail the safety gate; only recompiles
+   between `SERVER_READY` and the last `LEG_END` inside a
+   `[LEG_START, LEG_END]` interval may fail the safety gate.
+2. **Cache-matched correctness controls** — matched cold-cache
+   repeats on fresh servers replace the same-server sequential
+   pattern that produced the attempt-02 cache-state confound.
+   Radix caching stays enabled for the primary path;
+   `--disable-radix-cache` is a diagnostic ablation only.
+3. **Direct stock-PCG image negative control** — a fresh
+   stock-PCG server serves the exact fixture / prompts of leg
+   b; classified as `EXPECTED_STOCK_FAILURE`,
+   `STOCK_NOW_SURVIVES`, or `UNRELATED_FAILURE`. An expected
+   stock crash is isolated to its PGID.
+4. **Three-tier verdict**: `SAFETY_SUPERIORITY_PASS` (stock-PCG
+   reproduces the historical failure AND fork-PCG completes the
+   same sequence cleanly), `CORRECTNESS_PASS` (all cross-config
+   divergences fit inside matched-repeat determinism envelopes),
+   overall R6.1 PASS = both, `SAFETY_PASS_CORRECTNESS_AMBIGUOUS`
+   if only safety passes, `FAIL` if safety fails. Performance
+   claims (R6.3) require overall PASS.
+5. **Token-level metrics** (token IDs, common-prefix tokens,
+   normalized token Levenshtein, envelope-based inside/outside
+   test) supplement exact-equality; semantic evaluation is
+   supplementary only, not verdict-authoritative.
+
+Full text: [`results/R6_fix_value_validation/R6.1_correctness/protocol_amendment_A_direct_fix_comparison.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.1_correctness/protocol_amendment_A_direct_fix_comparison.md).
+Attempts 01 / 02 stand as recorded under the original protocol;
+attempt 03 executes under Amendment A.
+
+### R6 phases
+
+| Phase | Purpose | Exit / verdict |
+|---|---|---|
+| **R6.0** | Provenance freeze + protocol writeup; dataset SHA recorded; commit + push. | ✅ COMPLETE 2026-07-28 — `results/R6_fix_value_validation/{README.md, R6.0_provenance.md}` committed. |
+| **R6.1a** | Correctness protocol + fixture + runner (CPU-only preparation). Predefine verdict rules; deterministic 1280×720 PNG fixture (three vertical color bands, muted RGB) with SHA-256 pinned; 3 image prompts + 3 text-only prompts + interleaved sequence; refuses-without-GPU-ID runner + Python client + verdict computation. | ✅ COMPLETE 2026-07-28 — `results/R6_fix_value_validation/R6.1_correctness/{protocol.md, fixtures/*}`, `scripts/{run_R6_1_correctness.sh, R6_1_client.py, R6_1_verdict.py}`. CPU-only validation: bash syntax, `python3 -m py_compile` for all `.py`, fixture regeneration bit-identical, runner refuses `--help`-style invocations without approved GPU (exit 64). |
+| **R6.1b attempt 01** (historical) | Attempted 2026-07-28T10:46 UTC on GPU 1 (monitor-selected after 629 s idle). Runner exited 2 on the first server; no leg ran. **Corrected root cause per R6.0 Amendment A3**: `cuda-compat-13-0`'s `libcuda.so.580.82.07` took loader precedence over the host lib `libcuda.so.595.71.05`; torch 2.11.0+cu130 fails `cudaGetDeviceCount()` against the compat lib. Infrastructure blocker; not a clean-Y correctness failure. Committed as `test(v2): record R6 correctness gate` (`703ff69`). Preserved verbatim under `R6.1_correctness/{verdict.md, verdict.json, raw/}` — not rewritten. | historical only; attempt 02 supersedes for the correctness verdict |
+| **R6.1b attempt 02** | Executed 2026-07-28T12:39–12:43 UTC on **GPU 0**. Historical protocol; 4 servers × 9 legs all HTTP 200. Superseded by attempt 03 under Amendment A. | See `results/.../attempt_02_host_libcuda_595_gpu0/{verdict.md, analysis.md}`. |
+| **R6.1b attempt 03** | Under Amendment A — cache-matched correctness. | Tier 2 **CORRECTNESS PASS**. Machine verdict `FAIL / NONE` stands under the (later-corrected) Amendment A §2.3 safety-neg-control rule; safety interpretation superseded by Attempt 04. See [`verdict_amended.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.1_correctness/attempt_03_amended_A_gpu0/verdict_amended.md) + [`interpretation_addendum.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.1_correctness/attempt_03_amended_A_gpu0/interpretation_addendum.md). |
+| **R6.1b attempt 04** | Under Amendment B — repeated-shape safety on the exact historical R1 recipe, 2026-07-28T14:36–14:40 UTC on GPU 0. Stock-PCG + fork-PCG both under `--enforce-piecewise-cuda-graph`, 720p × 32 requests. | ✅ **`SAFETY_SUPERIORITY_PASS`**. Stock reproduced the exact `AssertionError: PCG capture stream is not set` at server_log:44322 (prefill shape `total=1023` — second occurrence). Fork completed 30 warmup + 32 measured requests: 0 assertions, 0 fallbacks, 0 post-ready inflight recompiles, `bench aggregate_completed=32`. **Combined with Attempt 03 CORRECTNESS_PASS → overall R6.1 PASS.** See [`verdict_amended_B.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.1_correctness/attempt_04_repeated_shape_gpu0/verdict_amended_B.md). |
+| **R6.2** | Text-only Case A on Qwen3-VL server. Same recipe as v2 #2 Case A: `caseA_short.jsonl`, 128→128, c=1, n=400, warmup=30, seed=1, 5 reps. Variants: **(2a)** stock-default, **(2b)** stock-PCG (`--enforce-piecewise-cuda-graph`), **(2c)** fork-PCG, **(2d)** stock-default_repeat (drift bracket). Pre-declared thresholds: fork-PCG mean TTFT ≤ stock-PCG mean TTFT × 1.05 AND CV ≤ 6% AND drift bracket 2a↔2d ≤ 3%. | Executed 2026-07-29T00:49–02:27 UTC on GPU 0. Machine verdict ❌ **FAIL** on **only** the drift metric (3.050% vs 3.0% cap, by 0.05 pp) — preserved verbatim as machine verdict under the original protocol. Every substantive gate PASSED under the pre-declared thresholds: fork/stock_pcg ratio **0.9617** (supports text-path non-regression relative to stock-PCG; treat as **within-noise-equivalent**, not as a statistically proven 3.8 % speedup, given the shared-GPU noise floor Amendment C was drafted to accommodate), all CV ≤ 5.91%, 5/5 × 400/400 reps every variant, 0 safety anomalies. Rep-mean point estimates: `stock_default = 26.86 → stock_pcg = 18.35 → fork_pcg = 17.65 ms`. Drift trace: intermittent foreign PIDs on GPU 0 during stock_default rep-1 (26.87 ms) and rep-5 (29.10 ms). **Amendment C** (2026-07-29, §5b.R6.2 Amendment C below): the drift bracket is a shared-GPU nuisance-control, not a fix gate; reclassify `3% < drift ≤ 5%` as `PASS_WITH_CAVEAT`. Under Amendment C, R6.2 = ✅ **`PASS_WITH_CAVEAT — TEXT_NON_REGRESSION_SUPPORTED`**; fork-vs-stock ratio, CV, and safety gates are unchanged. R6.3–R6.5 unblocked. Absolute `stock_default = 26.86 ms` carries a shared-GPU caveat in all downstream reporting. See [`R6.2_text_only_caseA/attempt_gpu0/verdict.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.2_text_only_caseA/attempt_gpu0/verdict.md) (machine), [`protocol_amendment_C_shared_gpu_drift_gate.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.2_text_only_caseA/protocol_amendment_C_shared_gpu_drift_gate.md), [`status_amended_C.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.2_text_only_caseA/attempt_gpu0/status_amended_C.md). |
+| **R6.3** | Fresh image cost + workload characterization on final fork SHA. **R6.3a** — rebaseline IMG-A `S0_ipc` and fork-PCG at the R5.B recipe (720p, 128 text, c=1, n=400) on `da802ddca` / `986c89e69`. Do **not** reuse or symlink R5.B (wrong SHA). 3 reps each; report mean TTFT + CV. **R6.3b** — workload sweep to locate any cell where fork-PCG mean TTFT ≤ stock-default mean TTFT: matrix over text tokens ∈ {128, 512, 2048}, image resolution ∈ {360p, 720p} (originally spec'd as 224p; sglang bench serving accepts only {4k,1080p,720p,360p} — 360p is the smallest supported), concurrency ∈ {1, 4}, single rep per cell (n=100). Every cell reported, positive and negative. **R6.3c (mandatory)** — mixed-modality safety subtest: interleaved text → image → text → image on one fork-PCG server, ≥ 50 requests each modality, log recompiles + assertions + fallbacks. This is *not* optional and does not require perf conclusions. | Executed on GPU 2 (attempt_gpu2) 2026-07-29T09:41–10:57 UTC. Prior attempt_gpu6 exposed two runner bugs (224p CLI, R6.3c launch return not checked) fixed in `dd93c43`; preserved as INFRA_INCOMPLETE. Machine verdict ✅ **PASS**. **R6.3a**: fork_pcg 87.01 vs stock_default 94.35 ms (ratio **0.9222**, fork 7.8% faster mean TTFT at 720p 1-img c=1 n=400; CVs 15.5%/21.9% reflect shared-GPU drift). **R6.3b**: **7 winning cells** — `t128_r360p_c1` 0.8942, `t128_r360p_c4` 0.8738, `t128_r720p_c1` 0.9799, `t128_r720p_c4` 0.8346, `t512_r360p_c1` 0.9583, `t512_r360p_c4` **0.7699** (fork 23% faster), `t512_r720p_c1` 0.9465. **5 losing cells**: every `t2048_*` (long-text regime) plus `t512_r720p_c4`. **R6.3c**: 0 request failures / 0 assertions / 0 fallbacks / 0 post-ready recompiles. Confirmation reps for the 7 winners are the next task (per revised framework). See [`R6.3_image_and_sweep/attempt_gpu2/verdict.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.3_image_and_sweep/attempt_gpu2/verdict.md). |
+| **R6.4** | Analytical crossover on **means** (not p50 — p50 is not a linear operator). Given `G = mean_text_off − mean_text_on > 0` and `C = mean_image_on − mean_image_off > 0`, `p* = C / (G + C)`. Bootstrap CI on `p*` from rep-level data (R6.2 gives 5 reps × 4 variants; R6.3a gives 3 reps × 2 variants). Table at p ∈ {0.5, 0.7, 0.8, p*, 0.9, 0.95, 1.0}. | Executed 2026-07-29 on R6.2 + R6.3a rep-level means. Machine verdict `AMBIGUOUS` preserved verbatim: point estimate `p* = −3.912` (outside `[0,1]`) with bootstrap **95 % CI [−12.39, +15.44]** — **statistically unidentifiable**. G = +9.21 ms and C = −7.34 ms are noisy point estimates from small-n shared-GPU inputs. An earlier reading of this row labelled R6.4 `STRICTLY_DOMINANT_ON_R6.2/R6.3a_OPERATING_POINT`; that framing is **retracted** here. The bootstrap interval spans 27+ units of `p` and includes 0 as well as values on both sides of `[0, 1]`, so the analytical framework does not identify a crossover in either direction. R6.4 stands as **AMBIGUOUS**. See [`R6.4_analytical_crossover/crossover.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.4_analytical_crossover/crossover.md) (verbatim machine output) and [`analysis.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.4_analytical_crossover/analysis.md) (historical interpretation — superseded by R6_FINAL_CONCLUSION.md). |
+| **R6.5** | Optional empirical mixed-workload perf validation. Only if R6.1 = PASS and R6.2/6.3/6.4 are all clean. Sweep ≥ 3 fixed mix ratios (below `p*`, at `p*`, above `p*`) with the identical fixed request order for stock-default and fork-PCG. Single 80/20 run is not accepted. | ❌ **INVALID_MIXED_PROVENANCE / AMBIGUOUS** (audited 2026-07-29). Attempted several times on 2026-07-29 UTC; all attempts preserved on-branch. The auto-generated attempt_gpu2 machine `PASS` verdict is preserved verbatim but does NOT reflect a clean 3-ratio run: `attempt_gpu2/raw/launch_context.json prelaunch_utc = 2026-07-29T12:27:18Z`, yet `ratio_0p5` (`started_utc = 12:17:32Z / 12:19:27Z`) and `ratio_0p8` (`12:21:09Z / 12:23:54Z`) predate the launch by 6–10 minutes and are stale artifacts from an earlier attempt (attempt_gpu4, 12:17–12:25). Only `ratio_0p2` is a true attempt_gpu2 measurement. `R6_5_verdict.py` did not enforce launch-ID or timestamp checks. **R6.5 does not validate mixed-workload dominance.** attempt_gpu4 machine verdict is independently AMBIGUOUS with only ratio_0p5 clean (stock 0.658 vs fork 0.661 s, statistically tied). The three earlier GPU 2 attempts on 2026-07-29T12:06–12:12 UTC were INFRA_INCOMPLETE (foreign-tenant OOM at model load). See [`R6.5_empirical_mixed/attempt_gpu2/verdict.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.5_empirical_mixed/attempt_gpu2/verdict.md) and the audit in [`R6_FINAL_CONCLUSION.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6_FINAL_CONCLUSION.md). |
+
+### R6 verdict framework
+
+*Historical framework (as pre-declared before results):*
+
+- **PASS** ← R6.1 = PASS AND R6.2 within thresholds
+  (Amendment C: `PASS` or `PASS_WITH_CAVEAT`) AND R6.3c = 0 failures /
+  0 assertions / 0 recompiles / 0 fallbacks AND (R6.3b found ≥ 1 winning
+  cell OR R6.4 `p*` is in operator-realistic range ≤ 0.95).
+- **FAIL** ← R6.1 = FAIL, or R6.2 fork-PCG regresses stock-PCG beyond
+  threshold, or R6.3c surfaces any failure / assertion / recompile /
+  fallback.
+- **R7_REQUIRED** ← R6.1 = AMBIGUOUS, or R6.3b sweep + R6.4 shows no
+  operator-realistic winning workload and `p*` > 0.95 → upstream PR
+  framing must be redesigned (correctness-only, no perf headline) before
+  submission.
+
+*Audited application (2026-07-29):*
+Under this framework a machine "R6 PASS" was reached because R6.1 =
+PASS, R6.2 = PASS_WITH_CAVEAT, R6.3c had zero safety events, and
+R6.3b returned ≥ 1 apparent winning cell. Post-hoc audit found:
+(a) the winning-cell criterion was met with **statistically thin**
+per-cell CVs (27–33 % in the higher-margin cells); the only cell
+with a clean statistical footprint is `cell_t512_r360p_c1`
+(~8.6 % mean improvement, CV ~4 % on each side).
+(b) R6.4 was labelled `STRICTLY_DOMINANT` on a point-estimate p*
+whose bootstrap 95 % CI is unidentifiable ([−12.39, +15.44]) —
+this framing is retracted.
+(c) R6.5 was labelled `PASS` by the machine but combined stale
+ratio_0p5 / ratio_0p8 artifacts with the new attempt_gpu2
+launch — retracted.
+
+The audited overall reading is therefore
+`CORRECTNESS_AND_SAFETY_FIX_PASS` +
+`PERFORMANCE_VALUE_PROMISING_BUT_NOT_FINAL` — overall performance
+dominance is **not** established. The pre-declared "≥ 1 winning
+cell" trigger did fire, but a well-attributed performance headline
+under the audit standard needs a clean isolated mixed-workload
+rerun with launch-context enforcement in the verdict script and
+a proper model-serving-ready readiness check.
+
+### R6 out of scope
+
+- Changing `is_multimodal_piecewise_cuda_graph_supported` defaults — Issue
+  #5 owns that decision; R6 evaluates *within* the existing override
+  semantics.
+- Filing the upstream PR itself — R6 gates it; user triggers the actual
+  filing.
+- Retroactively rewriting the R5.C `audit_report.md`. R5.C stands as
+  written; R6.1 supersedes it as the correctness authority. The current
+  uncommitted local edit to `R5C_correctness_audit/audit_report.md` is
+  preserved as-is under user control until user directs otherwise.
+
+### R6 commit cadence (applies to all R6 work)
+
+Per `CLAUDE.md` + Conventional Commits:
+
+- `docs(v2): ...` — plan and status revisions; final R6 conclusion.
+- `feat(v2): ...` — new runners, generators, analysis tooling.
+- `test(v2): ...` — recorded experiment results, **including recorded
+  failures** (a failed R6.1 or R6.2 result is a test commit, not a fix).
+- `perf(v2): ...` — only when the commit itself is a perf implementation
+  change; never for merely reporting perf numbers.
+- `fix(v2): ...` — profiler repo bugfixes.
+
+Every runner spec, every recorded experiment, and the final R6 conclusion
+are each an independent focused commit, pushed immediately. Any SGLang
+fork changes commit + push in `/data/sglang-fork` only; never mix fork
+edits into profiler commits.
 
 ## 6. Artifact Rules
 

@@ -1,0 +1,773 @@
+{
+  "ambiguous_cells": [],
+  "confirmed_cells": [
+    "cell_t128_r360p_c1",
+    "cell_t128_r360p_c4",
+    "cell_t128_r720p_c1",
+    "cell_t512_r360p_c1",
+    "cell_t512_r360p_c4"
+  ],
+  "launch_context": {
+    "attempt_dir": "attempt_gpu2_confirm",
+    "cells": [
+      "cell_t128_r360p_c1",
+      "cell_t128_r360p_c4",
+      "cell_t128_r720p_c1",
+      "cell_t128_r720p_c4",
+      "cell_t512_r360p_c1",
+      "cell_t512_r360p_c4",
+      "cell_t512_r720p_c1"
+    ],
+    "cuda_visible_devices": "2",
+    "host_libcuda": "/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05",
+    "hostname": "17b86cda54f9",
+    "launched_by": "run_R6_3_confirm",
+    "ld_preload": "/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05",
+    "nvidia_driver": "595.71.05",
+    "prelaunch_utc": "2026-07-29T11:02:59+00:00",
+    "reps_per_cell_per_variant": 3,
+    "selected_gpu_id": 2,
+    "sglang_fork_head": "986c89e69c25882ab6f3d396f8eb306f38f2c8d2",
+    "sglang_stock_head": "da802ddcafe55e25b3e1db86b1e0444afc3e05bc"
+  },
+  "not_confirmed_cells": [
+    "cell_t128_r720p_c4",
+    "cell_t512_r720p_c1"
+  ],
+  "per_cell": {
+    "cell_t128_r360p_c1": {
+      "fork_over_stock_ratio": 0.9883148797159084,
+      "variants": {
+        "fork_pcg": {
+          "mean_ttft_stats": {
+            "cv_pct": 30.558528745501555,
+            "mean": 63.47782697378231,
+            "median": 65.02640343052917,
+            "n": 3,
+            "stdev": 19.397890002803006,
+            "values": [
+              65.02640343052917,
+              43.352064130303916,
+              82.05501336051384
+            ]
+          },
+          "n_accepted": 3,
+          "n_invalidated": 0,
+          "reps": [
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.152743594560773,
+              "mean_ttft_ms": 65.02640343052917,
+              "median_ttft_ms": 61.924597997858655,
+              "missing": false,
+              "output_throughput": 177.77831108306904,
+              "rep": 1
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.157094043381623,
+              "mean_ttft_ms": 43.352064130303916,
+              "median_ttft_ms": 40.23258549568709,
+              "missing": false,
+              "output_throughput": 183.13799061685768,
+              "rep": 2
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.15458431802887,
+              "mean_ttft_ms": 82.05501336051384,
+              "median_ttft_ms": 40.49581800063606,
+              "missing": false,
+              "output_throughput": 173.61496010353395,
+              "rep": 3
+            }
+          ]
+        },
+        "stock_default": {
+          "mean_ttft_stats": {
+            "cv_pct": 11.481152710274412,
+            "mean": 64.22834288605372,
+            "median": 64.44961808956577,
+            "n": 3,
+            "stdev": 7.3741541300265,
+            "values": [
+              71.48936907862662,
+              56.746041489968775,
+              64.44961808956577
+            ]
+          },
+          "n_accepted": 3,
+          "n_invalidated": 0,
+          "reps": [
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.146887182596315,
+              "mean_ttft_ms": 71.48936907862662,
+              "median_ttft_ms": 68.17430850060191,
+              "missing": false,
+              "output_throughput": 176.33578806495146,
+              "rep": 1
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.149856479061624,
+              "mean_ttft_ms": 56.746041489968775,
+              "median_ttft_ms": 51.32842950115446,
+              "missing": false,
+              "output_throughput": 179.91227942246837,
+              "rep": 2
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.153843176142793,
+              "mean_ttft_ms": 64.44961808956577,
+              "median_ttft_ms": 49.534571495314594,
+              "missing": false,
+              "output_throughput": 177.83529957363734,
+              "rep": 3
+            }
+          ]
+        }
+      },
+      "verdict": "CONFIRMED_WIN"
+    },
+    "cell_t128_r360p_c4": {
+      "fork_over_stock_ratio": 0.817596346742074,
+      "variants": {
+        "fork_pcg": {
+          "mean_ttft_stats": {
+            "cv_pct": 10.368673934477908,
+            "mean": 88.52511689328821,
+            "median": 83.67079659976298,
+            "n": 3,
+            "stdev": 9.178880720780475,
+            "values": [
+              82.79271013045218,
+              83.67079659976298,
+              99.11184394964948
+            ]
+          },
+          "n_accepted": 3,
+          "n_invalidated": 0,
+          "reps": [
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.479289400076178,
+              "mean_ttft_ms": 82.79271013045218,
+              "median_ttft_ms": 81.65692649345146,
+              "missing": false,
+              "output_throughput": 653.2025344266206,
+              "rep": 1
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.478996061096629,
+              "mean_ttft_ms": 83.67079659976298,
+              "median_ttft_ms": 81.5780269986135,
+              "missing": false,
+              "output_throughput": 652.8881666212015,
+              "rep": 2
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.462593823788445,
+              "mean_ttft_ms": 99.11184394964948,
+              "median_ttft_ms": 75.75794100557687,
+              "missing": false,
+              "output_throughput": 634.0918315101358,
+              "rep": 3
+            }
+          ]
+        },
+        "stock_default": {
+          "mean_ttft_stats": {
+            "cv_pct": 14.999050847622335,
+            "mean": 108.27484399366465,
+            "median": 99.3115611205576,
+            "n": 3,
+            "stdev": 16.24019890579352,
+            "values": [
+              98.49153781018686,
+              99.3115611205576,
+              127.02143305024946
+            ]
+          },
+          "n_accepted": 3,
+          "n_invalidated": 0,
+          "reps": [
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.457156532912472,
+              "mean_ttft_ms": 98.49153781018686,
+              "median_ttft_ms": 91.90084150031907,
+              "missing": false,
+              "output_throughput": 642.7086746607326,
+              "rep": 1
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.455474809991649,
+              "mean_ttft_ms": 99.3115611205576,
+              "median_ttft_ms": 91.77166350127663,
+              "missing": false,
+              "output_throughput": 642.2651394090105,
+              "rep": 2
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.2450774496847,
+              "mean_ttft_ms": 127.02143305024946,
+              "median_ttft_ms": 97.38943649426801,
+              "missing": false,
+              "output_throughput": 641.0750560724493,
+              "rep": 3
+            }
+          ]
+        }
+      },
+      "verdict": "CONFIRMED_WIN"
+    },
+    "cell_t128_r720p_c1": {
+      "fork_over_stock_ratio": 0.9099933710611199,
+      "variants": {
+        "fork_pcg": {
+          "mean_ttft_stats": {
+            "cv_pct": 23.07368870699938,
+            "mean": 93.83377948969913,
+            "median": 83.0020797396719,
+            "n": 3,
+            "stdev": 21.650914181465406,
+            "values": [
+              118.76290165018872,
+              83.0020797396719,
+              79.73635707923677
+            ]
+          },
+          "n_accepted": 3,
+          "n_invalidated": 0,
+          "reps": [
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.191847342045841,
+              "mean_ttft_ms": 118.76290165018872,
+              "median_ttft_ms": 116.61231300240615,
+              "missing": false,
+              "output_throughput": 164.33093167815423,
+              "rep": 1
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.1859633633090025,
+              "mean_ttft_ms": 83.0020797396719,
+              "median_ttft_ms": 78.86103949567769,
+              "missing": false,
+              "output_throughput": 172.4102654904769,
+              "rep": 2
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.180483271505803,
+              "mean_ttft_ms": 79.73635707923677,
+              "median_ttft_ms": 77.0201284904033,
+              "missing": false,
+              "output_throughput": 173.342761943439,
+              "rep": 3
+            }
+          ]
+        },
+        "stock_default": {
+          "mean_ttft_stats": {
+            "cv_pct": 13.146073843701025,
+            "mean": 103.11479453996678,
+            "median": 105.32976290007355,
+            "n": 3,
+            "stdev": 13.555547034004626,
+            "values": [
+              115.42644936969737,
+              105.32976290007355,
+              88.58817135012941
+            ]
+          },
+          "n_accepted": 3,
+          "n_invalidated": 0,
+          "reps": [
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.189233706772738,
+              "mean_ttft_ms": 115.42644936969737,
+              "median_ttft_ms": 113.50083000434097,
+              "missing": false,
+              "output_throughput": 165.1150179019417,
+              "rep": 1
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.182530341889226,
+              "mean_ttft_ms": 105.32976290007355,
+              "median_ttft_ms": 83.2896344945766,
+              "missing": false,
+              "output_throughput": 167.50477697750014,
+              "rep": 2
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.179776860075393,
+              "mean_ttft_ms": 88.58817135012941,
+              "median_ttft_ms": 83.2150734931929,
+              "missing": false,
+              "output_throughput": 171.3315836517776,
+              "rep": 3
+            }
+          ]
+        }
+      },
+      "verdict": "CONFIRMED_WIN"
+    },
+    "cell_t128_r720p_c4": {
+      "fork_over_stock_ratio": 1.061510847896241,
+      "variants": {
+        "fork_pcg": {
+          "mean_ttft_stats": {
+            "cv_pct": 9.330303724453785,
+            "mean": 200.4959187101728,
+            "median": 211.22154366006725,
+            "n": 3,
+            "stdev": 18.706878170793086,
+            "values": [
+              178.8952486803464,
+              211.22154366006725,
+              211.37096379010472
+            ]
+          },
+          "n_accepted": 3,
+          "n_invalidated": 0,
+          "reps": [
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.687354132594948,
+              "mean_ttft_ms": 178.8952486803464,
+              "median_ttft_ms": 151.64457300124923,
+              "missing": false,
+              "output_throughput": 555.4862152287466,
+              "rep": 1
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.826660594250963,
+              "mean_ttft_ms": 211.22154366006725,
+              "median_ttft_ms": 149.36611199664185,
+              "missing": false,
+              "output_throughput": 531.6154613849895,
+              "rep": 2
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.903382630711449,
+              "mean_ttft_ms": 211.37096379010472,
+              "median_ttft_ms": 149.08597050089156,
+              "missing": false,
+              "output_throughput": 521.8706015018628,
+              "rep": 3
+            }
+          ]
+        },
+        "stock_default": {
+          "mean_ttft_stats": {
+            "cv_pct": 5.207006884713792,
+            "mean": 188.8778801531104,
+            "median": 185.9482530700916,
+            "n": 3,
+            "stdev": 9.834884223273923,
+            "values": [
+              199.84468882990768,
+              180.84069855933194,
+              185.9482530700916
+            ]
+          },
+          "n_accepted": 3,
+          "n_invalidated": 0,
+          "reps": [
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.5995270684975615,
+              "mean_ttft_ms": 199.84468882990768,
+              "median_ttft_ms": 172.5125655066222,
+              "missing": false,
+              "output_throughput": 547.864874487084,
+              "rep": 1
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.661785118820376,
+              "mean_ttft_ms": 180.84069855933194,
+              "median_ttft_ms": 176.0227515042061,
+              "missing": false,
+              "output_throughput": 558.553608168701,
+              "rep": 2
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.645553916615964,
+              "mean_ttft_ms": 185.9482530700916,
+              "median_ttft_ms": 180.30753399943933,
+              "missing": false,
+              "output_throughput": 557.5269388698838,
+              "rep": 3
+            }
+          ]
+        }
+      },
+      "verdict": "NOT_CONFIRMED"
+    },
+    "cell_t512_r360p_c1": {
+      "fork_over_stock_ratio": 0.9138451618358026,
+      "variants": {
+        "fork_pcg": {
+          "mean_ttft_stats": {
+            "cv_pct": 4.642771445859934,
+            "mean": 59.52395195660453,
+            "median": 58.21569985040696,
+            "n": 3,
+            "stdev": 2.76356104488862,
+            "values": [
+              58.21569985040696,
+              57.65743781943456,
+              62.69871819997207
+            ]
+          },
+          "n_accepted": 3,
+          "n_invalidated": 0,
+          "reps": [
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.169874110790089,
+              "mean_ttft_ms": 58.21569985040696,
+              "median_ttft_ms": 53.34242899698438,
+              "missing": false,
+              "output_throughput": 178.88384002176497,
+              "rep": 1
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.170935993300527,
+              "mean_ttft_ms": 57.65743781943456,
+              "median_ttft_ms": 55.05649700353388,
+              "missing": false,
+              "output_throughput": 179.0303166138194,
+              "rep": 2
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.167165071343477,
+              "mean_ttft_ms": 62.69871819997207,
+              "median_ttft_ms": 55.05988749791868,
+              "missing": false,
+              "output_throughput": 177.8984181668604,
+              "rep": 3
+            }
+          ]
+        },
+        "stock_default": {
+          "mean_ttft_stats": {
+            "cv_pct": 4.0060272671165995,
+            "mean": 65.13570836992585,
+            "median": 63.927535220282145,
+            "n": 3,
+            "stdev": 2.609354237928779,
+            "values": [
+              63.927535220282145,
+              68.13018565953826,
+              63.34940422995715
+            ]
+          },
+          "n_accepted": 3,
+          "n_invalidated": 0,
+          "reps": [
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.164529332273738,
+              "mean_ttft_ms": 63.927535220282145,
+              "median_ttft_ms": 59.02538950613234,
+              "missing": false,
+              "output_throughput": 177.64709825053038,
+              "rep": 1
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.160529787714527,
+              "mean_ttft_ms": 68.13018565953826,
+              "median_ttft_ms": 57.99118800496217,
+              "missing": false,
+              "output_throughput": 176.73492576780552,
+              "rep": 2
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.167793561735395,
+              "mean_ttft_ms": 63.34940422995715,
+              "median_ttft_ms": 56.46753049950348,
+              "missing": false,
+              "output_throughput": 177.67494052407724,
+              "rep": 3
+            }
+          ]
+        }
+      },
+      "verdict": "CONFIRMED_WIN"
+    },
+    "cell_t512_r360p_c4": {
+      "fork_over_stock_ratio": 0.7805864831390659,
+      "variants": {
+        "fork_pcg": {
+          "mean_ttft_stats": {
+            "cv_pct": 32.93282554835228,
+            "mean": 129.83710751325512,
+            "median": 109.96183054041467,
+            "n": 3,
+            "stdev": 42.7590281143669,
+            "values": [
+              109.96183054041467,
+              100.63315035993583,
+              178.9163416394149
+            ]
+          },
+          "n_accepted": 3,
+          "n_invalidated": 0,
+          "reps": [
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.712441393938724,
+              "mean_ttft_ms": 109.96183054041467,
+              "median_ttft_ms": 112.0231659951969,
+              "missing": false,
+              "output_throughput": 608.7561152457848,
+              "rep": 1
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.811610462045018,
+              "mean_ttft_ms": 100.63315035993583,
+              "median_ttft_ms": 105.23850949539337,
+              "missing": false,
+              "output_throughput": 604.6533405995854,
+              "rep": 2
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.665727235121546,
+              "mean_ttft_ms": 178.9163416394149,
+              "median_ttft_ms": 115.9416614973452,
+              "missing": false,
+              "output_throughput": 566.4891613168622,
+              "rep": 3
+            }
+          ]
+        },
+        "stock_default": {
+          "mean_ttft_stats": {
+            "cv_pct": 27.066858096797823,
+            "mean": 166.33276429682155,
+            "median": 171.2562651799817,
+            "n": 3,
+            "stdev": 45.021053280701885,
+            "values": [
+              119.05232810036978,
+              171.2562651799817,
+              208.68969961011317
+            ]
+          },
+          "n_accepted": 3,
+          "n_invalidated": 0,
+          "reps": [
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.584486061497453,
+              "mean_ttft_ms": 119.05232810036978,
+              "median_ttft_ms": 120.69646699819714,
+              "missing": false,
+              "output_throughput": 614.4704579061147,
+              "rep": 1
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.5713555620415836,
+              "mean_ttft_ms": 171.2562651799817,
+              "median_ttft_ms": 126.11835499410518,
+              "missing": false,
+              "output_throughput": 579.2542453660956,
+              "rep": 2
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.584366405909829,
+              "mean_ttft_ms": 208.68969961011317,
+              "median_ttft_ms": 138.12868599779904,
+              "missing": false,
+              "output_throughput": 554.84164228343,
+              "rep": 3
+            }
+          ]
+        }
+      },
+      "verdict": "CONFIRMED_WIN"
+    },
+    "cell_t512_r720p_c1": {
+      "fork_over_stock_ratio": 1.1689946277879193,
+      "variants": {
+        "fork_pcg": {
+          "mean_ttft_stats": {
+            "cv_pct": 27.441784951128685,
+            "mean": 114.8610672968304,
+            "median": 97.5082492310321,
+            "n": 3,
+            "stdev": 31.519927080167395,
+            "values": [
+              95.83069770029397,
+              151.24425495916512,
+              97.5082492310321
+            ]
+          },
+          "n_accepted": 3,
+          "n_invalidated": 0,
+          "reps": [
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.194263548892052,
+              "mean_ttft_ms": 95.83069770029397,
+              "median_ttft_ms": 94.48683499795152,
+              "missing": false,
+              "output_throughput": 169.24264158517187,
+              "rep": 1
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.195763300633146,
+              "mean_ttft_ms": 151.24425495916512,
+              "median_ttft_ms": 93.41543850314338,
+              "missing": false,
+              "output_throughput": 157.69128042030866,
+              "rep": 2
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.190815744408467,
+              "mean_ttft_ms": 97.5082492310321,
+              "median_ttft_ms": 94.21909749653423,
+              "missing": false,
+              "output_throughput": 168.975455123443,
+              "rep": 3
+            }
+          ]
+        },
+        "stock_default": {
+          "mean_ttft_stats": {
+            "cv_pct": 3.922239002630508,
+            "mean": 98.25628327666588,
+            "median": 98.5194033200969,
+            "n": 3,
+            "stdev": 3.8538462652125065,
+            "values": [
+              101.97182696007076,
+              98.5194033200969,
+              94.27761954982998
+            ]
+          },
+          "n_accepted": 3,
+          "n_invalidated": 0,
+          "reps": [
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.186208365517155,
+              "mean_ttft_ms": 101.97182696007076,
+              "median_ttft_ms": 98.90933400311042,
+              "missing": false,
+              "output_throughput": 168.13810493488378,
+              "rep": 1
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.188772264252944,
+              "mean_ttft_ms": 98.5194033200969,
+              "median_ttft_ms": 95.32766649499536,
+              "missing": false,
+              "output_throughput": 168.8301003476568,
+              "rep": 2
+            },
+            {
+              "completed": 100,
+              "invalidated": false,
+              "mean_tpot_ms": 5.196289549448563,
+              "mean_ttft_ms": 94.27761954982998,
+              "median_ttft_ms": 89.85846249561291,
+              "missing": false,
+              "output_throughput": 169.5252647518123,
+              "rep": 3
+            }
+          ]
+        }
+      },
+      "verdict": "NOT_CONFIRMED"
+    }
+  },
+  "reasons": [],
+  "server_safety": {
+    "fork_pcg": {
+      "assertions": 0,
+      "fallbacks": 0,
+      "post_ready_recompiles": 0,
+      "ready_line": 470,
+      "startup_recompiles": 0,
+      "total_lines": 9628
+    },
+    "stock_default": {
+      "assertions": 0,
+      "fallbacks": 0,
+      "post_ready_recompiles": 0,
+      "ready_line": 99,
+      "startup_recompiles": 0,
+      "total_lines": 8998
+    }
+  },
+  "verdict": "PASS"
+}

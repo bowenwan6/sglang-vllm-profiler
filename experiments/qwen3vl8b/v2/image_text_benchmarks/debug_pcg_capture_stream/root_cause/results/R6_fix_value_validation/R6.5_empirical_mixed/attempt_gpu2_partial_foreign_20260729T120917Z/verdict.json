@@ -1,0 +1,86 @@
+{
+  "launch_context": {
+    "attempt_dir": "attempt_gpu2",
+    "host_libcuda": "/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05",
+    "hostname": "17b86cda54f9",
+    "launched_by": "run_R6_5_empirical_mixed",
+    "ld_preload": "/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05",
+    "nvidia_driver": "595.71.05",
+    "prelaunch_utc": "2026-07-29T12:08:26+00:00",
+    "selected_gpu_id": 2,
+    "sglang_fork_head": "986c89e69c25882ab6f3d396f8eb306f38f2c8d2",
+    "sglang_stock_head": "da802ddcafe55e25b3e1db86b1e0444afc3e05bc"
+  },
+  "p_star": -3.9120377283468675,
+  "ratios": {
+    "ratio_0p5": {
+      "agreement": false,
+      "empirical_fork_wins": false,
+      "empirical_ratio_fork_over_stock": null,
+      "mean_lat_fork": null,
+      "mean_lat_stock": 0.6140465755698097,
+      "per_variant": {
+        "fork_pcg": {
+          "safety": {
+            "assertions": 0,
+            "fallbacks": 0,
+            "missing": false,
+            "post_ready_recompiles": 0,
+            "ready_line": null,
+            "startup_recompiles": 0,
+            "total_lines": 29
+          },
+          "summary": null
+        },
+        "stock_default": {
+          "safety": {
+            "missing": true
+          },
+          "summary": {
+            "all_latency_s_stats": {
+              "mean": 0.6140465755698097,
+              "median": 0.6825132234953344,
+              "n": 100,
+              "p90": 0.7032086239923956,
+              "p99": 0.7744801070075482,
+              "stdev": 0.15256644709814546
+            },
+            "ended_utc": "2026-07-29T12:07:49+00:00",
+            "fixture_sha256": "79c47c91070abcbae0dbc8bd983ec5b5f3bf37f450d535ac220b95e0fb74c967",
+            "image_latency_s_stats": {
+              "mean": 0.529464382379374,
+              "median": 0.5120184805055032,
+              "n": 50,
+              "p90": 0.7052004009892698,
+              "p99": 0.7090175650082529,
+              "stdev": 0.1434472048971113
+            },
+            "n_completed": 100,
+            "n_image": 50,
+            "n_planned": 100,
+            "n_text": 50,
+            "request_failures": 0,
+            "seed": 42,
+            "started_utc": "2026-07-29T12:06:47+00:00",
+            "text_latency_s_stats": {
+              "mean": 0.6986287687602453,
+              "median": 0.6834981880019768,
+              "n": 50,
+              "p90": 0.6862039300031029,
+              "p99": 0.6964227110001957,
+              "stdev": 0.10886078806210783
+            },
+            "text_ratio": 0.5
+          }
+        }
+      },
+      "predicted_fork_wins": true,
+      "text_ratio": 0.5
+    }
+  },
+  "reasons": [
+    "ratio_0p5/stock_default: server.log missing",
+    "only 1 ratios recorded, require >=3"
+  ],
+  "verdict": "AMBIGUOUS"
+}

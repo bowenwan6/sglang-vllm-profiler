@@ -1,0 +1,168 @@
+From 31cc8752f0cf5c00a86a63cb19a86a3fc14b48c1 Mon Sep 17 00:00:00 2001
+From: Bowen Wang <wangbowen1001@yahoo.com>
+Date: Tue, 30 Jun 2026 14:34:26 +0000
+Subject: [PATCH] feat(pcg): prototype Y broaden warmup capture for VLM
+ deepstack branch
+
+The (X) eager-fallback fix from 8a2dcb33a stops the crash but
+sacrifices cudagraph speedup on the recompiled multimodal frame:
+image+text PCG-ON-with-X measures ~104 ms TTFT vs ~65 ms PCG-OFF on
+IMG-A at n=400 c=1 720p. Cause: the warmup driver never feeds a
+non-None input_deepstack_embeds to Qwen3LLMModel.forward, so Dynamo
+captures every piecewise CUDA graph for the
+'input_deepstack_embeds is None' branch only.
+
+This prototype broadens the warmup so the multimodal Dynamo branch
+is compiled (and later capturable) too:
+
+  - Adds Qwen3VLForConditionalGeneration.pcg_warmup_multimodal_branch
+    method: synthesizes a torch.zeros input_deepstack_embeds tensor
+    at shape [num_tokens, hidden_size * num_deepstack_embeddings],
+    bypasses general_mm_embed_routine, and calls Qwen3LLMModel.forward
+    directly with the non-None deepstack kwarg. This is the
+    'input_deepstack_embeds != None' Dynamo specialization the
+    runtime currently has to recompile to reach.
+
+  - TcPiecewiseCudaGraphBackend._run_compile_pass detects the hook
+    via duck typing (getattr ... 'pcg_warmup_multimodal_branch', None)
+    and runs a second per-shape forward loop inside the same
+    enable_torch_compile_warmup() context, alongside the existing
+    text-only warmup. Models without the hook see no behavior change.
+
+Expected effect (to be validated):
+  - On Qwen3-VL: no Dynamo recompile on first image request;
+    therefore no missing-capture-stream fallback warning, full PCG
+    benefit on image+text path.
+  - Text-only models: unchanged.
+  - Prototype is opt-in and additive; no production semantics rely on
+    it firing.
+
+Marked as prototype because:
+  1. The synthesized forward bypasses general_mm_embed_routine, so
+     it may not match the exact Dynamo frame signature real traffic
+     hits. If shape-axis or kwargs differ, a runtime recompile may
+     still happen.
+  2. The hook is model-specific (Qwen3-VL deepstack-embeds layout).
+     A generic 'warmup all multimodal branches' interface would be
+     cleaner for upstream.
+  3. No additional regression / soak test yet.
+
+R4.C validates this prototype on the E2a recipe (image 720p c=1 n=32
+warmup=30 PCG on IPC on GPU 0). If the Dynamo recompile is eliminated
+and the bench TTFT drops toward the PCG-OFF baseline (or better),
+this confirms (Y) as the right structural fix to recommend upstream.
+---
+ .../tc_piecewise_cuda_graph_backend.py        | 32 +++++++++++
+ python/sglang/srt/models/qwen3_vl.py          | 53 +++++++++++++++++++
+ 2 files changed, 85 insertions(+)
+
+diff --git a/python/sglang/srt/model_executor/runner_backend/tc_piecewise_cuda_graph_backend.py b/python/sglang/srt/model_executor/runner_backend/tc_piecewise_cuda_graph_backend.py
+index 0054f0f2a..446ca2df7 100644
+--- a/python/sglang/srt/model_executor/runner_backend/tc_piecewise_cuda_graph_backend.py
++++ b/python/sglang/srt/model_executor/runner_backend/tc_piecewise_cuda_graph_backend.py
+@@ -195,6 +195,38 @@ class TcPiecewiseCudaGraphBackend(BaseCudaGraphBackend):
+                                     f"Compiling num tokens ({num_tokens=})"
+                                 )
+                             cuda_graph_runner._run_dummy_forward(num_tokens=num_tokens)
++                        # Multimodal warmup hook: opt-in per model.
++                        # Models that override
++                        # `pcg_warmup_multimodal_branch(input_ids, positions, fb)`
++                        # get a second forward pass per shape with the
++                        # `input_deepstack_embeds != None` Dynamo branch
++                        # exercised, so the piecewise CUDA graph backend can
++                        # later capture cudagraphs for it. Prototype for
++                        # debug/v2-imgA-pcg-capture-stream-fix (Y) shape.
++                        mm_warmup = getattr(
++                            getattr(self, "_model_runner_model", None)
++                            or getattr(cuda_graph_runner.model_runner, "model", None),
++                            "pcg_warmup_multimodal_branch",
++                            None,
++                        )
++                        if mm_warmup is not None:
++                            mm_range = (
++                                tqdm.tqdm(
++                                    list(reversed(cuda_graph_runner.capture_num_tokens))
++                                )
++                                if get_tensor_model_parallel_rank() == 0
++                                else reversed(cuda_graph_runner.capture_num_tokens)
++                            )
++                            for num_tokens in mm_range:
++                                if get_tensor_model_parallel_rank() == 0:
++                                    mm_range.set_description(
++                                        f"Compiling MM num tokens ({num_tokens=})"
++                                    )
++                                fb, attn_backend = cuda_graph_runner.capture_prepare(
++                                    num_tokens
++                                )
++                                attn_backend.init_forward_metadata(fb)
++                                mm_warmup(fb.input_ids, fb.positions, fb)
+             finally:
+                 _toggle_multi_platform_ops(
+                     language_model.model, reverse=True, num_tokens=16
+diff --git a/python/sglang/srt/models/qwen3_vl.py b/python/sglang/srt/models/qwen3_vl.py
+index 6a89e803a..c5e4adf05 100644
+--- a/python/sglang/srt/models/qwen3_vl.py
++++ b/python/sglang/srt/models/qwen3_vl.py
+@@ -1313,6 +1313,59 @@ class Qwen3VLForConditionalGeneration(nn.Module):
+         input_deepstack_embeds = embedding[:, separate_index:]
+         return input_embeds, input_deepstack_embeds
+ 
++    def pcg_warmup_multimodal_branch(
++        self,
++        input_ids: torch.Tensor,
++        positions: torch.Tensor,
++        forward_batch: ForwardBatch,
++    ):
++        """PCG warmup hook for the multimodal (input_deepstack_embeds != None)
++        Dynamo branch.
++
++        The default warmup driver builds a ForwardBatch with no mm_inputs;
++        general_mm_embed_routine therefore never passes
++        input_deepstack_embeds=tensor down to Qwen3LLMModel.forward. Dynamo
++        captures every piecewise CUDA graph for the input_deepstack_embeds=None
++        branch only. The first real image request fails the
++        'input_deepstack_embeds is None' guard and triggers a runtime
++        recompile whose new CUDAPiecewiseBackend instances never get a
++        capture stream attached.
++
++        This hook synthesizes a zero-valued input_deepstack_embeds tensor at
++        the expected shape and calls self.model.forward directly. Invoked
++        from TcPiecewiseCudaGraphBackend._run_compile_pass alongside the
++        existing text-branch warmup, it makes Dynamo trace and
++        torch.compile the multimodal branch as well, so the piecewise CUDA
++        graph backend can later capture cudagraphs for it during the
++        capture phase. Result: no Dynamo recompile on the first image
++        request, no missing-capture-stream fallback at inference.
++
++        Prototype for the (Y) shape in the
++        debug/v2-imgA-pcg-capture-stream-fix profiler sub-track.
++        """
++        if self.is_mrope_enabled:
++            positions = forward_batch.mrope_positions
++
++        embed_tokens = self.model.embed_tokens
++        input_embeds = embed_tokens(input_ids)
++
++        num_tokens = input_embeds.shape[0]
++        hidden_size = self.config.hidden_size
++        input_deepstack_embeds = torch.zeros(
++            num_tokens,
++            hidden_size * self.num_deepstack_embeddings,
++            dtype=input_embeds.dtype,
++            device=input_embeds.device,
++        )
++
++        return self.model(
++            input_ids=input_ids,
++            positions=positions,
++            forward_batch=forward_batch,
++            input_embeds=input_embeds,
++            input_deepstack_embeds=input_deepstack_embeds,
++        )
++
+     @property
+     def start_layer(self) -> int:
+         return getattr(getattr(self, "model", None), "start_layer", 0)
+-- 
+2.43.0
+

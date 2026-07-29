@@ -1,0 +1,73 @@
+{
+  "compare": {
+    "a": false,
+    "b": false,
+    "c": true,
+    "d": false,
+    "e": false,
+    "f_diagnostic": false
+  },
+  "leg_errors": {
+    "a1": null,
+    "a2": null,
+    "b": null,
+    "c": null,
+    "d": null,
+    "dp": null,
+    "f1": null,
+    "f2": null
+  },
+  "reasons": [
+    "(a) fork-default same-run repeat NOT bit-identical",
+    "(d) stock-PCG text != fork-PCG text (fix perturbs text-only PCG)",
+    "(e) mixed-safety subtest failed: {'missing': False, 'assertion_line_numbers': [], 'assertions': 0, 'fallback_line_numbers': [], 'fallbacks': 0, 'inference_only_recompile_count': 0, 'inference_only_recompile_line_numbers': [], 'inference_recompiles': 4, 'notes': \"manually reproduced via corrected tally (commit 73d438d). The pre-declared 'inference_recompiles' field is intentionally kept as the total recompile count per protocol \u00a76 which acknowledges the metric conflates warmup and inference-time recompiles. The phase-split fields (warmup_recompiles_count, inference_only_recompile_count) are supplementary evidence added to attempt-02 to characterise which category the 4 recompiles fall into: all 4 occur at lines <server_ready_line (i.e. all pre-server-ready warmup). R6.1 verdict.py still applies the strict pre-declared rule ('inference_recompiles == 0' required for PASS).\", 'path': '/data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.1_correctness/attempt_02_host_libcuda_595_gpu0/raw/safety_summary.json', 'recompile_line_numbers_all': [30, 53, 158, 193], 'request_failures': 0, 'server_log': '/data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.1_correctness/attempt_02_host_libcuda_595_gpu0/raw/fork-pcg_server.log', 'server_log_total_lines': 613, 'server_ready_line': 570, 'warmup_recompile_line_numbers': [30, 53, 158, 193], 'warmup_recompiles_count': 4}"
+  ],
+  "safety": {
+    "assertion_line_numbers": [],
+    "assertions": 0,
+    "fallback_line_numbers": [],
+    "fallbacks": 0,
+    "inference_only_recompile_count": 0,
+    "inference_only_recompile_line_numbers": [],
+    "inference_recompiles": 4,
+    "missing": false,
+    "notes": "manually reproduced via corrected tally (commit 73d438d). The pre-declared 'inference_recompiles' field is intentionally kept as the total recompile count per protocol \u00a76 which acknowledges the metric conflates warmup and inference-time recompiles. The phase-split fields (warmup_recompiles_count, inference_only_recompile_count) are supplementary evidence added to attempt-02 to characterise which category the 4 recompiles fall into: all 4 occur at lines <server_ready_line (i.e. all pre-server-ready warmup). R6.1 verdict.py still applies the strict pre-declared rule ('inference_recompiles == 0' required for PASS).",
+    "path": "/data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.1_correctness/attempt_02_host_libcuda_595_gpu0/raw/safety_summary.json",
+    "recompile_line_numbers_all": [
+      30,
+      53,
+      158,
+      193
+    ],
+    "request_failures": 0,
+    "server_log": "/data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R6_fix_value_validation/R6.1_correctness/attempt_02_host_libcuda_595_gpu0/raw/fork-pcg_server.log",
+    "server_log_total_lines": 613,
+    "server_ready_line": 570,
+    "warmup_recompile_line_numbers": [
+      30,
+      53,
+      158,
+      193
+    ],
+    "warmup_recompiles_count": 4
+  },
+  "selection": {
+    "attempt_dir": "attempt_02_host_libcuda_595_gpu0",
+    "cuda_visible_devices": "0",
+    "host_libcuda": "/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05",
+    "hostname": "17b86cda54f9",
+    "launched_by": "direct_runner",
+    "ld_preload": "/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05",
+    "nvidia_driver": "595.71.05",
+    "prelaunch_state": {
+      "compute_pids": [],
+      "mem_mib": 4,
+      "util_pct": 0
+    },
+    "prelaunch_utc": "2026-07-28T12:39:29+00:00",
+    "selected_gpu_id": 0,
+    "sglang_fork_head": "986c89e69c25882ab6f3d396f8eb306f38f2c8d2",
+    "sglang_stock_head": "da802ddcafe55e25b3e1db86b1e0444afc3e05bc"
+  },
+  "verdict": "FAIL"
+}

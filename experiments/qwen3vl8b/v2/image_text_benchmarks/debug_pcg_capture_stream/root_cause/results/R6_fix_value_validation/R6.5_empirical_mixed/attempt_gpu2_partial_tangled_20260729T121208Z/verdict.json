@@ -1,0 +1,80 @@
+{
+  "launch_context": null,
+  "p_star": -3.9120377283468675,
+  "ratios": {
+    "ratio_0p8": {
+      "agreement": false,
+      "empirical_fork_wins": false,
+      "empirical_ratio_fork_over_stock": null,
+      "mean_lat_fork": null,
+      "mean_lat_stock": 0.6591296431106457,
+      "per_variant": {
+        "fork_pcg": {
+          "safety": {
+            "assertions": 0,
+            "fallbacks": 0,
+            "missing": false,
+            "post_ready_recompiles": 0,
+            "ready_line": null,
+            "startup_recompiles": 0,
+            "total_lines": 4
+          },
+          "summary": null
+        },
+        "stock_default": {
+          "safety": {
+            "assertions": 0,
+            "fallbacks": 0,
+            "missing": false,
+            "post_ready_recompiles": 0,
+            "ready_line": 98,
+            "startup_recompiles": 0,
+            "total_lines": 606
+          },
+          "summary": {
+            "all_latency_s_stats": {
+              "mean": 0.6591296431106457,
+              "median": 0.6821367014999851,
+              "n": 100,
+              "p90": 0.6882643700082554,
+              "p99": 0.7940613679966191,
+              "stdev": 0.09146169876255571
+            },
+            "ended_utc": "2026-07-29T12:11:10+00:00",
+            "fixture_sha256": "79c47c91070abcbae0dbc8bd983ec5b5f3bf37f450d535ac220b95e0fb74c967",
+            "image_latency_s_stats": {
+              "mean": 0.5544503962504678,
+              "median": 0.511656574497465,
+              "n": 20,
+              "p90": 0.70694132099743,
+              "p99": 0.7841434840083821,
+              "stdev": 0.15634905526457193
+            },
+            "n_completed": 100,
+            "n_image": 20,
+            "n_planned": 100,
+            "n_text": 80,
+            "request_failures": 0,
+            "seed": 42,
+            "started_utc": "2026-07-29T12:10:04+00:00",
+            "text_latency_s_stats": {
+              "mean": 0.6852994548256902,
+              "median": 0.6821599304967094,
+              "n": 80,
+              "p90": 0.6836946010007523,
+              "p99": 0.7046796259965049,
+              "stdev": 0.03370757700795026
+            },
+            "text_ratio": 0.8
+          }
+        }
+      },
+      "predicted_fork_wins": true,
+      "text_ratio": 0.8
+    }
+  },
+  "reasons": [
+    "only 1 ratios recorded, require >=3"
+  ],
+  "verdict": "AMBIGUOUS"
+}

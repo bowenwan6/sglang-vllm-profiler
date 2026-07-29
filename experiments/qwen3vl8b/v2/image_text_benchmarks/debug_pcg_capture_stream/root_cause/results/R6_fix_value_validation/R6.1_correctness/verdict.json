@@ -1,0 +1,82 @@
+{
+  "verdict": "R7_REQUIRED",
+  "category": "INFRA_FAILURE",
+  "subcategory": "provenance_drift_nvidia_driver",
+  "attempted_at_utc": "2026-07-28T10:46:09+00:00",
+  "runner_exit_code": 2,
+  "reasons": [
+    "NVIDIA driver was silently upgraded during the ~3.5h monitor wait window: R6.0 recorded 570.172.08; runner-time driver observed 595.71.05.",
+    "Torch 2.11.0+cu130 in this container was built against the R6.0 driver ABI; it emits 'Error 803: system has unsupported display driver / cuda driver combination' on cudaGetDeviceCount() under 595.71.05.",
+    "sglang's ServerArgs.__post_init__ -> get_device() then raises 'RuntimeError: No accelerator (CUDA, XPU, HPU, NPU, MUSA, MPS) or platform plugin is available.' and the launched server process exits before opening the HTTP port.",
+    "No R6.1 leg (a, b, c, d, d', e, f) executed; the pre-declared R6.1 verdict rules in protocol.md are not evaluable from this run.",
+    "Not silently retried per user directive; documented and stopped."
+  ],
+  "compare": null,
+  "leg_errors": {
+    "a1": "not_run",
+    "a2": "not_run",
+    "b": "not_run",
+    "c": "not_run",
+    "d": "not_run",
+    "dp": "not_run",
+    "f1": "not_run",
+    "f2": "not_run"
+  },
+  "safety": {
+    "assertions": null,
+    "fallbacks": null,
+    "inference_recompiles": null,
+    "request_failures": null,
+    "note": "safety_summary.json not produced because the fork-PCG server was never launched"
+  },
+  "safety_invariants_verified": {
+    "no_pkill_invocation": true,
+    "no_killall_invocation": true,
+    "no_fuser_k_invocation": true,
+    "no_nvidia_smi_reset_invocation": true,
+    "no_foreign_pid_signalled": true,
+    "no_tracked_pgid_left_alive_at_exit": true,
+    "gpu_post_failure_state": {
+      "gpu_id": 1,
+      "memory_used_mib": 0,
+      "memory_free_mib": 143158,
+      "utilization_pct": 0,
+      "compute_apps_count": 0
+    }
+  },
+  "selection": {
+    "idle_hold_s": 600,
+    "idle_start_utc": "2026-07-28T10:35:35+00:00",
+    "mem_threshold_mib": 500,
+    "monitor_pid": 15269,
+    "poll_interval_s": 30,
+    "prelaunch_state": {
+      "compute_pids": [],
+      "idle": true,
+      "mem_mib": 0,
+      "ok": true,
+      "util_pct": 0
+    },
+    "prelaunch_utc": "2026-07-28T10:46:09+00:00",
+    "qualified_utc": "2026-07-28T10:46:05+00:00",
+    "selected_gpu_id": 1,
+    "util_threshold_pct": 5,
+    "monitor_first_poll_utc": "2026-07-28T07:23:20+00:00",
+    "total_monitor_wait_approx": "~3h 22min",
+    "monitor_wait_note": "All 8 GPUs occupied by unrelated tenants until 10:35:35 UTC; GPUs 0,1,2,3 released simultaneously; GPU 0's streak was reset once by transient activity; GPU 1 qualified first per the deterministic lowest-ID-first rule."
+  },
+  "provenance_observed": {
+    "nvidia_driver_at_R6_0": "570.172.08",
+    "nvidia_driver_at_R6_1b_launch": "595.71.05",
+    "torch": "2.11.0+cu130",
+    "torch_cuda": "13.0",
+    "sglang_stock_head": "da802ddcafe55e25b3e1db86b1e0444afc3e05bc",
+    "sglang_fork_head": "986c89e69c25882ab6f3d396f8eb306f38f2c8d2",
+    "note": "Stock and fork SHAs unchanged; environment drift is at the driver layer only."
+  },
+  "required_unblocking_work": [
+    "Resolve driver / torch ABI mismatch (rebuild the stack against 595.71.05, or roll back the driver, or replace the container).",
+    "Commit docs(v2): update R6 provenance recording the new frozen driver / stack tuple.",
+    "Re-run R6.1b under the amended provenance without modifying protocol, fixture, prompts, or verdict rules."
+  ]
+}

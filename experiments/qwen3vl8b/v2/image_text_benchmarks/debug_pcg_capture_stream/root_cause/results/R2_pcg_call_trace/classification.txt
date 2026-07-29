@@ -1,0 +1,15 @@
+stage: R2
+snapshot: snapshots/0c351dd01ed87e9c1b53cbc748cba10e6187ff3b
+gpu: 0
+classification: PCG_CAPTURE_STREAM_ASSERT
+gpu_used_mib_after_teardown: 0
+fork_branch: fix/pcg-vlm-deepstack-warmup
+fork_head: 2167b5f4d6124c8f1df11039826f3a050cc9f1cf
+pythonpath_prefix: /data/sglang-fork/python
+sglang_debug_pcg_call_trace: 1
+server_log: /data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R2_pcg_call_trace/raw/server.log (NOT committed)
+bench_log:  /data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R2_pcg_call_trace/raw/bench.log (NOT committed)
+bench_jsonl: /data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R2_pcg_call_trace/raw/bench.jsonl (NOT committed)
+pcg_call_trace_excerpt: /data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/results/R2_pcg_call_trace/pcg_call_trace_excerpt.log (committed)
+pcg_debug_lines_total: 17542
+pcg_debug_lines_kept_in_excerpt: 17547

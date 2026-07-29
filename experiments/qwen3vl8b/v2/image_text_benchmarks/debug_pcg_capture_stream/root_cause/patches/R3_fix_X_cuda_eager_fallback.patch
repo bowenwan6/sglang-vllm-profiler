@@ -1,0 +1,104 @@
+From 8a2dcb33a107424b34ddf3033bee66ba20ab9975 Mon Sep 17 00:00:00 2001
+From: Bowen Wang <wangbowen1001@yahoo.com>
+Date: Tue, 30 Jun 2026 13:57:57 +0000
+Subject: [PATCH] fix(pcg): extend HIP eager fallback to CUDA for missing
+ capture stream
+
+CUDAPiecewiseBackend.__call__ used to assert when
+get_pcg_capture_stream() returned None on non-HIP platforms, with the
+comment 'HIP/MLA serving batches whose token count exceeds the
+captured range' implying this only happened on ROCm. In practice it
+also fires deterministically on CUDA for multimodal models like
+Qwen3-VL when --enforce-piecewise-cuda-graph is in effect:
+
+  1. PCG warmup runs Qwen3LLMModel.forward with
+     input_deepstack_embeds = None (warmup builds a dummy ForwardBatch
+     with no mm_inputs; general_mm_embed_routine therefore never
+     populates kwargs['input_deepstack_embeds']).
+  2. Dynamo captures every per-shape piecewise CUDA graph for the
+     None branch of get_deepstack_embeds (qwen3_vl.py:1129).
+  3. The first real image prompt fails the
+     'input_deepstack_embeds is None' guard => Dynamo recompiles
+     Qwen3LLMModel.forward into a brand-new fx graph with new
+     CUDAPiecewiseBackend instances.
+  4. The new instances are never reached by
+     PiecewiseCudaGraphRunner.capture_session(), so no capture stream
+     is ever attached. The second call at any shape hits this assert.
+
+Extending the existing eager fallback to also cover CUDA removes the
+crash without changing capture-path semantics on either platform:
+
+  - When stream is set (normal capture path on CUDA or HIP), behavior
+    is unchanged.
+  - When stream is None (Dynamo recompiled the frame, no capture
+    session active), the call falls through to entry.runnable, which
+    is bound to compiled_graph_for_general_shape -- the inductor-
+    compiled general-shape graph that is callable in eager. Correct
+    result, just no per-shape cudagraph speedup for the recompiled
+    frame.
+
+print_warning_once flags the fall through so it remains discoverable
+in operational logs.
+
+The comment in the source now spells out the multimodal Dynamo case
+alongside the HIP/MLA case. This is the (X) minimum-safety fix for
+the debug/v2-imgA-pcg-capture-stream-fix profiler sub-track; the
+follow-up (Y) is to broaden warmup capture so the multimodal frame
+captures cuda graphs too and the fallback is not exercised in
+practice on this path.
+---
+ .../srt/compilation/cuda_piecewise_backend.py | 25 +++++++------------
+ 1 file changed, 9 insertions(+), 16 deletions(-)
+
+diff --git a/python/sglang/srt/compilation/cuda_piecewise_backend.py b/python/sglang/srt/compilation/cuda_piecewise_backend.py
+index ca4981324..2c3172920 100644
+--- a/python/sglang/srt/compilation/cuda_piecewise_backend.py
++++ b/python/sglang/srt/compilation/cuda_piecewise_backend.py
+@@ -200,10 +200,14 @@ class CUDAPiecewiseBackend:
+ 
+             # During normal capture (PiecewiseCudaGraphRunner.capture()),
+             # set_pcg_capture_stream() guarantees a valid stream. However,
+-            # Dynamo may silently recompile on HIP/MLA serving batches whose
+-            # token count exceeds the captured range. The replacement backend
+-            # has no capture stream; fall back there instead of crashing while
+-            # preserving the original assertion on other platforms.
++            # Dynamo may silently recompile (e.g. multimodal models'
++            # forward when input_deepstack_embeds toggles from None to a
++            # tensor on the first image request, or HIP/MLA batches
++            # whose token count exceeds the captured range). The
++            # replacement backend has no capture stream; fall back to
++            # the inductor-compiled general-shape graph instead of
++            # crashing. Pre-existed for HIP; extended to CUDA so the
++            # assertion can no longer be reached at inference time.
+             stream = get_pcg_capture_stream()
+             if _DEBUG_PCG_CALL_TRACE:
+                 _pcg_dbg(
+@@ -212,24 +216,13 @@ class CUDAPiecewiseBackend:
+                     f"about to capture; stream={'set' if stream is not None else 'None'} "
+                     f"_is_hip={_is_hip}"
+                 )
+-            if _is_hip and stream is None:
++            if stream is None:
+                 print_warning_once(
+                     "PCG capture stream is not set; likely a Dynamo runtime "
+                     "recompilation. Falling back to eager execution for this "
+                     "subgraph."
+                 )
+                 return entry.runnable(*args)
+-            if stream is None and _DEBUG_PCG_CALL_TRACE:
+-                _pcg_dbg(
+-                    f"ASSERTION ABOUT TO FIRE id={id(self):#x} "
+-                    f"layer_idx={self.piecewise_compile_index} "
+-                    f"runtime_shape={runtime_shape} "
+-                    f"entry.compiled={entry.compiled} "
+-                    f"entry.num_finished_warmup={entry.num_finished_warmup}"
+-                )
+-            assert (
+-                stream is not None
+-            ), "PCG capture stream is not set, please check if runtime recompilation happened"
+ 
+             if self.compile_config.get_enable_debug_mode():
+                 input_addresses = [
+-- 
+2.43.0
+
