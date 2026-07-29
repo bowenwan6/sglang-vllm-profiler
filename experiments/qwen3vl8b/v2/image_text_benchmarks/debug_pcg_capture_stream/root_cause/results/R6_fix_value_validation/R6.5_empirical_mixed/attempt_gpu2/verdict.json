@@ -1,0 +1,334 @@
+{
+  "launch_context": {
+    "attempt_dir": "attempt_gpu2",
+    "host_libcuda": "/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05",
+    "hostname": "17b86cda54f9",
+    "launched_by": "run_R6_5_empirical_mixed",
+    "ld_preload": "/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05",
+    "nvidia_driver": "595.71.05",
+    "prelaunch_utc": "2026-07-29T12:27:18+00:00",
+    "selected_gpu_id": 2,
+    "sglang_fork_head": "986c89e69c25882ab6f3d396f8eb306f38f2c8d2",
+    "sglang_stock_head": "da802ddcafe55e25b3e1db86b1e0444afc3e05bc"
+  },
+  "p_star": -3.9120377283468675,
+  "ratios": {
+    "ratio_0p2": {
+      "agreement": true,
+      "empirical_fork_wins": true,
+      "empirical_ratio_fork_over_stock": 0.9976624004690786,
+      "mean_lat_fork": 0.5659310168388765,
+      "mean_lat_stock": 0.567257036621595,
+      "per_variant": {
+        "fork_pcg": {
+          "safety": {
+            "assertions": 0,
+            "fallbacks": 0,
+            "missing": false,
+            "post_ready_recompiles": 0,
+            "ready_line": 469,
+            "startup_recompiles": 0,
+            "total_lines": 926
+          },
+          "summary": {
+            "all_latency_s_stats": {
+              "mean": 0.5659310168388765,
+              "median": 0.522754839497793,
+              "n": 100,
+              "p90": 0.6965175599907525,
+              "p99": 0.9315696590056177,
+              "stdev": 0.17965192431443822
+            },
+            "ended_utc": "2026-07-29T12:31:16+00:00",
+            "fixture_sha256": "79c47c91070abcbae0dbc8bd983ec5b5f3bf37f450d535ac220b95e0fb74c967",
+            "image_latency_s_stats": {
+              "mean": 0.5388668036990566,
+              "median": 0.5019437925002421,
+              "n": 80,
+              "p90": 0.6979851530049928,
+              "p99": 0.9315696590056177,
+              "stdev": 0.19165973330682035
+            },
+            "n_completed": 100,
+            "n_image": 80,
+            "n_planned": 100,
+            "n_text": 20,
+            "request_failures": 0,
+            "seed": 42,
+            "started_utc": "2026-07-29T12:30:20+00:00",
+            "text_latency_s_stats": {
+              "mean": 0.6741878693981562,
+              "median": 0.674392369495763,
+              "n": 20,
+              "p90": 0.6761670889973175,
+              "p99": 0.6768759059923468,
+              "stdev": 0.0038051737567657068
+            },
+            "text_ratio": 0.2
+          }
+        },
+        "stock_default": {
+          "safety": {
+            "assertions": 0,
+            "fallbacks": 0,
+            "missing": false,
+            "post_ready_recompiles": 0,
+            "ready_line": 98,
+            "startup_recompiles": 0,
+            "total_lines": 555
+          },
+          "summary": {
+            "all_latency_s_stats": {
+              "mean": 0.567257036621595,
+              "median": 0.5274622189972433,
+              "n": 100,
+              "p90": 0.7059629640134517,
+              "p99": 0.7917719209945062,
+              "stdev": 0.1437153346906209
+            },
+            "ended_utc": "2026-07-29T12:28:50+00:00",
+            "fixture_sha256": "79c47c91070abcbae0dbc8bd983ec5b5f3bf37f450d535ac220b95e0fb74c967",
+            "image_latency_s_stats": {
+              "mean": 0.5383225758894696,
+              "median": 0.5120236209986615,
+              "n": 80,
+              "p90": 0.7079721340123797,
+              "p99": 0.7917719209945062,
+              "stdev": 0.14710116856416403
+            },
+            "n_completed": 100,
+            "n_image": 80,
+            "n_planned": 100,
+            "n_text": 20,
+            "request_failures": 0,
+            "seed": 42,
+            "started_utc": "2026-07-29T12:27:53+00:00",
+            "text_latency_s_stats": {
+              "mean": 0.6829948795500969,
+              "median": 0.683597875002306,
+              "n": 20,
+              "p90": 0.6865878980024718,
+              "p99": 0.6869623259990476,
+              "stdev": 0.004661648186345859
+            },
+            "text_ratio": 0.2
+          }
+        }
+      },
+      "predicted_fork_wins": true,
+      "text_ratio": 0.2
+    },
+    "ratio_0p5": {
+      "agreement": true,
+      "empirical_fork_wins": true,
+      "empirical_ratio_fork_over_stock": 0.9957270857848514,
+      "mean_lat_fork": 0.6577341131605499,
+      "mean_lat_stock": 0.6605566149103106,
+      "per_variant": {
+        "fork_pcg": {
+          "safety": {
+            "assertions": 0,
+            "fallbacks": 0,
+            "missing": false,
+            "post_ready_recompiles": 0,
+            "ready_line": 464,
+            "startup_recompiles": 0,
+            "total_lines": 467
+          },
+          "summary": {
+            "all_latency_s_stats": {
+              "mean": 0.6577341131605499,
+              "median": 0.7291771119926125,
+              "n": 100,
+              "p90": 0.7548811080050655,
+              "p99": 0.8511017409909982,
+              "stdev": 0.13301242073007558
+            },
+            "ended_utc": "2026-07-29T12:20:33+00:00",
+            "fixture_sha256": "79c47c91070abcbae0dbc8bd983ec5b5f3bf37f450d535ac220b95e0fb74c967",
+            "image_latency_s_stats": {
+              "mean": 0.578209099819942,
+              "median": 0.5519688870044774,
+              "n": 50,
+              "p90": 0.7549429180071456,
+              "p99": 0.785370569996303,
+              "stdev": 0.14961732456835986
+            },
+            "n_completed": 100,
+            "n_image": 50,
+            "n_planned": 100,
+            "n_text": 50,
+            "request_failures": 0,
+            "seed": 42,
+            "started_utc": "2026-07-29T12:19:27+00:00",
+            "text_latency_s_stats": {
+              "mean": 0.7372591265011579,
+              "median": 0.731429442006629,
+              "n": 50,
+              "p90": 0.754389153997181,
+              "p99": 0.8011152889957884,
+              "stdev": 0.021301279715269343
+            },
+            "text_ratio": 0.5
+          }
+        },
+        "stock_default": {
+          "safety": {
+            "assertions": 0,
+            "fallbacks": 0,
+            "missing": false,
+            "post_ready_recompiles": 0,
+            "ready_line": 100,
+            "startup_recompiles": 0,
+            "total_lines": 810
+          },
+          "summary": {
+            "all_latency_s_stats": {
+              "mean": 0.6605566149103106,
+              "median": 0.7371585115033668,
+              "n": 100,
+              "p90": 0.7657145670091268,
+              "p99": 0.8025986099964939,
+              "stdev": 0.13928717295057635
+            },
+            "ended_utc": "2026-07-29T12:18:38+00:00",
+            "fixture_sha256": "79c47c91070abcbae0dbc8bd983ec5b5f3bf37f450d535ac220b95e0fb74c967",
+            "image_latency_s_stats": {
+              "mean": 0.5737035877612652,
+              "median": 0.5568334975032485,
+              "n": 50,
+              "p90": 0.7637586609926075,
+              "p99": 0.780830897987471,
+              "stdev": 0.15150117797062296
+            },
+            "n_completed": 100,
+            "n_image": 50,
+            "n_planned": 100,
+            "n_text": 50,
+            "request_failures": 0,
+            "seed": 42,
+            "started_utc": "2026-07-29T12:17:32+00:00",
+            "text_latency_s_stats": {
+              "mean": 0.747409642059356,
+              "median": 0.7411688834909,
+              "n": 50,
+              "p90": 0.7666349229984917,
+              "p99": 0.8025986099964939,
+              "stdev": 0.02916111697375688
+            },
+            "text_ratio": 0.5
+          }
+        }
+      },
+      "predicted_fork_wins": true,
+      "text_ratio": 0.5
+    },
+    "ratio_0p8": {
+      "agreement": true,
+      "empirical_fork_wins": true,
+      "empirical_ratio_fork_over_stock": 0.9548925243504123,
+      "mean_lat_fork": 0.6796662106410076,
+      "mean_lat_stock": 0.7117724699995597,
+      "per_variant": {
+        "fork_pcg": {
+          "safety": {
+            "assertions": 0,
+            "fallbacks": 0,
+            "missing": false,
+            "post_ready_recompiles": 0,
+            "ready_line": 463,
+            "startup_recompiles": 0,
+            "total_lines": 468
+          },
+          "summary": {
+            "all_latency_s_stats": {
+              "mean": 0.6796662106410076,
+              "median": 0.7120458130011684,
+              "n": 100,
+              "p90": 0.7160638520144857,
+              "p99": 0.8409242150082719,
+              "stdev": 0.09337488440957113
+            },
+            "ended_utc": "2026-07-29T12:25:01+00:00",
+            "fixture_sha256": "79c47c91070abcbae0dbc8bd983ec5b5f3bf37f450d535ac220b95e0fb74c967",
+            "image_latency_s_stats": {
+              "mean": 0.5407244237001578,
+              "median": 0.5376326114928816,
+              "n": 20,
+              "p90": 0.6841801690025022,
+              "p99": 0.6995483409991721,
+              "stdev": 0.13540897691598047
+            },
+            "n_completed": 100,
+            "n_image": 20,
+            "n_planned": 100,
+            "n_text": 80,
+            "request_failures": 0,
+            "seed": 42,
+            "started_utc": "2026-07-29T12:23:54+00:00",
+            "text_latency_s_stats": {
+              "mean": 0.7144016573762201,
+              "median": 0.7124356790081947,
+              "n": 80,
+              "p90": 0.7163512219995027,
+              "p99": 0.7309706840023864,
+              "stdev": 0.02017998171344567
+            },
+            "text_ratio": 0.8
+          }
+        },
+        "stock_default": {
+          "safety": {
+            "assertions": 0,
+            "fallbacks": 0,
+            "missing": false,
+            "post_ready_recompiles": 0,
+            "ready_line": 101,
+            "startup_recompiles": 0,
+            "total_lines": 832
+          },
+          "summary": {
+            "all_latency_s_stats": {
+              "mean": 0.7117724699995597,
+              "median": 0.7378035325018573,
+              "n": 100,
+              "p90": 0.7607758840022143,
+              "p99": 0.8673572839907138,
+              "stdev": 0.10728550289993478
+            },
+            "ended_utc": "2026-07-29T12:22:21+00:00",
+            "fixture_sha256": "79c47c91070abcbae0dbc8bd983ec5b5f3bf37f450d535ac220b95e0fb74c967",
+            "image_latency_s_stats": {
+              "mean": 0.5757057787508529,
+              "median": 0.5551211304991739,
+              "n": 20,
+              "p90": 0.7586419470026158,
+              "p99": 0.8161538670101436,
+              "stdev": 0.16677468225420627
+            },
+            "n_completed": 100,
+            "n_image": 20,
+            "n_planned": 100,
+            "n_text": 80,
+            "request_failures": 0,
+            "seed": 42,
+            "started_utc": "2026-07-29T12:21:09+00:00",
+            "text_latency_s_stats": {
+              "mean": 0.7457891428117364,
+              "median": 0.7387173295064713,
+              "n": 80,
+              "p90": 0.7607758840022143,
+              "p99": 0.8666391529986868,
+              "stdev": 0.04331106565617246
+            },
+            "text_ratio": 0.8
+          }
+        }
+      },
+      "predicted_fork_wins": true,
+      "text_ratio": 0.8
+    }
+  },
+  "reasons": [],
+  "verdict": "PASS"
+}
