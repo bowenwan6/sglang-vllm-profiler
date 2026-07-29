@@ -4,7 +4,10 @@
 # R6.3a: 720p, 128->128, c=1, n=400, 3 reps × {stock_default, fork_pcg}
 # R6.3b: sweep matrix
 #         text ∈ {128, 512, 2048}
-#         image ∈ {224p, 720p}
+#         image ∈ {360p, 720p}  (sglang bench serving accepts {4k,1080p,720p,360p};
+#                                 360p is the smallest offered and stands in for the
+#                                 intended "small image" cell that was originally
+#                                 written as 224p — 224p is not a supported enum)
 #         concurrency ∈ {1, 4}
 #         n=100 per cell, 1 rep, identical seed
 # R6.3c: fork_pcg interleaved text+image (50+50) mixed safety
@@ -186,7 +189,7 @@ run_sweep_variant(){ local LABEL="$1" USE_FORK="$2"
   launch_server "sweep_${LABEL}" "$USE_FORK" "$([[ $USE_FORK == yes ]] && echo --enforce-piecewise-cuda-graph)" "$server_log_dir" || return $?
   local txt res conc
   for txt in 128 512 2048; do
-    for res in 224p 720p; do
+    for res in 360p 720p; do
       for conc in 1 4; do
         local cell="cell_t${txt}_r${res}_c${conc}"
         local cdir="$RAW/b_sweep/$cell/$LABEL"
@@ -214,15 +217,29 @@ run_sweep_variant fork_pcg yes
 
 # ---- R6.3c mixed safety ----
 echo "[R6.3] ===== R6.3c mixed safety (fork_pcg interleaved 50 text + 50 image) ====="
-launch_server "mixed_fork_pcg" yes "--enforce-piecewise-cuda-graph" "$RAW/c_mixed_safety"
-python3 "$MIXED_CLIENT" \
-  --base-url "http://127.0.0.1:$PORT" --model "$SNAP" \
-  --fixture "$FIXTURE" \
-  --n-text 50 --n-image 50 \
-  --out-jsonl "$RAW/c_mixed_safety/fork_pcg_interleaved.jsonl" \
-  --out-summary "$RAW/c_mixed_safety/client_summary.json" \
-  > "$RAW/c_mixed_safety/client.log" 2>&1 || true
-teardown_server
+# Wait for GPU 6 to be idle again (foreign tenants may land between sweep
+# teardown and R6.3c). Retry up to 20 x 15s.
+C_SAFETY_READY=0
+for wait_i in $(seq 1 20); do
+  if launch_server "mixed_fork_pcg" yes "--enforce-piecewise-cuda-graph" "$RAW/c_mixed_safety"; then
+    C_SAFETY_READY=1; break
+  fi
+  echo "[R6.3c] launch attempt $wait_i failed (foreign PID or not idle); waiting 15s and retrying" >&2
+  sleep 15
+done
+if [[ "$C_SAFETY_READY" -ne 1 ]]; then
+  echo "[R6.3c] ABORT: could not bring mixed-safety server up on GPU $GPU_ID after 20 retries; refusing to run client against nonexistent server" >&2
+  echo "$(date -u -Iseconds) c_mixed_safety_launch_failed" > "$RAW/c_mixed_safety/launch_failed.txt"
+else
+  python3 "$MIXED_CLIENT" \
+    --base-url "http://127.0.0.1:$PORT" --model "$SNAP" \
+    --fixture "$FIXTURE" \
+    --n-text 50 --n-image 50 \
+    --out-jsonl "$RAW/c_mixed_safety/fork_pcg_interleaved.jsonl" \
+    --out-summary "$RAW/c_mixed_safety/client_summary.json" \
+    > "$RAW/c_mixed_safety/client.log" 2>&1 || true
+  teardown_server
+fi
 
 # ---- Verdict ----
 python3 "$VERDICT" --in-dir "$RAW" --out-md "$BASE/verdict.md" --out-json "$BASE/verdict.json"
