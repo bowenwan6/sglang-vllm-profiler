@@ -111,7 +111,7 @@ launch_server(){ local LABEL="$1" USE_FORK="$2" EXTRA="$3" LOG_DIR="$4"
   SRV_LABEL="$LABEL"
   # shellcheck disable=SC2086
   env $ENV_PREFIX python3 "$SETSID" "$PIDFILE" \
-    python3 -m sglang.launch_server --model-path "$SNAP" --dtype bfloat16 --port "$PORT" --tp 1 --attention-backend flashinfer $EXTRA \
+    python3 -m sglang.launch_server --model-path "$SNAP" --dtype bfloat16 --port "$PORT" --tp 1 --attention-backend flashinfer --mem-fraction-static 0.88 $EXTRA \
     > "$LOG" 2>&1 &
   local w=0; while [[ ! -s "$PIDFILE" && $w -lt 100 ]]; do sleep 0.1; w=$((w+1)); done
   [[ -s "$PIDFILE" ]] || return 3
