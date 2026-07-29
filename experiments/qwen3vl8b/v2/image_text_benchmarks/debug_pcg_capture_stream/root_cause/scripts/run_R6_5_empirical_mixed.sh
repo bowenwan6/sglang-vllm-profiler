@@ -146,7 +146,19 @@ run_ratio(){ local RATIO="$1"; local RID="ratio_$(echo $RATIO | tr '.' 'p')"
     local V=$(echo "$VARIANT_INFO" | cut -d: -f1)
     local USE_FORK=$(echo "$VARIANT_INFO" | cut -d: -f2)
     local EXTRA=$(echo "$VARIANT_INFO" | cut -d: -f3)
-    launch_server "${RID}_${V}" "$USE_FORK" "$EXTRA" "$rdir/$V" || { echo "[R6.5] launch failed for $V"; return 2; }
+    local READY=0
+    for LA in $(seq 1 20); do
+      if launch_server "${RID}_${V}" "$USE_FORK" "$EXTRA" "$rdir/$V"; then
+        READY=1; break
+      fi
+      echo "[R6.5] launch attempt $LA failed for $V (foreign PID / not idle); waiting 15s and retrying" >&2
+      sleep 15
+    done
+    if [[ "$READY" -ne 1 ]]; then
+      echo "[R6.5] ABORT: could not bring $V up for $RID after 20 retries; skipping this variant" >&2
+      echo "$(date -u -Iseconds) launch_failed_after_retries" > "$rdir/$V.LAUNCH_FAILED"
+      continue
+    fi
     python3 "$CLIENT" \
       --base-url "http://127.0.0.1:$PORT" --model "$SNAP" \
       --fixture "$FIXTURE" --caseA "$CASEA" \
