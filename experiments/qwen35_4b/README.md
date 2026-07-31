@@ -41,8 +41,9 @@ outcomes are enumerated in `plan.md` §7.5.
 | [`provenance.md`](provenance.md) | Frozen SHAs / model / environment pins the validation must verify at run time. | landed Part 2 |
 | [`hypothesis.md`](hypothesis.md) | Established facts vs source-level observations vs unverified runtime hypotheses vs pre-declared acceptance criteria. | landed Part 2 |
 | [`validation_plan.md`](validation_plan.md) | The design that distinguishes outcomes (1)–(4) with objective evidence (verdict shape, evidence layers, configurations, fixtures, confounder controls). | landed Part 3 |
+| [`fixtures/`](fixtures/) | Byte-pinned deterministic assets (image + `manifest.json`). Regeneration must be bit-identical. | landed Part 5 |
+| [`scripts/`](scripts/) | CPU-only scaffolding: fixture generator, provenance preflight, runner skeleton, client skeleton, verdict skeleton. All refuse to touch a GPU without an explicitly authorised ID. | landed Part 5 |
 | [`results/`](results/) | Reserved for future validation attempts (see `results/README.md`). | empty in the CPU-only phase |
-| [`scripts/`](scripts/) | Reserved for CPU-only scaffolding (Part 5) and, later, runners under strict GPU-safety rules (see `scripts/README.md`). | empty in the CPU-only phase |
 
 ## Read order for a fresh reader
 
@@ -50,9 +51,35 @@ outcomes are enumerated in `plan.md` §7.5.
 2. `hypothesis.md` (what is established vs suspected — sets expectations).
 3. `source_audit.md` (why we suspect it — direct source citations).
 4. `provenance.md` (the SHAs / env this rests on).
-5. `validation_plan.md` (once landed) — how we plan to prove or disprove
-   the hypothesis.
-6. `results/` — once populated after GPU authorisation.
+5. `validation_plan.md` — how we plan to prove or disprove the
+   hypothesis (predeclared verdicts, evidence layers, configurations).
+6. `scripts/` and `fixtures/` — CPU-only scaffolding you can dry-run
+   right now without any GPU.
+7. `results/` — once populated after GPU authorisation.
+
+## CPU dry-run smoke test
+
+Everything below runs on any CPU-only environment and touches no GPU:
+
+```bash
+# regenerate the byte-pinned image fixture (must be bit-identical)
+python3 experiments/qwen35_4b/scripts/generate_fixture.py --check --strict
+
+# provenance preflight (dry-run skips the network probes)
+python3 experiments/qwen35_4b/scripts/preflight_provenance.py --dry-run
+
+# runner skeleton dry-run (writes /tmp/qwen35_launch_ctx_*.json, no server)
+bash experiments/qwen35_4b/scripts/runner_skeleton.sh --dry-run
+
+# same runner must refuse without --gpu-id / QWEN35_GPU_ID (exit 64)
+bash experiments/qwen35_4b/scripts/runner_skeleton.sh   # expect FATAL + rc=64
+
+# client + verdict skeletons (no network, no CUDA)
+python3 experiments/qwen35_4b/scripts/client_skeleton.py --launch-ctx \
+    "$(ls -t /tmp/qwen35_launch_ctx_*.json | head -1)" --dry-run
+python3 experiments/qwen35_4b/scripts/verdict.py --attempt-dir /tmp/some-dir \
+    --dry-run --force-verdict INFRA_FAILURE
+```
 
 ## Historical context (read-only)
 

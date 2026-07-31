@@ -433,14 +433,19 @@ Sequenced, no GPU work in any of these:
    configurations, fixtures, and confounder controls landed at
    [`experiments/qwen35_4b/validation_plan.md`](experiments/qwen35_4b/validation_plan.md)
    (`docs(qwen35): plan BCG DeepStack validation`).
-3. Open the tracking issue in this profiler repo (not upstream)
-   linking PR #30872, the source-level observations, and the
-   validation plan — commit `docs(qwen35): link BCG DeepStack investigation issue`.
-4. Land CPU-only scaffolding (deterministic fixture, provenance
-   checks, GPU-refusing runner skeleton, PGID-scoped safeguards) —
-   commit `feat(qwen35): prepare BCG DeepStack validation`.
-5. Stop. Wait for user to authorise a specific GPU ID before any
-   GPU-touching work.
+3. Done — tracking [profiler-repo issue #9](https://github.com/bowenwan6/sglang-vllm-profiler/issues/9)
+   filed, linking PR #30872, source observations, and the validation
+   plan (`docs(qwen35): link BCG DeepStack investigation issue`).
+   No upstream SGLang issue filed at this stage.
+4. Done — CPU-only scaffolding under
+   [`experiments/qwen35_4b/scripts/`](experiments/qwen35_4b/scripts/)
+   and byte-pinned fixture under
+   [`experiments/qwen35_4b/fixtures/`](experiments/qwen35_4b/fixtures/)
+   (`feat(qwen35): prepare BCG DeepStack validation`). Runner refuses
+   without `--gpu-id`; provenance preflight, client and verdict
+   skeletons all pass CPU dry-run.
+5. **Stop.** Waiting for user to authorise a specific GPU ID before
+   any GPU-touching work.
 
 ### 7.7 §7 out of scope
 
