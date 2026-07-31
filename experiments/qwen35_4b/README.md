@@ -37,7 +37,7 @@ outcomes are enumerated in `plan.md` §7.5.
 | [`source_audit.md`](source_audit.md) | Deep source-level audit of upstream SGLang `main` — files, line numbers, PR provenance. | landed Part 2 |
 | [`provenance.md`](provenance.md) | Frozen SHAs / model / environment pins the validation must verify at run time. | landed Part 2 |
 | [`hypothesis.md`](hypothesis.md) | Established facts vs source-level observations vs unverified runtime hypotheses vs pre-declared acceptance criteria. | landed Part 2 |
-| [`validation_plan.md`](validation_plan.md) | The design that distinguishes outcomes (1)–(4) with objective evidence. | placeholder in Part 2; fills in Part 3 |
+| [`validation_plan.md`](validation_plan.md) | The design that distinguishes outcomes (1)–(4) with objective evidence (verdict shape, evidence layers, configurations, fixtures, confounder controls). | landed Part 3 |
 | [`results/`](results/) | Reserved for future validation attempts (see `results/README.md`). | empty in the CPU-only phase |
 | [`scripts/`](scripts/) | Reserved for CPU-only scaffolding (Part 5) and, later, runners under strict GPU-safety rules (see `scripts/README.md`). | empty in the CPU-only phase |
 

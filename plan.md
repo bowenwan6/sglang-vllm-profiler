@@ -424,15 +424,15 @@ until runtime evidence supports it.
 
 Sequenced, no GPU work in any of these:
 
-1. Organise the investigation area under `experiments/qwen35_4b/`
-   (source audit, provenance, validation plan, empty `results/` and
-   `scripts/`) — commit `docs(qwen35): organize BCG DeepStack validation records`.
-2. Design the validation plan that can distinguish the four outcomes
-   above with objective evidence — commit
-   `docs(qwen35): plan BCG DeepStack validation`.
-3. Open the tracking issue in this profiler repo (not upstream) linking
-   PR #30872, the source-level observations, and the validation plan
-   — commit `docs(qwen35): link BCG DeepStack investigation issue`.
+1. Done — organised investigation area under
+   `experiments/qwen35_4b/` (`docs(qwen35): organize BCG DeepStack validation records`).
+2. Done — validation plan with predeclared verdicts, evidence layers,
+   configurations, fixtures, and confounder controls landed at
+   [`experiments/qwen35_4b/validation_plan.md`](experiments/qwen35_4b/validation_plan.md)
+   (`docs(qwen35): plan BCG DeepStack validation`).
+3. Open the tracking issue in this profiler repo (not upstream)
+   linking PR #30872, the source-level observations, and the
+   validation plan — commit `docs(qwen35): link BCG DeepStack investigation issue`.
 4. Land CPU-only scaffolding (deterministic fixture, provenance
    checks, GPU-refusing runner skeleton, PGID-scoped safeguards) —
    commit `feat(qwen35): prepare BCG DeepStack validation`.
