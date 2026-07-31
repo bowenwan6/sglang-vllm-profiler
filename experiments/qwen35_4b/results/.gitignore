@@ -1,0 +1,6 @@
+# Per-attempt raw outputs are large / transient. Only metadata /
+# summary / verdict files are committed by default.
+attempt_*/raw/
+attempt_*/logs/
+attempt_*/*.log
+attempt_*/*.jsonl
