@@ -103,6 +103,7 @@ Every data directory has one `qwen3vl8b/` subtree (the single experiment):
 | `configs/qwen3vl8b/` | reserved for Phase 5 sweep configs |
 | `plan.md` | **active v2 source of truth** (short; current mainline + Round 2 roadmap). Full v1 plan archived at `experiments/qwen3vl8b/v1_archive_plan.md` |
 | `experiments/qwen3vl8b/v2/` | Round 2 (v2) experiments; first is `caseAC_rebaseline/` (issue #2, protocol drafted, pending approval) |
+| `experiments/qwen35_4b/` | **Qwen3.5-4B BCG DeepStack investigation** (branch `debug/qwen35-4b-bcg-deepstack`, plan §7). Correctness-first source-level audit of `Qwen/Qwen3.5-4B` on current upstream SGLang; runtime validation not yet run. Not related to the historical Qwen3-VL-8B PCG capture-stream sub-track under `experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/`. |
 
 ## How To Read This Repo
 

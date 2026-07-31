@@ -297,7 +297,9 @@ profiler commits.
 
 Active branch: `debug/qwen35-4b-bcg-deepstack` (based on `main` = `a803285`).
 Investigation anchor:
-[`experiments/qwen35_4b/README.md`](experiments/qwen35_4b/README.md).
+[`experiments/qwen35_4b/README.md`](experiments/qwen35_4b/README.md)
+with `source_audit.md`, `provenance.md`, `hypothesis.md`,
+`validation_plan.md`, and reserved `results/` / `scripts/` subdirs.
 
 ### 7.1 Why Qwen3.5-4B (target choice)
 

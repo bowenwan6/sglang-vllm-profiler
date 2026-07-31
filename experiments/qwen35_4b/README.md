@@ -29,26 +29,27 @@ returns divergent outputs, or (c) triggers a Dynamo recompile / assertion
 that keeps correctness but defeats the perf premise. The four possible
 outcomes are enumerated in `plan.md` §7.5.
 
-## Layout (to be filled in later parts)
+## Layout
 
-This README is the anchor placed in Part 1. Later parts fill in:
+| Path | Purpose | Status |
+|---|---|---|
+| [`README.md`](README.md) | Index (this file) — entry point and reader map. | landed Part 1 |
+| [`source_audit.md`](source_audit.md) | Deep source-level audit of upstream SGLang `main` — files, line numbers, PR provenance. | landed Part 2 |
+| [`provenance.md`](provenance.md) | Frozen SHAs / model / environment pins the validation must verify at run time. | landed Part 2 |
+| [`hypothesis.md`](hypothesis.md) | Established facts vs source-level observations vs unverified runtime hypotheses vs pre-declared acceptance criteria. | landed Part 2 |
+| [`validation_plan.md`](validation_plan.md) | The design that distinguishes outcomes (1)–(4) with objective evidence. | placeholder in Part 2; fills in Part 3 |
+| [`results/`](results/) | Reserved for future validation attempts (see `results/README.md`). | empty in the CPU-only phase |
+| [`scripts/`](scripts/) | Reserved for CPU-only scaffolding (Part 5) and, later, runners under strict GPU-safety rules (see `scripts/README.md`). | empty in the CPU-only phase |
 
-- `source_audit.md` — deep source-level audit of upstream `main`, with
-  exact line numbers and captured file provenance.
-- `provenance.md` — pinned upstream / model / driver / library SHAs and
-  the exact commands used to reproduce them.
-- `validation_plan.md` — the CPU-planned validation design able to
-  distinguish outcomes (1)–(4).
-- `hypothesis.md` — clearly separated established facts vs runtime
-  hypotheses vs unverified assumptions, with acceptance criteria.
-- `results/` — reserved for future validation attempts (empty until GPU
-  is authorised).
-- `scripts/` — reserved for future runner / analysis skeletons (CPU-only
-  scaffolding lands in Part 5).
+## Read order for a fresh reader
 
-Populated in the commits `docs(qwen35): organize BCG DeepStack validation
-records`, `docs(qwen35): plan BCG DeepStack validation`, and
-`feat(qwen35): prepare BCG DeepStack validation`.
+1. `plan.md` §7 (top-level context and roadmap position).
+2. `hypothesis.md` (what is established vs suspected — sets expectations).
+3. `source_audit.md` (why we suspect it — direct source citations).
+4. `provenance.md` (the SHAs / env this rests on).
+5. `validation_plan.md` (once landed) — how we plan to prove or disprove
+   the hypothesis.
+6. `results/` — once populated after GPU authorisation.
 
 ## Historical context (read-only)
 
