@@ -296,6 +296,9 @@ profiler commits.
 > explicitly approved.
 
 Active branch: `debug/qwen35-4b-bcg-deepstack` (based on `main` = `a803285`).
+Tracking issue: [profiler-repo issue #9](https://github.com/bowenwan6/sglang-vllm-profiler/issues/9)
+(sub-track of #3; no upstream SGLang issue filed at investigation
+start — deferred until runtime evidence is in hand).
 Investigation anchor:
 [`experiments/qwen35_4b/README.md`](experiments/qwen35_4b/README.md)
 with `source_audit.md`, `provenance.md`, `hypothesis.md`,

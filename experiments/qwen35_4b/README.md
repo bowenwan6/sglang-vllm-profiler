@@ -6,6 +6,9 @@
 > authorised in this phase.
 
 - **Branch:** `debug/qwen35-4b-bcg-deepstack` (based on `main` = `a803285`).
+- **Tracking issue:** [profiler-repo issue #9](https://github.com/bowenwan6/sglang-vllm-profiler/issues/9)
+  (sub-track of #3; no upstream SGLang issue filed until runtime
+  evidence is in hand).
 - **Model target:** `Qwen/Qwen3.5-4B` (HF, `sha=851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a`,
   `config.architectures=["Qwen3_5ForConditionalGeneration"]`,
   `model_type=qwen3_5`, ungated).
