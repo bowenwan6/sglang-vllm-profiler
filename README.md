@@ -21,14 +21,20 @@ latency gap comes from — not a generic benchmark ranking.
 
 ## Overview
 
-This repo holds one experiment, **`qwen3vl8b`**, that asks a focused question: **where does SGLang's
-time-to-first-token (TTFT) gap versus vLLM come from?** The goal is not to declare a winner but to
-attribute the gap to a specific stage (prefill vs decode), kernel family, and system path, and to
-turn that into ranked, evidence-backed hypotheses for optimization.
+This repo holds two experiments:
 
-The work is organized as a phase-gated pipeline (Phase 0 → 5): prove the two servers are comparable,
-establish a baseline, shape/​de-noise the workloads, collect torch-profiler traces, triage them, and
-(next) validate the top hypothesis.
+1. **`qwen3vl8b`** — the original TTFT-gap investigation on Qwen3-VL-8B-Instruct, asking a focused
+   question: **where does SGLang's time-to-first-token (TTFT) gap versus vLLM come from?** The goal
+   is not to declare a winner but to attribute the gap to a specific stage (prefill vs decode),
+   kernel family, and system path, and to turn that into ranked, evidence-backed hypotheses for
+   optimization. Organised as a phase-gated pipeline (Phase 0 → 5): prove the two servers are
+   comparable, establish a baseline, shape / de-noise the workloads, collect torch-profiler traces,
+   triage them, and validate the top hypothesis. See §Directory Layout below and `plan.md` §1–§6.
+2. **`qwen35_4b`** — a correctness-first sub-track under active development on branch
+   `debug/qwen35-4b-bcg-deepstack`. Source-level audit of `Qwen/Qwen3.5-4B` on current upstream
+   SGLang `main` for a suspected multimodal prefill BCG DeepStack gap. **This is an investigation,
+   not a confirmed bug** — verdict pending runtime validation on GPU 0. See
+   [`experiments/qwen35_4b/README.md`](experiments/qwen35_4b/README.md) and `plan.md` §7.
 
 ## Main Findings
 

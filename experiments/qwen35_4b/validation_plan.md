@@ -1,241 +1,236 @@
 # Validation Plan — Qwen3.5-4B BCG DeepStack
 
-> **Purpose.** Design a set of experiments that, run on current upstream
-> SGLang `main` (`5f9b0db1` at plan time; re-verify at run time) with
-> `Qwen/Qwen3.5-4B`, produces objective, per-request evidence sufficient
-> to pick exactly one of the four outcomes in `plan.md` §7.5.
+> **Purpose.** Design a small correctness/path experiment that, run on
+> the frozen upstream SGLang `main` checkout at
+> `89f4a80c1f5e71c1c960df120f1e03b43dfd3c1d` with `Qwen/Qwen3.5-4B`,
+> produces objective per-request evidence sufficient to pick exactly
+> one of the five outcomes in `hypothesis.md` §5.
 >
-> **Non-goal.** This plan does not design a fix. It proves or disproves
-> the problem before any fix is discussed. It also does not run any
-> GPU workload; every runner it names is CPU-plannable, but GPU
-> execution requires an explicitly authorised GPU ID.
+> **Scope.** This is a correctness/path experiment, not a performance
+> benchmark. Latency percentiles, CV gates, and 30-rep sweeps are
+> **not** in scope. The plan uses a small matched initial test and
+> a small confirmation only if a signal appears.
 
 ## 1. Predeclared verdict shape
 
-The plan must, at the end, emit exactly one verdict:
+Verdict labels are defined in `hypothesis.md` §5 and are the source
+of truth. The runner and `verdict.py` must emit exactly one of:
 
 | Verdict | Trigger |
 |---|---|
-| **`PASS_H_B`** | BCG is available in server logs but `can_run_graph` (or equivalent) rejects image requests, so image requests demonstrably run through the eager path. Correctness is trivially preserved; DeepStack replay-side gap is not exercised. Upstream defect claim closed. |
-| **`PASS_H_D`** | Image requests demonstrably execute BCG replay AND greedy tokens / logits / hidden states match the eager reference within the matched-noise envelope from the text-only control. Some code path we did not find in `source_audit.md` handles DeepStack. Upstream defect claim closed. |
-| **`FAIL_H_A`** | Image requests execute BCG replay AND greedy tokens diverge from the eager reference beyond the matched-noise envelope, with tensor-level or hidden-state evidence isolating the divergence to the DeepStack-relevant layers (0–2) or to a zero-DeepStack signature. Upstream defect claim upgraded. |
-| **`FAIL_H_C`** | Image requests crash with an assertion (`PCG capture stream is not set`, illegal memory), or emit `Falling back to eager execution` after warmup completed. Upstream defect claim upgraded. |
-| **`AMBIGUOUS`** | Divergence exists but attribution fails (bf16 noise floor swallows the signal, no matched control succeeded, or eager reference itself was nondeterministic). |
-| **`INFRA_FAILURE`** | Environment cannot be brought to the frozen provenance, a shared GPU disqualifies the run, or the runner aborts on a foreign-PID guard. Recorded, does not count for or against the hypothesis. |
+| **`PASS_BCG_CORRECT`** | Image request demonstrably replays BCG (instrumentation confirms `_execute_body_capture` + `replay_layer_forward` served it) AND greedy tokens / logits match `eager_normal` within the eager-vs-eager envelope AND `input_deepstack_embeds` was non-trivially nonzero at request time. |
+| **`FEATURE_GAP_EAGER_FALLBACK`** | Image request demonstrably ran on the eager runner despite BCG being enabled. Correctness is trivially preserved; the BCG performance premise is not demonstrated. Documented as a feature gap; **not** "PASS" in the strong sense. |
+| **`FAIL_BCG_DEEPSTACK`** | Image request demonstrably replays BCG AND one of: (a) matched greedy-token or hidden-state divergence beyond the eager-vs-eager envelope with a zero-DeepStack signature (i.e. `bcg_normal` ≈ `eager_zero_deepstack`), or (b) the BCG replay raises an assertion / illegal memory access at inference time. |
+| **`AMBIGUOUS`** | Divergence exists but attribution fails (envelope swallows the signal, `bcg_normal` matches neither `eager_normal` nor `eager_zero_deepstack`, fixture produced trivially-zero DeepStack, instrumentation self-inconsistent). |
+| **`INFRA_FAILURE`** | Provenance preflight fails on a hard pin; GPU 0 cannot be safely acquired; foreign compute PID appears on GPU 0 during the run; server fails to bring up; runner aborts on its own ownership guard. Recorded, does not count for or against any hypothesis. |
 
 The verdict is **declared before observing any result**. Post-hoc
 softening requires an explicit written amendment recorded in
 `hypothesis.md` §5 and re-committed.
 
-## 2. Prerequisites the plan requires from every run
+## 2. Prerequisites the runner records for every attempt
 
 Every attempt records, before executing any request:
 
-1. **Upstream SGLang HEAD SHA** at run time. If different from
-   `provenance.md` §1, the discrepancy is logged and the run is
-   labelled with the new SHA.
-2. **HF model revision** actually loaded (from
-   `sglang.launch_server`'s startup log or an equivalent snapshot
-   probe). Must equal `provenance.md` §2.
-3. **Framework versions** (torch, flashinfer, sgl_kernel) and
-   `libcuda.so` path via `ldconfig`. Must match `provenance.md` §3
-   or an explicit override flag.
-4. **Server flags emitted verbatim** (BCG backend selection, allowlist
-   membership, `enforce-piecewise-cuda-graph`, cache flags).
-5. **`nvidia-smi --query-compute-apps=pid,gpu_uuid --format=csv`
-   snapshot** at start / periodically / end — must show no foreign PID
-   on the authorised GPU. Foreign PID mid-run → run classified
-   `INFRA_FAILURE`.
-6. **PGID** of every server / bench process the runner launched.
-   Cleanup signals **only** those PGIDs and only after verifying every
-   PID inside was recorded by the runner.
+1. **Frozen local SGLang checkout SHA** (hard pin;
+   `89f4a80c1f5e71c1c960df120f1e03b43dfd3c1d`). Preflight aborts if
+   drifted.
+2. **Upstream `main` HEAD SHA at query time** — informational only,
+   WARN on drift.
+3. **Imported `sglang.__file__`** — must resolve inside the frozen
+   checkout after the runner's `PYTHONPATH` override.
+4. **HF model revision** actually loaded (from the server's startup
+   log or an equivalent snapshot probe). Must equal `provenance.md`
+   §2.
+5. **Framework versions** (torch, flashinfer, sgl_kernel) and
+   `libcuda.so` path via `ldconfig`. WARN on drift; hard failure only
+   under `--strict-env`.
+6. **Server flags emitted verbatim**, including whether BCG is on
+   and whether `--enforce-piecewise-cuda-graph` was passed (which it
+   must not be for the BCG legs — see §4).
+7. **`nvidia-smi --query-gpu=... --id=0`** snapshot at start,
+   periodically during execution, and at end. Queries are filtered
+   to GPU 0 by UUID; never wildcarded.
+8. **`nvidia-smi --query-compute-apps=pid,gpu_uuid,used_gpu_memory
+   --format=csv`** filtered to GPU 0's UUID at start / periodically /
+   end. Must show no foreign PID on GPU 0. Foreign PID mid-run →
+   attempt classified `INFRA_FAILURE`; the runner does not signal
+   the foreign PID.
+9. **Launch identity** (PID, PGID, SID, executable path, launch UUID,
+   `prelaunch_utc`) for every process the runner launches. Cleanup
+   signals only recorded PGIDs whose current members were all
+   recorded by this runner. Never `pkill` / `killall` / `fuser -k`
+   / `nvidia-smi --gpu-reset`.
 
-## 3. Evidence layers required (in order of increasing strength)
+## 3. Instrumentation the runner needs
 
-Any single layer in isolation is insufficient. The plan requires all
-layers below Layer 0 for every attempt; Layer 3 is the minimum for a
-FAIL verdict.
+Owned by this branch only. Applied as a lightweight monkey-patch (or
+in-tree patch to the frozen checkout, reverted at teardown) that
+records per-request:
 
-### Layer 0 — Execution-path evidence (required for every attempt)
+- Whether the request entered `_execute_body_capture` (BCG replay
+  execute path), or the eager runner.
+- Whether `replay_layer_forward` was invoked.
+- Whether the incoming `layer_kwargs` contained `input_deepstack_embeds`
+  and, if so:
+  - shape, dtype, numel;
+  - `finite = torch.isfinite(x).all()`;
+  - `nonzero_frac = (x != 0).float().mean()`;
+  - a **compact checksum** (e.g. `float64(x.abs().sum())` +
+    `float64((x*x).sum())` + a 16-byte SHA-256 prefix of the raw
+    bytes converted to CPU) — enough to detect drift, small enough
+    to persist.
+  - `.data_ptr()` as diagnostic **only** — see the pointer wording
+    in `source_audit.md` §4.1; the runner must not draw
+    correctness conclusions from pointer equality alone.
+- Whether the served request took BCG replay or eager (the same
+  signal as `can_run_graph`'s return value at the model runner
+  boundary).
+- Startup vs inference-time recompile events (from
+  `TORCH_LOGS=recompiles_verbose` on the confirmation run only;
+  omitted for the primary run to avoid perturbing behaviour).
+- Greedy token IDs and per-token logprobs where supported. If
+  logprobs are not supported under BCG replay for this
+  configuration, record `logprobs_available=false` and rely on
+  hidden-state RMS instead.
+- Per-configuration hidden-state RMS at layers 0, 1, 2, 3, and the
+  final layer (via a small `LogitsProcessorOutput.hidden_states` hook
+  or the profiler-side patch), compared across `eager_normal`,
+  `eager_zero_deepstack`, and `bcg_normal` on the *same* request.
 
-We must know whether each request actually used BCG replay.
-
-- **Server-log evidence.** Enable and grep:
-  - `TORCH_LOGS=recompiles_verbose` (only for at least one confirmation
-    run per configuration; production runs may keep it off).
-  - The prefill-CG runner's per-request `cuda graph: True` / `cuda
-    graph: False` line (the same signal used in PR #30872's validation).
-  - The BCG capture-session banner (must be visible at server startup).
-- **Runtime marker.** A tiny per-branch instrumentation patch,
-  restricted to this branch and never staged into upstream, that logs
-  from within `_execute_body_capture` and from within
-  `replay_layer_forward` whether it took the BCG path and whether the
-  incoming `layer_kwargs` contained `input_deepstack_embeds`. The patch
-  is kept as a `.patch` file under `scripts/` and applied only for the
-  duration of a run.
-- **Reject the run's evidence** for any request whose BCG path we
-  cannot classify — do not average it in.
-
-### Layer 1 — Input-side evidence (required)
-
-We must know that the request's DeepStack tensor was populated with
-non-trivially-nonzero data.
-
-- Before sending, the runner computes the tokenised prompt and image
-  embedding via the same processor, or, equivalently, the runner
-  requests SGLang to echo `input_deepstack_embeds.abs().sum()` back
-  (via a small profiler-side hook — server-scoped, never committed
-  upstream). A near-zero value on a real image is itself informative
-  (means [F4] in `hypothesis.md` produced only zeros for this input,
-  and the whole test is a no-op — must be excluded from a FAIL verdict).
-
-### Layer 2 — Output-token evidence (required)
-
-- **Greedy tokens** (`temperature=0`, `top_p=1`, deterministic sampler
-  seed) from the BCG-active configuration must be recorded verbatim.
-- **Reference greedy tokens** from the matched eager configuration on
-  the same request must be recorded verbatim.
-- **Diff** — first-differing token offset, count of differing tokens,
-  and full sequence diff. Any diff at all in a greedy setup is
-  meaningful (subject to the noise envelope below).
-
-### Layer 3 — Tensor / hidden-state / logits evidence (required for FAIL)
-
-Because bf16 numerics permit small divergences in a "same" setup,
-Layer 2 alone cannot cleanly attribute a mismatch. FAIL requires at
-least one of:
-
-- **Per-layer hidden-state RMS comparison** at layers 0, 1, 2, 3, and
-  the final layer, between eager and BCG runs on the identical batch.
-  If the divergence is concentrated in layers 0–2, that is the
-  DeepStack signature; if it appears only at the final layer, it is
-  likely something else.
-- **Logit-level comparison**: top-k logits at each decoded position,
-  KL divergence, cosine similarity. Available if we can use
-  `return_logprob=True` on both paths.
-- **`input_deepstack_embeds`-in-graph probe.** With the branch-local
-  instrumentation, tag the DeepStack tensor with a canary pattern
-  before submitting; after the run, check whether the layer-body
-  captured graph "saw" that pattern (via a lightweight test hook that
-  hashes the read address's contents at replay time).
-
-### Layer 4 — Statistical envelope (required)
-
-- **Matched noise envelope.** Run the eager reference against itself
-  (two independent replicas of the eager configuration on the same
-  input). The measured token / hidden-state / logit divergence between
-  those two runs is the noise floor. A BCG-vs-eager divergence larger
-  than that noise floor by a documented factor (e.g., ≥ 3× the
-  layer-0 RMS noise on the same prompt) is beyond noise.
-- **CV bound on every reported metric.** ≤ 6 % on latency; ≤ 3× the
-  layer-0 noise-floor RMS on hidden-state divergence.
+**No full DeepStack tensor is dumped.** Compact checksum plus per-layer
+RMS is sufficient for attribution; anything larger risks disk-space
+regressions and complicates reproducibility.
 
 ## 4. Configurations under test
 
-Every configuration serves `Qwen/Qwen3.5-4B` at the pinned revision.
+Every configuration serves `Qwen/Qwen3.5-4B` at the pinned revision
+under the frozen SGLang checkout. **No configuration uses
+`--enforce-piecewise-cuda-graph`** — Qwen3.5 is not on the PCG
+allowlist (source_audit.md §2), so that flag is not a valid BCG
+control. It is removed from the plan entirely.
 
 | # | Label | Server flags (key) | Purpose |
 |---|---|---|---|
-| C0 | `eager_ref` | prefill CUDA graph disabled; radix cache disabled; explicit greedy sampler | Correctness reference. Two independent replicas C0a, C0b give the noise floor. |
-| C1 | `bcg_default` | prefill CUDA graph = default breakable backend; no override flag | Production-likely BCG-on default for a Qwen3.5-4B multimodal server. |
-| C2 | `bcg_enforce` | prefill CUDA graph = breakable + `--enforce-piecewise-cuda-graph` | Same code path as C1 with the historical Qwen3-VL enforce flag; used to distinguish [H_B] (auto-fallback) from [H_A] (silent DeepStack loss) — if C1 falls back but C2 does not, we know the fallback path exists and works. |
-| C3 | `text_only_control` | Any of C0 / C1 / C2 on text-only requests | Confirms the framework serves text-only correctly on the same server; isolates DeepStack-specific regressions from generic BCG regressions. |
-| C4 | `warm_cache_replica` | C1 with the same cache-warmed state as the request under test | Guards against warm/cold cache confounds. |
+| C0 | `eager_ref` | prefill CUDA graph disabled (e.g. by pinning a graph-disabling flag or by running an eager-only variant); radix cache off | Correctness reference. |
+| C1 | `bcg_default` | default breakable prefill backend (BCG on); no PCG flag; radix cache off | The path under test. |
+| C_ABL | `eager_zero_deepstack` | Same as C0 with the branch-local instrumentation that zeros `input_deepstack_embeds` immediately before the LM forward | Diagnostic ablation for the zero-DeepStack signature. |
+| C_TEXT | `text_only_control` | Any of C0 or C1 with a text-only prompt | Confirms the framework serves text-only correctly on the same server; isolates DeepStack-specific regressions from generic BCG regressions. |
 
-Each configuration runs the same request set (see §5 fixtures) with
-the same PRNG seed, same greedy sampling, same batch-of-1 pacing,
-and back-to-back with a scripted delay so KV-cache state does not
-drift.
+Each configuration runs the same **small** request set (§5) with
+matched cache state and greedy sampling.
 
-## 5. Fixtures
+## 5. Fixtures and request schedule
 
-### 5.1 Deterministic prompts
+### 5.1 Fixtures
 
 - **Image prompt (P_IMG).** A short instruction ("Describe the
-  colours in this image.") applied to a **byte-pinned PNG fixture**
-  (`fixtures/image_bands.png`, 1280×720, three deterministic
-  vertical colour bands with SHA-256 recorded in the fixture manifest).
-  Chosen to make DeepStack tiles nonzero and easy to reason about.
+  colours in this image.") applied to the byte-pinned PNG
+  `fixtures/image_bands.png`
+  (SHA-256 `8fa3ed69d78049835d6631b3b4314be21ea3e797626be6c58fc72adfb30070a2`).
 - **Text prompt (P_TXT).** A single short instruction with no image;
-  reused from `datasets/qwen3vl8b/caseA_short.jsonl` (an existing,
-  SHA-256-pinned dataset). Used only as the C3 control.
-- **Multi-token prompt (P_LONG).** ≥ 512 text tokens plus the same
-  image, to exercise a shape not covered by the single-shape DeepStack
-  warmup (`capture_num_tokens[-1]` per [F7]). This is critical
-  because the source-level hypothesis specifically implicates non-max
-  shapes.
+  reused from `datasets/qwen3vl8b/caseA_short.jsonl` (existing
+  SHA-256-pinned dataset).
 
-Every fixture is committed under `experiments/qwen35_4b/fixtures/`
-with a `manifest.json` that pins SHA-256, dimensions, and MIME type.
-Scaffolding for this manifest lands in Part 5.
+`fixtures/manifest.json` pins byte counts, dimensions, and MIME type.
 
-### 5.2 Request schedule
+### 5.2 Request schedule (simplified — correctness/path)
 
-- Serial (max concurrency 1) to eliminate scheduler interference.
-- Warmup: 30 requests using P_TXT only (never DeepStack) so any DeepStack
-  branch trigger is provably the first-ever tensor-valued call, matching
-  the historical failure mode.
-- Measured: 30 requests per configuration, first 5 discarded as JIT /
-  cache warmup.
-- **Cold-cache repeats.** For each `C1_measured[i]`, run C0 immediately
-  before with the same request against a fresh server to keep prefix
-  cache and radix state matched.
-- **Configuration order.** Randomised across attempts (but recorded)
-  so no configuration systematically gets warmer buffers.
+- **Batch of 1**, serial (no concurrency), greedy (`temperature=0`,
+  `top_p=1`, fixed seed).
+- **Initial matched test** — the minimum set required to distinguish
+  the five verdicts:
+  1. `C0` (`eager_normal`) × 1 request: `P_IMG`.
+  2. `C0` (`eager_normal`) × 1 request: `P_TXT` (text-only control).
+  3. `C_ABL` (`eager_zero_deepstack`) × 1 request: `P_IMG`.
+  4. `C1` (`bcg_default`) × 1 request: `P_TXT` (text-only control,
+     to confirm BCG serves text-only without regression).
+  5. `C1` (`bcg_default`) × 1 request: `P_IMG` — the primary scored
+     leg.
+- **Eager-noise envelope** — one additional `C0 × P_IMG` repeat, on
+  the same server with matched cache. The greedy tokens must be
+  identical; the hidden-state RMS diff between the two `eager_normal`
+  runs is the noise floor.
+- **Confirmation-only repeats** — if the initial matched test shows
+  an apparent signal (any divergence between `bcg_normal` and
+  `eager_normal` above the noise floor), the runner may repeat the
+  primary `C1 × P_IMG` and the ablation `C_ABL × P_IMG` up to 3
+  times each to confirm stability. Absent a signal, no confirmation
+  is needed.
+- **Server reuse policy** — the initial matched test uses one server
+  per configuration (C0, C1). A fresh server is not required for
+  every individual request; correctness is verified by matched
+  cache state (radix disabled unless the run explicitly targets a
+  cache confound) and a warmup pass on each fresh server.
+- **Warmup** — the plan retains warmup per fresh server (the
+  standard SGLang warmup that runs on server start; no synthetic
+  30-request warmup imposed by the runner).
+- **Deterministic sampler seed** — fixed integer for every request.
+
+**What was explicitly removed from the earlier plan.** Latency-CV
+gates, per-configuration 30-request measured runs (with 5 discards),
+fresh-server-per-request, cross-attempt configuration randomisation,
+Layer 4 statistical envelope beyond a single eager-vs-eager pair.
+These were performance-benchmark controls that do not help a
+correctness/path decision and inflate the run cost without adding
+attribution power.
 
 ## 6. What each verdict requires as evidence
 
-- **`PASS_H_B`** ← Layer 0 shows every image request took the eager
-  path (`cuda graph: False`) despite BCG being available AND Layer 2
-  shows greedy tokens match C0 exactly on every request.
-- **`PASS_H_D`** ← Layer 0 shows every image request took the BCG path
-  (`cuda graph: True`) AND Layer 2 shows greedy tokens match C0 within
-  the C0a↔C0b noise envelope AND Layer 3 shows layer-0/1/2 hidden-state
-  RMS divergence is inside the noise envelope AND Layer 1 confirms
-  `input_deepstack_embeds` was non-trivially nonzero.
-- **`FAIL_H_A`** ← Layer 0 shows every image request took the BCG path
-  AND Layer 2 shows greedy tokens differ AND Layer 3 shows
-  layer-0/1/2 divergence exceeds the noise envelope by the documented
-  factor OR the layer-0/1/2 hidden-state pattern matches a zero-DeepStack
-  signature (i.e. the divergence is exactly what one would expect if
-  DeepStack were replaced by zeros).
-- **`FAIL_H_C`** ← Any image request produces a server assertion or
-  `Falling back to eager execution` log line at inference time (i.e.
-  after warmup completed).
-- **`AMBIGUOUS`** ← Any required layer's evidence is missing or
-  degraded.
-- **`INFRA_FAILURE`** ← Provenance mismatch not waived, foreign PID
-  seen mid-run, or setup failure before any measurement.
+- **`PASS_BCG_CORRECT`** ← Instrumentation shows every scored `C1 ×
+  P_IMG` request took the BCG execute path (`_execute_body_capture`
+  invoked, `replay_layer_forward` invoked) AND
+  `input_deepstack_embeds.nonzero_frac > 0` (checksum recorded) AND
+  greedy tokens match `C0 × P_IMG` exactly AND `bcg_normal` per-layer
+  RMS vs `eager_normal` is within the eager-vs-eager envelope.
+- **`FEATURE_GAP_EAGER_FALLBACK`** ← Instrumentation shows every
+  scored `C1 × P_IMG` request went through the eager runner (no
+  `_execute_body_capture`, no `replay_layer_forward`). Correctness
+  holds by construction; the verdict is not stronger than "BCG did
+  not run for this request set".
+- **`FAIL_BCG_DEEPSTACK`** ← Instrumentation shows every scored `C1
+  × P_IMG` request took the BCG execute path AND (a) greedy tokens
+  differ AND `bcg_normal` per-layer RMS pattern is closer to
+  `eager_zero_deepstack` than to `eager_normal` (documented ratio,
+  e.g. within 1.5× of the ablation RMS and > 3× the eager-vs-eager
+  envelope), OR (b) BCG replay raised an assertion or produced an
+  illegal memory access mid-run.
+- **`AMBIGUOUS`** ← Any of: instrumentation self-inconsistent,
+  DeepStack was trivially zero, ablation arm was corrupted, cache
+  state was not matched.
+- **`INFRA_FAILURE`** ← Provenance preflight failed on a hard pin,
+  foreign PID seen on GPU 0 mid-run, GPU 0 could not be safely
+  acquired, or server crash during startup before any request.
 
 ## 7. Confounders and how the plan controls them
 
 | Confounder | Control |
 |---|---|
-| bf16 nondeterminism | C0a↔C0b noise envelope in Layer 4; never claim FAIL below the envelope. |
-| Warm-vs-cold KV cache | Fresh server per matched pair; matched request order; radix cache flag identical across paired runs. |
-| Silent BCG-off | Server-log per-request `cuda graph:` line + branch-local instrumentation; every request classified before averaging. |
+| bf16 nondeterminism | Single eager-vs-eager pair gives the noise envelope; never claim `FAIL_BCG_DEEPSTACK` below the envelope. |
+| Warm-vs-cold KV cache | Matched fresh server per configuration; radix cache off unless explicitly targeted. |
+| Silent BCG-off | The branch-local instrumentation is authoritative for path attribution; the runner rejects any scored request it could not classify. |
 | Framework version drift | Provenance preflight (§2). |
-| Prompt/image tokenisation drift | Byte-pinned image fixture, SHA-pinned text prompts, tokenisation echoed and hashed. |
-| Shared-GPU noise | Foreign-PID guard aborts to `INFRA_FAILURE`; per-metric CV bound (§3). |
+| Prompt/image tokenisation drift | Byte-pinned image fixture, SHA-pinned text prompts. |
+| Shared-GPU noise | Foreign-PID guard aborts to `INFRA_FAILURE`; the acquisition protocol (`plan.md` §7 Step 3) requires 10 continuous minutes of GPU 0 idle before launch and continuous monitoring during execution. |
 | Speculative decoding / MTP | Explicitly disabled in every configuration. |
-| LoRA / DP attention | Explicitly disabled unless the run explicitly targets them (they are not part of this plan). |
-| Radix / prefix cache | Same setting across matched pairs; disable for the primary FAIL / PASS verdicts, enable only for a supplementary run. |
-| P_IMG image producing all-zero DeepStack tiles | Layer 1 check aborts to `INFRA_FAILURE` — the test is meaningless without nonzero DeepStack. |
-| Runner authoring bugs (missed launch checks, etc.) | Each runner has a CPU-only `--dry-run` (Part 5). Post-run, `verdict.py` re-parses the launch-context JSON and refuses to score across mismatched launches (a direct reaction to the historical R6.5 stale-artifact bug). |
+| LoRA / DP attention | Explicitly disabled unless a run explicitly targets them (they are not part of this plan). |
+| Radix / prefix cache | Disabled for the primary verdict legs; enabled only for a supplementary run if the plan later needs it. |
+| P_IMG image producing all-zero DeepStack tiles | Instrumentation Layer-1 check aborts to `AMBIGUOUS` — the test is meaningless without nonzero DeepStack. |
+| Runner authoring bugs (missed launch checks, stale artifacts) | Every runner has a CPU-only `--dry-run`; `verdict.py` re-parses the launch-context JSON and refuses to score across mismatched launch IDs (reaction to the historical Qwen3-VL R6.5 stale-artifact bug). |
 
 ## 8. Deliverables per attempt
 
 For each attempt (indexed under `results/attempt_<id>/`):
 
 - `metadata.json` — provenance preflight output, server flags, PGIDs,
-  request-set identity, sampler seed.
+  launch UUID, request-set identity, sampler seed.
 - `raw/` — server stderr / stdout, bench-client JSON, per-request
-  `cuda graph:` log lines, per-request hidden-state / logit dumps
-  (small; a few hundred KB at most). **Not committed** unless
-  explicitly approved.
+  instrumentation records, per-layer hidden-state RMS values, greedy
+  token dumps. **Not committed** unless explicitly approved. Path is
+  under a gitignored `results/` subtree.
 - `verdict.json` — machine-readable {verdict, per-hypothesis-support,
-  per-layer-evidence-checks, noise-envelope-bounds, envelope-crossed
-  y/n, notes}.
+  per-layer-evidence-checks, envelope, envelope-crossed y/n,
+  execution-path counts per configuration, notes}.
 - `verdict.md` — human-readable narrative that explains why the
   machine verdict was chosen, cites the raw evidence, and preserves
   any known caveats.
@@ -247,18 +242,24 @@ default.
 
 ## 9. Sequencing (dry-run then GPU)
 
-1. **CPU dry-runs** — every runner and every verdict script must pass
-   `--dry-run` (no CUDA import, argument parsing, JSON schema, PGID
-   scaffolding). Landed in Part 5.
-2. **User authorises a specific GPU ID.**
-3. **Infra check pass.** A minimal `INFRA_CHECK` run brings up the
-   server on the authorised GPU with no requests, records the log,
-   records the `cuda graph:` capture-session banner, tears down
-   cleanly. Any anomaly aborts to `INFRA_FAILURE`.
-4. **Configuration order** as randomised per §5.
-5. **Verdict scoring** by `verdict.py` on the committed
-   `verdict.json`.
-6. **Report** back to plan.md §7 with the machine verdict verbatim
+1. **CPU dry-runs** — every runner and every verdict script must
+   pass `--dry-run` (no CUDA import, argument parsing, JSON schema,
+   PGID scaffolding).
+2. **GPU 0 authorisation.** GPU 0 is the only authorised device.
+3. **GPU 0 acquisition protocol** — see `plan.md` §7. Read-only
+   query first; require 10 continuous minutes of idle (zero compute
+   processes, memory ≤ 500 MiB, utilisation ≤ 5 %); recheck
+   immediately before the first server launch to leave no idle gap;
+   never signal any foreign PID; never switch GPUs.
+4. **INFRA_CHECK.** Bring up the smallest real Qwen3.5-4B server
+   configuration needed to verify model revision, dependencies, CUDA
+   / libcuda, multimodal readiness, BCG capture banner, clean
+   request-free teardown, GPU memory release. Any anomaly →
+   `INFRA_FAILURE`, stop.
+5. **Correctness/path validation.** Run the initial matched test in
+   §5.2. If a signal appears, run the small confirmation. Score
+   via `verdict.py`.
+6. **Report** back to `plan.md` §7 with the machine verdict verbatim
    plus a human interpretation.
 
 Filing an upstream SGLang issue (or PR) is **not** part of this plan;

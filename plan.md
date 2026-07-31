@@ -316,145 +316,211 @@ from which the hypothesis is drawn. It replaces the earlier Qwen3-VL-8B
 plan for BCG DeepStack validation because 4B is much cheaper to
 serve and does not change any of the source-level control paths under test.
 
-### 7.2 Upstream provenance frozen at investigation start
+### 7.2 Upstream provenance (rebaselined 2026-07-31)
 
 Values verified against `sgl-project/sglang` on 2026-07-31 via GitHub API.
 
 | Item | Value |
 |---|---|
-| Upstream SGLang `main` HEAD | `5f9b0db18c787cf56ed9bbaf255f083f26c6ebc2` (subject: `Fix async loading of RunAI-streamed tensors (#32896)`) |
-| PR #30872 (`Enable multimodal prefill BCG for VL and audio models`) | **MERGED** 2026-07-28T22:47:40Z — merge commit `c9947b087bf9d3d16b5198234ba4c39b68bb79e9`. Enables prefill BCG for multimodal VL / audio wrappers; adds `input_embeds` static slot; decode-first capture ordering. Contains **no `input_deepstack_embeds` slot or copy** (verified in PR diff). |
-| PR #30868 (`fix: fix vlm cuda graph shape stability`) | **MERGED** 2026-07-19T14:35:51Z. Introduces `run_dummy_multimodal_deepstack_forward` on `PrefillCudaGraphRunner` to warm the tensor-valued DeepStack branch at `capture_num_tokens[-1]` only, plus a defensive eager fallback if a replacement backend is instantiated without a capture stream. Related but **not equivalent** to the §7 hypothesis — §7 is about capture / replay data-flow for `input_deepstack_embeds`, not Dynamo shape stability. |
-| Local mirror `/sgl-workspace/sglang` | `da802dd` — a **stale** older HEAD; not the source of truth for this audit. Upstream files read via raw.githubusercontent for the audit under `experiments/qwen35_4b/`. |
-| Historical local fork `/data/sglang-fork` | `986c89e69` — untouched by §7; read-only reference only. |
+| **Executed local SGLang checkout (HARD PIN)** | isolated `git clone` under `<scratchpad>/sglang_checkout/sglang/`, HEAD pinned to `89f4a80c1f5e71c1c960df120f1e03b43dfd3c1d`. The runner sources it via `PYTHONPATH` and verifies `sglang.__file__` resolves inside it. |
+| Upstream SGLang `main` HEAD at rebaseline | `89f4a80c1f5e71c1c960df120f1e03b43dfd3c1d` (subject: `Support fastsafetensors no-GDS loading and page-cache release (#31859)`). Later remote-main movement is informational only, not a hard failure — see `provenance.md` §1. |
+| PR #30872 (`Enable multimodal prefill BCG for VL and audio models`) | **MERGED** 2026-07-28T22:47:40Z — merge commit `c9947b087bf9d3d16b5198234ba4c39b68bb79e9`. Adds Qwen3.5 to `multimodal_breakable_cuda_graph_supported_model_archs` (the **BCG** allowlist), registers the `input_embeds` static slot, and adds the `replay_layer_forward` per-request copy of `input_embeds`. **Contains no `input_deepstack_embeds` slot or copy on the BCG code path.** |
+| PR #30868 (`fix: fix vlm cuda graph shape stability`) | **MERGED** 2026-07-19T14:35:51Z. Introduces `run_dummy_multimodal_deepstack_forward` and a defensive eager fallback, **both scoped to `tc_piecewise_cuda_graph_backend`**. This is a Dynamo shape-stability warmup for **TC piecewise / PCG**, not a BCG capture / replay slot. |
+| Local mirror `/sgl-workspace/sglang` | `da802dd` — stale older HEAD; the installed sglang at that path is **not** the runner's source of truth. Runners override via `PYTHONPATH` to the frozen checkout and assert `sglang.__file__` resolves inside it. |
+| Historical local fork `/data/sglang-fork` | `986c89e69c25882ab6f3d396f8eb306f38f2c8d2` — untouched by §7; read-only reference only. The runner sanity-checks that this HEAD is unchanged before and after every attempt. |
 
-### 7.3 Established facts (source-level, on upstream `main` @ `5f9b0db1`)
+### 7.3 Established facts (source-level, on upstream `main` @ `89f4a80c`)
 
 Verified by inspection of files under
 `python/sglang/srt/{models,model_executor,managers,configs}`. All line
 numbers refer to raw upstream files captured 2026-07-31.
 
-1. **Qwen3.5 architectures live in the BCG allowlist.** In
-   `python/sglang/srt/configs/model_config.py:1836`,
-   `multimodal_piecewise_cuda_graph_supported_model_archs` includes
-   `"Qwen3_5ForConditionalGeneration"` and
-   `"Qwen3_5MoeForConditionalGeneration"` (lines `1846-1847`).
-   `is_multimodal_piecewise_cuda_graph_supported` (line `1908`) returns
-   True for these architectures when `enable_multimodal` is set.
+1. **BCG and PCG allowlists are DISTINCT; Qwen3.5 is on BCG only.**
+   In `python/sglang/srt/configs/model_config.py`:
+   - Lines `1836-1841` — `multimodal_piecewise_cuda_graph_supported_model_archs`
+     (the **PCG / `tc_piecewise` / torch.compile-based** allowlist)
+     contains **only** `Cohere2VisionForConditionalGeneration`,
+     `KimiK25ForConditionalGeneration`, `MiniMaxM3SparseForCausalLM`,
+     `MiniMaxM3SparseForConditionalGeneration` — **not** Qwen3.5.
+   - Lines `1845-1848` — `multimodal_breakable_cuda_graph_supported_model_archs`
+     (the **BCG** allowlist) contains `Qwen3_5ForConditionalGeneration`
+     and `Qwen3_5MoeForConditionalGeneration`. The in-source comment
+     is: "embed-carrying batches are rejected at replay
+     (can_run_graph) and run eager." (See §7.3(6) below for what
+     "embed-carrying" actually gates.)
+   - `is_multimodal_piecewise_cuda_graph_supported` (line `1908`)
+     and `is_multimodal_breakable_cuda_graph_supported` (line `1916`)
+     are two independent accessors. `ModelConfig` computes both.
+     **`--enforce-piecewise-cuda-graph` is not a valid BCG control
+     for Qwen3.5**; the validation plan does not use it.
 2. **Qwen3.5 inherits the Qwen3-VL multimodal wrapper.**
    `python/sglang/srt/models/qwen3_5.py:1771`:
    `class Qwen3_5ForConditionalGeneration(Qwen3VLForConditionalGeneration)`
    with `language_model_cls=Qwen3_5ForCausalLM`. The MoE variant
-   (line `1928`) does the same. The `Qwen3_5ForCausalLM.forward`
-   signature (line `1408`) accepts
-   `input_deepstack_embeds: Optional[torch.Tensor] = None`, and the loop
-   at line `1448-1458` adds
-   `input_deepstack_embeds[:, sep : sep + hidden_size]` to `hidden_states`
-   for `layer_idx < 3` when the tensor is non-`None` and non-empty.
-3. **`general_mm_embed_routine` synthesises DeepStack live per request.**
-   `python/sglang/srt/managers/mm_utils.py:1108-1140` builds
-   `input_deepstack_embeds` in `embed_mm_inputs` as a fresh
-   `torch.zeros(deepstack_embedding_shape, device=input_embeds.device, dtype=input_embeds.dtype)`
-   allocated per call, then scatters per-modality DeepStack tiles into it
-   and returns it in `other_info`. The pointer is fresh per request.
-4. **BCG replay copies `input_embeds` into a stable slot; there is no
-   equivalent for `input_deepstack_embeds`.**
+   (line `1928`) does the same. `Qwen3_5ForCausalLM.forward`
+   (line `1408-1478`) accepts
+   `input_deepstack_embeds: Optional[torch.Tensor] = None`, and the
+   loop at line `1448-1458` `add_`s
+   `input_deepstack_embeds[:, sep : sep + hidden_size]` to
+   `hidden_states` for `layer_idx < 3` when the tensor is non-`None`
+   and non-empty. The DeepStack contribution is *injected* at
+   layers 0–2 but propagates through later layers via the residual
+   stream — the observable effect is not restricted to layers 0–2.
+3. **`general_mm_embed_routine` synthesises DeepStack per request.**
+   `python/sglang/srt/managers/mm_utils.py:1108-1140` allocates
+   `input_deepstack_embeds` as a per-call `torch.zeros(...)`
+   (`(num_tokens, hidden_size * num_deepstack_embeddings)`), scatters
+   per-modality tiles into it, and stores it in `other_info`. Lines
+   `1247-1373` route the routine and unpack
+   `other_info["input_deepstack_embeds"]` into the LM's `kwargs`.
+   Lines `1361-1363` copy `input_embeds` into a stable slot when
+   one exists; **no analogous copy exists for
+   `input_deepstack_embeds`**. The Python tensor is fresh per call;
+   its `.data_ptr()` is not stable by contract but the CUDA caching
+   allocator may reuse the same address, so pointer equality alone
+   is not diagnostic.
+4. **BCG replay copies `input_embeds` into a stable slot; there is
+   no equivalent for `input_deepstack_embeds`.**
    - `python/sglang/srt/model_executor/cuda_graph_buffer_registry.py:867-877`
      registers an `input_embeds` slot when `is_multimodal and
-     register_input_embeds=True`; **no slot named `input_deepstack_embeds`
-     is ever registered**.
+     register_input_embeds=True`; **no slot named
+     `input_deepstack_embeds` is ever registered**.
    - `python/sglang/srt/model_executor/runner/prefill_cuda_graph_runner.py`,
      `_execute_body_capture` closure `replay_layer_forward` (lines
-     `1498-1519`) copies **only** the live `input_embeds` argument into the
-     registry's `input_embeds` slot before calling
+     `1498-1519`) copies **only** the live `input_embeds` argument
+     into the registry's `input_embeds` slot before calling
      `self.backend.replay(shape_key, static_forward_batch, **kwargs)`.
-     The outer `**kwargs` is the tail-forward kwargs from `_execute_body_capture`,
-     not `layer_kwargs`, so `input_deepstack_embeds` (passed by
-     `general_mm_embed_routine` as a `layer_kwargs` entry) is **not**
-     forwarded into `.replay()` and **not** copied into any stable slot.
-5. **The one existing DeepStack accommodation is a Dynamo warmup only,
-   not a capture / replay slot.**
-   `run_dummy_multimodal_deepstack_forward` at
-   `prefill_cuda_graph_runner.py:662-725` calls
-   `language_model.forward(..., input_deepstack_embeds=deepstack_embeds)`
-   during warmup with a locally-allocated `torch.zeros(...)` tensor. This
-   traces the tensor-valued DeepStack branch through Dynamo so the
-   `input_deepstack_embeds is None` guard does not force an
-   inference-time recompile, but the tensor has no stable-address slot
-   in the buffer registry and its allocation is dropped when the warmup
-   function returns.
-6. **Existing tests do not cover the DeepStack replay path.** Registered
-   tests referencing BCG / piecewise + deepstack are limited to
-   `test/registered/unit/model_executor/test_prefill_cuda_graph_runner_helpers.py`
-   (mrope helper unit, added by PR #30868),
-   `test/registered/unit/model_executor/test_prefill_cuda_graph_runner.py`
-   (wrapper resolution + `input_embeds` slot helper, from PR #30872), and
-   `test/registered/unit/configs/test_multimodal_piecewise_cuda_graph.py`
-   (the allowlist itself). No test verifies that the captured graph's
-   DeepStack contribution matches the eager result on a real image
-   request.
+     `**kwargs` here is the **outer** tail-forward kwargs, not
+     `layer_kwargs`; `input_deepstack_embeds` (routed as a
+     `layer_kwargs` entry) is not forwarded into `.replay()` and
+     not copied anywhere. The BCG backend's `.replay(...)`
+     (`runner_backend/breakable_cuda_graph_backend.py:241-248`)
+     replays the captured graph and ignores `**kwargs`.
+5. **The one existing DeepStack accommodation is TC piecewise only,
+   not BCG.** `run_dummy_multimodal_deepstack_forward` at
+   `prefill_cuda_graph_runner.py:662-725` is a Dynamo shape-stability
+   warmup that allocates a local `torch.zeros(...)` and traces the
+   tensor-valued DeepStack branch. Its **only** caller is
+   `tc_piecewise_cuda_graph_backend._run_compile_pass`
+   (`runner_backend/tc_piecewise_cuda_graph_backend.py:214-216`),
+   after `torch.compile` is installed. **The BCG capture path never
+   invokes it.** BCG's `_run_forward` (`prefill_cuda_graph_runner.py:606-649`)
+   drives `layer_model.forward(input_ids, positions, forward_batch,
+   forward_batch.input_embeds)` — four positional args, no
+   `input_deepstack_embeds` kwarg. The DeepStack `add_` branch is
+   therefore **cold at BCG capture time**, and the captured graph
+   contains no DeepStack kernels at all. This is a distinct concern
+   from PR #30868's PCG Dynamo warmup and PR #30872's BCG replay
+   bridge; the two PRs together do not close it.
+6. **`can_run_graph`'s `input_embeds is not None` gate targets
+   API-`input_embeds`, not multimodal image requests.**
+   `prefill_cuda_graph_runner.py:1015-1016` returns `False` when
+   `forward_batch.input_embeds is not None`. In `managers/schedule_batch.py:2233-2401`,
+   `batch.input_embeds` is populated only when the request carries
+   an API-level `req.input_embeds`; normal multimodal image requests
+   leave it `None` and set `batch.multimodal_inputs` instead. So
+   the "embed-carrying rejection" comment (§7.3(1)) applies to
+   API-provided embeddings, not to image requests. Image requests
+   are not filtered here by construction.
+7. **Existing tests do not cover the DeepStack BCG replay path.**
+   Registered tests referencing BCG / piecewise + deepstack are
+   limited to the wrapper-resolution / helper units from PRs #30872
+   and #30868, plus the allowlist assertion; no test verifies that
+   the captured BCG graph's DeepStack contribution matches the eager
+   result on a real image request.
 
 ### 7.4 Runtime hypothesis (unverified)
 
-Given the source-level observations in §7.3, the working hypothesis is:
+Given §7.3, the working hypothesis is:
 
-> On current SGLang `main` (`5f9b0db1`), when
-> `Qwen/Qwen3.5-4B` serves an image request under
-> `--enforce-piecewise-cuda-graph` (or the default `breakable` prefill
-> backend), the BCG-captured layer-body graph replays without the live
-> `input_deepstack_embeds` tensor pointer being copied into any stable
-> slot. Consequences may include (a) silent output divergence versus the
-> eager path because layers 0–2 miss their DeepStack contribution, or
-> (b) an inference-time Dynamo recompile on the first tensor-valued
-> DeepStack shape not covered by the single-shape warmup, or (c) a hard
-> assertion / illegal-memory failure if the warmup tensor was freed.
+> On current upstream SGLang `main` at
+> `89f4a80c1f5e71c1c960df120f1e03b43dfd3c1d`, when
+> `Qwen/Qwen3.5-4B` serves an image request under the default
+> breakable prefill backend, the BCG-captured layer-body graph has
+> no DeepStack `add_` kernels (the branch was cold at capture) and
+> no stable slot for `input_deepstack_embeds`. Consequences may be
+> (a) silent output divergence versus the eager path with a
+> "DeepStack-zeroed" signature, (b) illegal-memory / assertion at
+> replay, (c) a runtime filter this audit did not find routes image
+> requests to eager (feature gap; correctness preserved but BCG not
+> exercised for images), or (d) some code path pins DeepStack that
+> the audit missed and correctness holds. The validation plan must
+> distinguish these with direct evidence, not by elimination.
 
-This is the hypothesis the §7 validation plan must be able to prove or
-disprove. It is **not** a confirmed bug and must not be quoted as one
-until runtime evidence supports it.
+This is the hypothesis §7's validation plan proves or disproves.
+It is **not** a confirmed bug and must not be quoted as one until
+runtime evidence supports it.
 
-### 7.5 Possible outcomes the validation must distinguish
+### 7.5 Machine verdict shape (predeclared)
 
-1. Image request uses BCG and DeepStack is preserved correctly.
-2. Request falls back to eager, so correctness is preserved but
-   multimodal prefill BCG is not actually exercised.
-3. Request uses BCG but DeepStack is omitted / stale, producing a
-   correctness defect.
-4. The suspected source-level gap is handled elsewhere in the code base
-   and no defect exists.
+The validation plan must emit exactly one of the following. **An
+eager fallback is never "bug closed" or full PASS.**
+
+- **`PASS_BCG_CORRECT`** — Image request demonstrably replays BCG
+  and DeepStack-active results match the eager reference within the
+  eager-vs-eager noise envelope.
+- **`FEATURE_GAP_EAGER_FALLBACK`** — Correctness is preserved
+  because the image request runs eager, but multimodal BCG
+  support/performance is not demonstrated. Documented as a feature
+  gap.
+- **`FAIL_BCG_DEEPSTACK`** — Image request demonstrably replays BCG
+  and live DeepStack is missing, stale, or produces a matched
+  correctness divergence (zero-DeepStack signature), or the BCG
+  replay raises an assertion / illegal memory access at inference
+  time.
+- **`AMBIGUOUS`** — Divergence exists but cannot be cleanly
+  attributed.
+- **`INFRA_FAILURE`** — Environment / GPU / preflight failure;
+  neutral outcome, does not count for or against any hypothesis.
+
+Predeclared **diagnostic ablation**: on top of `eager_normal` and
+`bcg_normal`, the runner also collects `eager_zero_deepstack`
+(eager run with a branch-local instrumentation hook that zeros
+`input_deepstack_embeds` immediately before the LM forward). If
+`bcg_normal` tracks `eager_zero_deepstack` rather than
+`eager_normal`, that is strong attribution evidence for
+`FAIL_BCG_DEEPSTACK`. This is a diagnostic ablation, not production
+behavior.
 
 ### 7.6 Immediate next steps (§7 track)
 
-Sequenced, no GPU work in any of these:
+Executed in one continuous pass; each step commits+pushes on
+success.
 
-1. Done — organised investigation area under
-   `experiments/qwen35_4b/` (`docs(qwen35): organize BCG DeepStack validation records`).
-2. Done — validation plan with predeclared verdicts, evidence layers,
-   configurations, fixtures, and confounder controls landed at
-   [`experiments/qwen35_4b/validation_plan.md`](experiments/qwen35_4b/validation_plan.md)
-   (`docs(qwen35): plan BCG DeepStack validation`).
-3. Done — tracking [profiler-repo issue #9](https://github.com/bowenwan6/sglang-vllm-profiler/issues/9)
-   filed, linking PR #30872, source observations, and the validation
-   plan (`docs(qwen35): link BCG DeepStack investigation issue`).
-   No upstream SGLang issue filed at this stage.
-4. Done — CPU-only scaffolding under
-   [`experiments/qwen35_4b/scripts/`](experiments/qwen35_4b/scripts/)
-   and byte-pinned fixture under
-   [`experiments/qwen35_4b/fixtures/`](experiments/qwen35_4b/fixtures/)
-   (`feat(qwen35): prepare BCG DeepStack validation`). Runner refuses
-   without `--gpu-id`; provenance preflight, client and verdict
-   skeletons all pass CPU dry-run.
-5. **Stop.** Waiting for user to authorise a specific GPU ID before
-   any GPU-touching work.
+1. **Step 1 (docs)** — corrected the BCG-vs-PCG facts, the
+   caller/scope of `run_dummy_multimodal_deepstack_forward`, the
+   pointer wording, the verdict labels, the simplified
+   correctness/path protocol, the diagnostic ablation, and the
+   top-level README. Commit `docs(qwen35): correct BCG DeepStack
+   validation protocol`.
+2. **Step 2 (live runner)** — implemented the profiler-owned
+   instrumentation patch, the live runner, the live client, and
+   the real verdict inference. All CPU-only tests pass. Commit
+   `feat(qwen35): add live BCG DeepStack validation runner`.
+3. **Step 3 (GPU 0 acquisition)** — read-only query GPU 0; qualifies
+   only when zero compute processes, memory ≤ 500 MiB, utilisation
+   ≤ 5 %; require 10 continuous minutes idle; recheck and launch
+   with no intentional gap; never signal a foreign PID; never
+   switch GPUs.
+4. **Step 4 (INFRA_CHECK)** — smallest real Qwen3.5-4B server
+   configuration; verifies model revision, dependencies, CUDA /
+   libcuda, multimodal readiness, BCG capture banner, clean
+   teardown, GPU memory release. Commit `test(qwen35): verify
+   Qwen3.5 BCG infrastructure`.
+5. **Step 5 (validation)** — run the predeclared controls
+   (`eager_normal`, `eager_zero_deepstack`, `bcg_normal`, text-only
+   eager/BCG, small confirmation if signal), score verdict, commit
+   `test(qwen35): record Qwen3.5 BCG DeepStack verdict`.
 
 ### 7.7 §7 out of scope
 
-- Any GPU work (server launch, weight download, `nvidia-smi` memory
-  allocation) until the user authorises a specific GPU ID.
 - Filing an upstream SGLang issue or PR — deferred until runtime
   reproduction (or definitive disproof) is in hand.
-- Rewriting or repurposing the historical Qwen3-VL PCG evidence under
-  §4 or the `debug/v2-imgA-pcg-capture-stream-fix` branch. §7 links
-  historically where useful but treats §4 as read-only.
-- Editing anything under `/data/sglang-fork`. That fork is preserved
-  read-only as historical evidence at `986c89e69`.
+- Implementing a fix — the whole plan is diagnostic; a fix is a
+  separate follow-up gated on the verdict.
+- Rewriting or repurposing the historical Qwen3-VL PCG evidence
+  under §4 or the `debug/v2-imgA-pcg-capture-stream-fix` branch.
+  §7 links historically where useful but treats §4 as read-only.
+- Editing anything under `/data/sglang-fork`. That fork is
+  preserved read-only as historical evidence at `986c89e69`.
+- Using any GPU other than GPU 0.

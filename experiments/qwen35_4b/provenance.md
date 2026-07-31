@@ -11,11 +11,33 @@
 | Profiler repo | `bowenwan6/sglang-vllm-profiler` (this repo) | `git remote -v` |
 | Profiler branch | `debug/qwen35-4b-bcg-deepstack` | `git branch --show-current` |
 | Profiler base commit | `a803285` (`main`, PR #8 merge) | `git merge-base HEAD main` |
-| Upstream SGLang `main` HEAD at audit start | `5f9b0db18c787cf56ed9bbaf255f083f26c6ebc2` (2026-07-31) | `gh api repos/sgl-project/sglang/commits/main --jq .sha` |
-| SGLang PR #30872 (`Enable multimodal prefill BCG for VL and audio models`) | **MERGED** 2026-07-28T22:47:40Z, merge SHA `c9947b087bf9d3d16b5198234ba4c39b68bb79e9` | `gh pr view 30872 --repo sgl-project/sglang` |
-| SGLang PR #30868 (`fix: fix vlm cuda graph shape stability`) | **MERGED** 2026-07-19T14:35:51Z, merge SHA `d4801be44773` | `gh pr view 30868 --repo sgl-project/sglang` |
+| **Executed local SGLang checkout (HARD PIN)** | `<scratchpad>/sglang_checkout/sglang` cloned from `https://github.com/sgl-project/sglang.git`, HEAD pinned to `89f4a80c1f5e71c1c960df120f1e03b43dfd3c1d`. The runner sources this via `PYTHONPATH=<scratchpad>/sglang_checkout/sglang/python` and verifies `sglang.__file__` resolves inside it. | `cd <scratchpad>/sglang_checkout/sglang && git rev-parse HEAD` and `python3 -c 'import sglang; print(sglang.__file__)'` |
+| Upstream SGLang `main` HEAD at audit rebaseline | `89f4a80c1f5e71c1c960df120f1e03b43dfd3c1d` (2026-07-31, subject `Support fastsafetensors no-GDS loading and page-cache release (#31859)`) | `gh api repos/sgl-project/sglang/commits/main --jq .sha` |
+| SGLang PR #30872 (`Enable multimodal prefill BCG for VL and audio models`) | **MERGED** 2026-07-28T22:47:40Z, merge SHA `c9947b087bf9d3d16b5198234ba4c39b68bb79e9`. Added Qwen3.5 to `multimodal_breakable_cuda_graph_supported_model_archs`, registered `input_embeds` slot, added `replay_layer_forward` copy of `input_embeds`. No DeepStack slot / copy on the BCG path. | `gh pr view 30872 --repo sgl-project/sglang` |
+| SGLang PR #30868 (`fix: fix vlm cuda graph shape stability`) | **MERGED** 2026-07-19T14:35:51Z, merge SHA `d4801be44773`. Added `run_dummy_multimodal_deepstack_forward` and a defensive eager fallback, **both scoped to `tc_piecewise_cuda_graph_backend`**, not BCG. | `gh pr view 30868 --repo sgl-project/sglang` |
 | Historical Qwen3-VL fork `/data/sglang-fork` | `986c89e69c25882ab6f3d396f8eb306f38f2c8d2` | read-only reference; not touched by §7 |
-| Local mirror `/sgl-workspace/sglang` HEAD (stale) | `da802dd` — do **not** trust as upstream truth | `cd /sgl-workspace/sglang && git rev-parse HEAD` |
+| Local mirror `/sgl-workspace/sglang` HEAD (stale) | `da802dd` — do **not** trust as upstream truth or as the "installed" SGLang the runner uses. Runners must override via `PYTHONPATH` and verify `sglang.__file__`. | `cd /sgl-workspace/sglang && git rev-parse HEAD` |
+
+**Provenance hardness convention (new).**
+
+- The **hard pin** is the executed local SGLang checkout SHA. Runner
+  preflight aborts with a non-zero exit code if:
+  - the frozen checkout directory does not exist, or
+  - its git HEAD does not equal
+    `89f4a80c1f5e71c1c960df120f1e03b43dfd3c1d`, or
+  - `python3 -c 'import sglang; print(sglang.__file__)'` does not
+    resolve inside that checkout after the runner's `PYTHONPATH`
+    override.
+- The **upstream `main` HEAD at query time** is informational. If it
+  has moved past the frozen SHA, the preflight logs a WARN and
+  continues; movement of remote main is not a hard failure because
+  the executed code path is fully specified by the frozen checkout.
+- The **HF model revision** is a hard pin (`851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a`).
+- The **fixture SHA-256** is a hard pin
+  (`8fa3ed69d78049835d6631b3b4314be21ea3e797626be6c58fc72adfb30070a2`).
+- **torch / sgl_kernel / flashinfer / libcuda** are pinned soft: the
+  preflight logs observed values and warns on any drift; a hard
+  failure requires an explicit `--strict-env` flag.
 
 ## 2. Model target
 
@@ -41,15 +63,15 @@ The Qwen3-VL sub-track froze a working environment at:
 |---|---|---|
 | System python + torch | `python 3.12.3` · torch `2.11.0+cu130` | Qwen3-VL R6 provenance |
 | CUDA runtime | `13.0` | environment snapshot |
-| Host libcuda | `libcuda.so.595.71.05` (driver 595.71.05) | R6 Amendment A3 |
+| Host libcuda | `libcuda.so.595.71.05` (driver 595.71.05) at `/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05`; the `cuda-compat-13-0` loader precedence at `/usr/local/cuda-13.0/compat/libcuda.so.1` must be overridden with `LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05` | R6 Amendment A3 |
 | flashinfer | `0.6.12` | Qwen3-VL R6 provenance |
 | sgl_kernel | `0.4.4` | Qwen3-VL R6 provenance |
 | Profiling client env | `/opt/miniconda3/envs/profiling` (torch `2.11.0+cu130`, vLLM `0.21.0`) | Qwen3-VL R6 provenance |
 
-**Warning.** These are the *starting expectations*. The validation plan
-must re-verify each of them at run time (see `scripts/` preflight in
-Part 5) because the upstream SGLang HEAD may have changed pinned deps
-since the Qwen3-VL sub-track froze them.
+**Warning.** These are the *starting expectations*. The validation
+runner must re-verify each of them at run time; drift on
+torch/sgl_kernel/flashinfer/libcuda is a WARN by default, and a hard
+failure only under `--strict-env`.
 
 ## 4. Datasets and fixtures
 
@@ -58,17 +80,23 @@ since the Qwen3-VL sub-track froze them.
   from the Qwen3-VL R6 record). Reusable as a text-only control because
   Qwen3.5 accepts the same tokenizer text; **must be verified** at run
   time via `sha256sum` before use.
-- **Image fixture.** Defined in `validation_plan.md`. Must be a
-  deterministic, byte-pinned file so repeated runs are comparable.
-  Committed under `experiments/qwen35_4b/fixtures/` at scaffolding time
-  (Part 5).
+- **Image fixture.** `experiments/qwen35_4b/fixtures/image_bands.png`,
+  SHA-256 `8fa3ed69d78049835d6631b3b4314be21ea3e797626be6c58fc72adfb30070a2`,
+  1280×720 three-band PNG. Byte-pinned so repeated runs are comparable.
 
 ## 5. What is expressly not part of this investigation's provenance
 
-- `/data/sglang-fork` — historical Qwen3-VL fork; read-only.
+- `/data/sglang-fork` — historical Qwen3-VL fork; **read-only**. The
+  Step 2 runner must not modify it, and its HEAD is expected to
+  remain `986c89e69c25882ab6f3d396f8eb306f38f2c8d2` before and after
+  every attempt (checked by the runner as a sanity guard).
 - `experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/root_cause/`
   — historical Qwen3-VL PCG capture-stream evidence; §7 references it
-  but does not rewrite it.
+  but does not rewrite it. In particular the preserved uncommitted
+  `R5C_correctness_audit/audit_report.md` edit and the orphan
+  `R6.3_image_and_sweep/attempt_gpu2_partial_orphaned_…/` directory
+  are protected: the runner and any commit must leave them
+  unmodified.
 - Any prior Qwen3-VL numbers (`21.94 ms`, `14.04 ms`, `64.8 ms`,
   R6.x results) — different model, different SHAs, not baselines for
   Qwen3.5-4B.
@@ -78,16 +106,23 @@ since the Qwen3-VL sub-track froze them.
 Every runner introduced under §7 **must** perform, and record in its
 output, the following before doing any GPU work:
 
-1. Emit the current `sgl-project/sglang` HEAD SHA reachable at run
-   time. If different from the SHA in this file, warn loudly and
-   record both values; do **not** silently proceed as if unchanged.
-2. Emit the HF model revision it is about to load; compare byte-for-byte
-   against §2.
-3. Emit `nvidia-smi --query-gpu=driver_version,name --format=csv` for the
-   authorised GPU only (no GPU allocation), and the loaded `libcuda.so`
-   path via `ldconfig -p | grep libcuda`.
-4. Emit `python -c "import torch, sgl_kernel, flashinfer; print(...)"`
-   version tuple.
-5. Abort with a non-zero exit code if any hard-required item disagrees
-   with the pinned value and the user has not explicitly waived the
-   check.
+1. Emit the executed local SGLang checkout SHA (from `git -C
+   <checkout> rev-parse HEAD`) and confirm it equals the hard pin.
+   Non-match → abort with non-zero exit.
+2. Emit the current `sgl-project/sglang` remote HEAD SHA (best-effort,
+   via `gh api` or GitHub REST). If different from the pin, log a
+   WARN; do not abort.
+3. Import `sglang` and emit `sglang.__file__`. It must resolve
+   under the frozen checkout after the runner's `PYTHONPATH`
+   override. Non-match → abort.
+4. Emit the HF model revision the runner is about to load; compare
+   against §2. Non-match → abort unless `--waive-model-revision` is
+   set.
+5. Emit `nvidia-smi --query-gpu=driver_version,name,uuid --format=csv`
+   for **GPU 0 only** (`--id=0`, no wildcard). Never query all GPUs.
+6. Emit the loaded `libcuda.so` path via `ldconfig -p | grep libcuda`
+   and confirm the runtime `LD_PRELOAD` targets
+   `/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05` (WARN if
+   different, ABORT if unset entirely).
+7. Emit `python -c "import torch, sgl_kernel, flashinfer; print(...)"`
+   version tuple. WARN on drift; ABORT under `--strict-env`.
