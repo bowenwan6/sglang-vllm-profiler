@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""CPU-only tests for the DeepStack instrumentation forward-pre-hook.
+"""CPU-only tests for the DeepStack instrumentation forward-pre-hook
+and the profiler-owned test-only BCG allowlist monkey-patch.
 
 Proves that the branch-owned instrumentation:
 
@@ -15,6 +16,25 @@ Proves that the branch-owned instrumentation:
    returns, so no residual state persists on the module.
 5. Does not accumulate hooks across repeated calls (the hook count
    before and after N calls is unchanged).
+
+Proves that the BCG allowlist monkey-patch:
+
+6. When the opt-in flag is set, adds ``Qwen3VLForConditionalGeneration``
+   and ``Qwen3VLMoeForConditionalGeneration`` to a stand-in
+   ``multimodal_breakable_cuda_graph_supported_model_archs`` list in
+   memory, and reports the pre/post state.
+7. Is a no-op when neither the env var nor ``force=True`` is set —
+   the list is unchanged.
+8. Is idempotent — repeated application on an already-patched list
+   does not duplicate entries.
+
+Proves the pre-hook generalises to Qwen3-VL:
+
+9. Fires correctly on a toy ``nn.Module`` whose class inherits a name
+   from the ``KNOWN_LM_CLASS_NAMES`` set (e.g. a subclass named
+   ``Qwen3LLMModel``), tagging
+   ``module_class_recognised = true`` in the event log while still
+   performing the same 5 behaviours from tests 1-5.
 
 Runs entirely on CPU. No GPU import. No SGLang import. Uses a toy
 ``nn.Module`` stand-in for the language model plus a stand-in for
@@ -82,13 +102,18 @@ class _ToyLanguageModel:
     """Stand-in for ``Qwen3_5ForCausalLM``. It's a ``nn.Module`` whose
     forward reads ``input_deepstack_embeds`` from kwargs and adds it
     (broadcasted) to a base tensor.
+
+    The wrapped module's class name is chosen at construction time so
+    the ``module_class_recognised`` field on the hook event can be
+    exercised for both known (``Qwen3LLMModel``, ``Qwen3_5ForCausalLM``)
+    and unknown (fallback ``_LM``) class names.
     """
 
-    def __init__(self):
+    def __init__(self, cls_name: str = "_LM"):
         import torch
         import torch.nn as nn
 
-        class _LM(nn.Module):
+        class _LMBase(nn.Module):
             def __init__(self):
                 super().__init__()
                 # a trivial parameter so this really is an nn.Module
@@ -106,7 +131,11 @@ class _ToyLanguageModel:
                     out = out + input_deepstack_embeds[:, :4]
                 return out
 
-        self.module = _LM()
+        # Rebind the class name so ``type(module).__name__`` reflects
+        # the requested name — that's what the instrumentation records.
+        _LMBase.__name__ = cls_name
+        _LMBase.__qualname__ = cls_name
+        self.module = _LMBase()
 
     def __call__(self, *args, **kwargs):
         return self.module(*args, **kwargs)
@@ -159,7 +188,7 @@ def _make_toy_routine(instrumentation_mod):
     return fake_mm
 
 
-def _run_one_scenario(zero_mode: bool):
+def _run_one_scenario(zero_mode: bool, toy_class_name: str = "_LM"):
     import torch
 
     with tempfile.TemporaryDirectory() as td:
@@ -176,7 +205,7 @@ def _run_one_scenario(zero_mode: bool):
         inst = _load_instrumentation(log_path, zero_mode=zero_mode)
         mm = _make_toy_routine(inst)
 
-        toy = _ToyLanguageModel()
+        toy = _ToyLanguageModel(cls_name=toy_class_name)
 
         # Sanity: initial hook count on the module is zero.
         pre_hooks_before = list(toy.module._forward_pre_hooks.values())
@@ -296,8 +325,175 @@ def main() -> int:
     # asserts above (pre_hooks_after == 0 after N calls).
     print("  hooks removed after each call, no accumulation — OK")
 
+    print("== toy CPU test — Qwen3-VL generalisation ==")
+    # Run the same normal-mode scenario against a toy whose class is
+    # named "Qwen3LLMModel" (Qwen3-VL's LM module class). Assert the
+    # hook fires, the event marks the module as recognised, and the
+    # zero-mode ablation still measurably diverges.
+    out_ng, out_ng2, evts_ng, ds_ng, ie_ng = _run_one_scenario(
+        zero_mode=False, toy_class_name="Qwen3LLMModel"
+    )
+    fired_ng = _assert_events_have_hook_fired(evts_ng, expected_count=2)
+    for e in fired_ng:
+        assert e.get("module_class") == "Qwen3LLMModel", (
+            f"Qwen3-VL toy: expected module_class=Qwen3LLMModel, got {e}"
+        )
+        assert e.get("module_class_recognised") is True, (
+            f"Qwen3-VL toy: module_class_recognised was False on event {e}"
+        )
+        ds_sum = (e.get("input_deepstack_embeds") or {})
+        assert ds_sum.get("nonzero_frac", 0.0) > 0.0, (
+            f"Qwen3-VL normal-mode observed a zero DeepStack tensor: {ds_sum}"
+        )
+    _assert_events_have_zeroed(evts_ng, expected_count=0)
+
+    out_zg, out_zg2, evts_zg, ds_zg, ie_zg = _run_one_scenario(
+        zero_mode=True, toy_class_name="Qwen3LLMModel"
+    )
+    fired_zg = _assert_events_have_hook_fired(evts_zg, expected_count=2)
+    for e in fired_zg:
+        assert e.get("module_class_recognised") is True, (
+            f"Qwen3-VL zero-mode: module_class_recognised was False on event {e}"
+        )
+    zeroed_zg = _assert_events_have_zeroed(evts_zg, expected_count=2)
+    for e in zeroed_zg:
+        assert e["after"]["nonzero_frac"] == 0.0
+        assert e["after"]["abs_sum"] == 0.0
+    assert not torch.allclose(out_zg, out_ng), (
+        "Qwen3-VL toy: zero-mode output equals normal-mode output — "
+        "ablation had no effect on the recognised LM class"
+    )
+    print("  Qwen3-VL toy (Qwen3LLMModel-named class): pre-hook fires, "
+          "module_class_recognised=true, zero ablation diverges — OK")
+
+    # Sanity: an unknown class name is still hooked, but marked
+    # module_class_recognised=false. Protects the recognised flag from
+    # silently drifting to "always true".
+    out_uk, out_uk2, evts_uk, ds_uk, ie_uk = _run_one_scenario(
+        zero_mode=False, toy_class_name="TotallyNotAKnownLM"
+    )
+    fired_uk = _assert_events_have_hook_fired(evts_uk, expected_count=2)
+    for e in fired_uk:
+        assert e.get("module_class_recognised") is False, (
+            f"Unknown class name incorrectly marked recognised: {e}"
+        )
+    print("  unknown-class toy: hook fires with module_class_recognised=false — OK")
+
+    print("== CPU test — BCG allowlist monkey-patch ==")
+    _run_bcg_allowlist_patch_tests()
+    print("  BCG allowlist patch: opt-in adds Qwen3-VL classes, opt-out is no-op, "
+          "repeated application is idempotent — OK")
+
     print("all CPU tests passed")
     return 0
+
+
+def _load_bcg_allowlist_patch():
+    """Load ``bcg_allowlist_patch.py`` as a fresh module (independent of
+    any prior import in this test process)."""
+    import importlib.util
+
+    patch_path = Path(__file__).resolve().parent / "bcg_allowlist_patch.py"
+    spec = importlib.util.spec_from_file_location(
+        "qwen35_bcg_allowlist_patch_test", str(patch_path)
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    return mod
+
+
+def _run_bcg_allowlist_patch_tests():
+    """Test the BCG allowlist patch against a stand-in
+    ``sglang.srt.configs.model_config`` module.
+
+    We install a fake module in ``sys.modules`` before loading the
+    patch, so the patch's ``install()`` mutates the fake list. This
+    keeps the CPU test hermetic — no real SGLang import required.
+    """
+    import types
+
+    # Clean any prior stubs.
+    for k in list(sys.modules.keys()):
+        if k.startswith("sglang.srt.configs.model_config"):
+            del sys.modules[k]
+
+    # Build stand-in module chain: sglang / sglang.srt / sglang.srt.configs /
+    # sglang.srt.configs.model_config.
+    def _install_stub(initial_list):
+        for pkg in ("sglang", "sglang.srt", "sglang.srt.configs"):
+            if pkg not in sys.modules:
+                m = types.ModuleType(pkg)
+                m.__path__ = []  # mark as package
+                sys.modules[pkg] = m
+        fake_mc = types.ModuleType("sglang.srt.configs.model_config")
+        fake_mc.__file__ = "<fake sglang.srt.configs.model_config>"
+        fake_mc.multimodal_breakable_cuda_graph_supported_model_archs = list(initial_list)
+        sys.modules["sglang.srt.configs.model_config"] = fake_mc
+        return fake_mc
+
+    # --- Test 6a: env var + force=False — no mutation ------------------
+    os.environ.pop("QWEN35_PATCH_BCG_ALLOWLIST", None)
+    fake = _install_stub(["Qwen3_5ForConditionalGeneration",
+                          "Qwen3_5MoeForConditionalGeneration"])
+    patch = _load_bcg_allowlist_patch()
+    result = patch.install(force=False)
+    assert result["enabled"] is False, (
+        f"opt-in should be off when env var unset and force=False: {result}"
+    )
+    assert result["mutated"] is False
+    assert "Qwen3VLForConditionalGeneration" not in fake.multimodal_breakable_cuda_graph_supported_model_archs
+
+    # --- Test 6b: env var set — mutation ------------------------------
+    os.environ["QWEN35_PATCH_BCG_ALLOWLIST"] = "1"
+    fake = _install_stub(["Qwen3_5ForConditionalGeneration",
+                          "Qwen3_5MoeForConditionalGeneration"])
+    # Reload so ``is_env_enabled()`` at call time sees the updated env.
+    patch = _load_bcg_allowlist_patch()
+    result = patch.install()
+    assert result["enabled"] is True, (
+        f"env var should enable the patch: {result}"
+    )
+    assert result["mutated"] is True
+    assert set(result["added"]) == {
+        "Qwen3VLForConditionalGeneration",
+        "Qwen3VLMoeForConditionalGeneration",
+    }
+    assert "Qwen3VLForConditionalGeneration" in fake.multimodal_breakable_cuda_graph_supported_model_archs
+    assert "Qwen3VLMoeForConditionalGeneration" in fake.multimodal_breakable_cuda_graph_supported_model_archs
+    # Pre/post state present and comparable.
+    assert result["pre_state"]["contains"]["Qwen3VLForConditionalGeneration"] is False
+    assert result["post_state"]["contains"]["Qwen3VLForConditionalGeneration"] is True
+
+    # --- Test 6c: force=True regardless of env ------------------------
+    os.environ.pop("QWEN35_PATCH_BCG_ALLOWLIST", None)
+    fake = _install_stub(["Qwen3_5ForConditionalGeneration"])
+    patch = _load_bcg_allowlist_patch()
+    result = patch.install(force=True)
+    assert result["enabled"] is True and result["mutated"] is True
+    assert "Qwen3VLForConditionalGeneration" in fake.multimodal_breakable_cuda_graph_supported_model_archs
+
+    # --- Test 8: idempotence ------------------------------------------
+    # Second application should not duplicate.
+    result2 = patch.install(force=True)
+    assert result2["enabled"] is True
+    assert result2["mutated"] is False, (
+        f"second install should be a no-op, got: {result2}"
+    )
+    assert result2["added"] == []
+    # No duplicates.
+    l = fake.multimodal_breakable_cuda_graph_supported_model_archs
+    for arch in ("Qwen3VLForConditionalGeneration",
+                 "Qwen3VLMoeForConditionalGeneration"):
+        assert l.count(arch) == 1, (
+            f"idempotence broken: arch {arch} appears {l.count(arch)} times in {l}"
+        )
+
+    # Cleanup: leave sys.modules without our stubs so subsequent tests
+    # or callers do not see the fake sglang.
+    for k in list(sys.modules.keys()):
+        if k.startswith("sglang"):
+            del sys.modules[k]
+    os.environ.pop("QWEN35_PATCH_BCG_ALLOWLIST", None)
 
 
 if __name__ == "__main__":

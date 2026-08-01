@@ -70,6 +70,29 @@ a profiler-owned test-only monkey-patch that adds Qwen3-VL to the
 BCG allowlist at runtime, to convert the latent hypothesis into
 live-fire evidence.
 
+- Retarget scaffolding landed 2026-08-01 as
+  `feat(qwen35): retarget harness to Qwen3-VL under monkey-patched BCG`:
+  new `scripts/bcg_allowlist_patch.py` sibling module mutates the
+  frozen SGLang checkout's
+  `multimodal_breakable_cuda_graph_supported_model_archs` list **in
+  memory only** to include `Qwen3VLForConditionalGeneration` and
+  `Qwen3VLMoeForConditionalGeneration`, opt-in via
+  `QWEN35_PATCH_BCG_ALLOWLIST=1` env var or the
+  `--patch-bcg-allowlist` runner/launcher flag; idempotent; frozen
+  SGLang source unchanged (`git diff` empty). The pre-hook
+  installer in `instrumentation.py` was generalised to also
+  recognise Qwen3-VL's `Qwen3LLMModel` / `Qwen3MoeLLMModel`
+  language-model classes (tagged `module_class_recognised=true` on
+  every `lm_forward_input_deepstack` event). The
+  `scripts/bootstrap/sitecustomize.py` shim was extended to
+  reapply the BCG allowlist mutation inside every SGLang scheduler
+  / model-worker spawn child so the child's re-imported
+  `is_multimodal_breakable_cuda_graph_supported` returns True for
+  `Qwen3VLForConditionalGeneration`. Validated by CPU tests in
+  `scripts/test_instrumentation.py` (opt-in adds classes, opt-out
+  is no-op, repeated apply is idempotent, hook fires on a toy
+  `Qwen3LLMModel`-named `nn.Module`).
+
 ## Layout
 
 | Path | Purpose | Status |
@@ -80,6 +103,7 @@ live-fire evidence.
 | [`hypothesis.md`](hypothesis.md) | Established facts vs source-level observations vs unverified runtime hypotheses vs pre-declared acceptance criteria; verdict labels revised 2026-07-31. | landed Part 2, corrected 2026-07-31 |
 | [`validation_plan.md`](validation_plan.md) | Correctness/path experiment design (small matched test + diagnostic ablation), verdict shape, evidence layers, configurations, fixtures, confounder controls; revised 2026-07-31 to remove perf-benchmark controls and the incorrect `--enforce-piecewise-cuda-graph` control. | landed Part 3, corrected 2026-07-31 |
 | [`latent_bug_analysis.md`](latent_bug_analysis.md) | Cross-arch audit (2026-08-01): BCG allowlist × DeepStack-in-shipped-config intersection is empty; retarget-with-monkey-patch plan for Attempt 03. | landed 2026-08-01 |
+| [`scripts/bcg_allowlist_patch.py`](scripts/bcg_allowlist_patch.py) | Profiler-owned test-only monkey-patch that mutates the frozen SGLang checkout's `multimodal_breakable_cuda_graph_supported_model_archs` list in memory to include `Qwen3VLForConditionalGeneration` / `Qwen3VLMoeForConditionalGeneration`. Opt-in via `QWEN35_PATCH_BCG_ALLOWLIST=1` or `--patch-bcg-allowlist`; idempotent; frozen SGLang source unchanged. | landed 2026-08-01 |
 | [`fixtures/`](fixtures/) | Byte-pinned deterministic assets (image + `manifest.json`). Regeneration must be bit-identical. | landed Part 5 |
 | [`scripts/`](scripts/) | CPU-only scaffolding + live runner (Step 2): fixture generator, provenance preflight, live runner, client, verdict scorer, instrumentation patch. All refuse to touch a GPU without an explicitly authorised ID. | evolving |
 | [`results/`](results/) | Validation attempts (see `results/README.md`). Raw per-attempt outputs are gitignored; only summary / metadata / verdict files are committed. Step 4 INFRA_CHECK landed 2026-08-01 as `infracheck_gpu7_20260801T012122Z` (PASS). Step 5 correctness/path validation landed same day as `attempt_gpu7_20260801T013522Z` with verdict `AMBIGUOUS` (preserved as historical evidence: `language_model.__call__` instance-dict interceptor ineffective on `nn.Module`, and `<image>` placeholder mismatched the pinned Qwen VL processor's `<\|vision_start\|><\|image_pad\|><\|vision_end\|>`). Both flaws are repaired under `validation_plan.md` Amendment 2 (2026-08-01). The harness-validation follow-up `harness_gpu1_20260801T062833Z` (2026-08-01, GPU 1) confirms the repair works on GPU (pre-hook fires, placeholder warnings gone) but records `HARNESS_NOT_DIAGNOSTIC`: every publicly released `Qwen/Qwen3.5-*` checkpoint ships `vision_config.deepstack_visual_indexes = []`, so `input_deepstack_embeds` is empty (`numel = 0`) and the DeepStack `add_` branch is trivially skipped on every request. Under `validation_plan.md` Amendment 3, the source-level suspicion is not testable against this model family without a model swap. | populated as attempts land |

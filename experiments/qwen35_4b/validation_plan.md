@@ -498,3 +498,87 @@ against the current model target.
 pins, verdict labels (still exactly the five in §1 plus the
 Step-2-only `HARNESS_NOT_DIAGNOSTIC`), ban on signalling foreign
 PIDs / resetting GPUs / modifying `/data/sglang-fork`.
+
+## Amendment 4 (2026-08-01) — retarget to Qwen3-VL under monkey-patched BCG allowlist
+
+**Applies to:** every §7 attempt on or after 2026-08-01 that uses
+`Qwen/Qwen3-VL-8B-Instruct` (or another Qwen3-VL / Qwen3-Omni
+checkpoint) as the primary target. Attempts on `Qwen/Qwen3.5-*`
+targets remain governed by Amendments 1-3 unchanged.
+
+**Observed protocol gap (from Amendment 3 and `latent_bug_analysis.md`):**
+the source-level BCG DeepStack suspicion (`hypothesis.md` F5-F8) is
+not testable against any publicly released `Qwen/Qwen3.5-*` checkpoint
+at the pinned SGLang SHA because every shipped Qwen3.5 config carries
+`vision_config.deepstack_visual_indexes = []`. The cross-arch audit in
+`latent_bug_analysis.md` § 2 shows the intersection of "on BCG
+allowlist" and "actually populates DeepStack" is empty on current
+upstream, so the DeepStack code path in `Qwen3_5ForCausalLM.forward`
+never fires during a real prefill on shipped configurations.
+
+**Amended rules for attempts on or after 2026-08-01 that target
+Qwen3-VL:**
+
+1. **Primary target.** `Qwen/Qwen3-VL-8B-Instruct @ 0c351dd01ed87e9c1b53cbc748cba10e6187ff3b`,
+   `config.architectures = ["Qwen3VLForConditionalGeneration"]`,
+   `config.model_type = "qwen3_vl"`, `vision_config.deepstack_visual_indexes = [8, 16, 24]`,
+   `text_config.hidden_size = 4096`. Recorded in `provenance.md` § 2.2.
+2. **Test-only BCG allowlist opt-in.** Because
+   `Qwen3VLForConditionalGeneration` is not on the shipped
+   `multimodal_breakable_cuda_graph_supported_model_archs` list at the
+   pinned SGLang SHA, `scripts/bcg_allowlist_patch.py` installs a
+   profiler-owned test-only monkey-patch that mutates the list **in
+   memory only** to include `Qwen3VLForConditionalGeneration` and
+   `Qwen3VLMoeForConditionalGeneration`. The frozen SGLang source is
+   never modified (`git diff` under the frozen checkout must be empty
+   before and after every attempt). The patch is opt-in via
+   `QWEN35_PATCH_BCG_ALLOWLIST=1` env var or the runner's
+   `--patch-bcg-allowlist` flag; it is idempotent and logs the
+   pre/post allowlist snapshot to `raw/bcg_allowlist_patch_<config>.json`.
+   `scripts/bootstrap/sitecustomize.py` reapplies the mutation in
+   every SGLang scheduler / model-worker spawn child so the child's
+   re-imported `is_multimodal_breakable_cuda_graph_supported` returns
+   True for `Qwen3VLForConditionalGeneration`.
+3. **Verdict evidence-hierarchy unchanged.** The five predeclared
+   verdict labels in §1 and the 2×2 rules in Amendment 2 apply
+   verbatim. A live-fire `FAIL_BCG_DEEPSTACK` obtained under the
+   monkey-patched allowlist is direct evidence of the source-level
+   bug (`replay_layer_forward` copies `input_embeds` but not
+   `input_deepstack_embeds`), tagged with the "obtained under
+   monkey-patched allowlist" caveat in the verdict narrative so
+   downstream readers understand the upstream production path is
+   currently unreachable without the same patch.
+4. **Instrumentation generalised.** The `KNOWN_LM_CLASS_NAMES` set in
+   `scripts/instrumentation.py` now includes `Qwen3LLMModel` and
+   `Qwen3MoeLLMModel` (Qwen3-VL's LM classes) alongside
+   `Qwen3_5ForCausalLM` and `Qwen3_5MoeForCausalLM`. Every
+   `lm_forward_input_deepstack` event records
+   `module_class_recognised: true` on any subclass of a known LM
+   class name; unknown classes are still hooked but tagged
+   `module_class_recognised: false` for post-run auditing.
+5. **Fixture reused verbatim.** `fixtures/image_bands.png` (SHA-256
+   `8fa3ed69d78049835d6631b3b4314be21ea3e797626be6c58fc72adfb30070a2`)
+   is reused unchanged. The visual placeholder token is unchanged
+   (`<|vision_start|><|image_pad|><|vision_end|>`) — Qwen3-VL uses
+   the same processor family. The tokeniser / processor for
+   Qwen3-VL-8B is loaded at the pinned revision by SGLang's
+   `--model-path` + `--revision` flags.
+6. **`bcg_zero_deepstack` arm already added.** Amendment 2 already
+   added the fourth arm (BCG on, DeepStack zeroed). This amendment
+   introduces no additional configuration; the 2×2 stays exactly
+   `{eager_normal, eager_zero_deepstack, bcg_normal, bcg_zero_deepstack}`.
+
+**Not changed by this amendment:**
+
+- Verdict-label set (still the five in §1 plus the Step-2-only
+  `HARNESS_NOT_DIAGNOSTIC`).
+- Hard SGLang checkout pin (`58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8`).
+- Hard fixture SHA pin.
+- GPU allowlist (`{0, 1, 7}`) and Amendment 1 idle-gate waiver
+  semantics; other GPUs remain refused.
+- Ban on signalling foreign PIDs, resetting GPUs, or modifying
+  `/data/sglang-fork`.
+- Requirement that all four arms in the 2×2 must be present for a
+  non-`AMBIGUOUS` verdict.
+- Preservation of prior attempt directories (`attempt_gpu7_20260801T013522Z`,
+  `harness_gpu1_20260801T062833Z`) and their recorded verdicts.

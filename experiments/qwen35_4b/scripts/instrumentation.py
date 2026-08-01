@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Branch-owned instrumentation for the Qwen3.5-4B BCG DeepStack validation.
+"""Branch-owned instrumentation for the Qwen3.5-4B / Qwen3-VL BCG DeepStack validation.
 
 This module is imported by ``server_launcher.py`` before SGLang's server
 starts. It applies **narrow, reversible** monkey-patches so the runner
@@ -24,6 +24,20 @@ in ``finally``. Repeated calls do not accumulate hooks. This replaces
 the earlier ``instance-dict __call__`` assignment which nn.Module
 silently ignored (nn.Module resolves ``__call__`` at the class level,
 not from the instance ``__dict__``).
+
+The pre-hook is installed unconditionally on whatever ``nn.Module`` is
+passed as ``language_model=`` by ``general_mm_embed_routine``. On
+current upstream that resolves to:
+
+- ``Qwen3_5ForCausalLM`` / ``Qwen3_5MoeForCausalLM`` for Qwen3.5
+  (targeted by Attempts 01-02).
+- ``Qwen3LLMModel`` / ``Qwen3MoeLLMModel`` for Qwen3-VL (targeted by
+  Attempt 03 onward under ``experiments/qwen35_4b/latent_bug_analysis.md``
+  § 3, with the profiler-owned BCG allowlist monkey-patch enabled).
+
+The class name of the module the hook lands on is recorded on every
+``lm_forward_input_deepstack`` event as ``module_class`` so post-hoc
+inspection can confirm targeting.
 
 All events are logged as JSON lines to the file named by
 ``QWEN35_INSTRUMENTATION_LOG``. If that env var is unset, this module
@@ -55,6 +69,26 @@ _INSTALLED = False
 _LOCK = threading.Lock()
 _LOG_FH = None
 _REQUEST_COUNTER = 0
+
+# Known SGLang language-model classes that ``general_mm_embed_routine``
+# passes as ``language_model=`` for the two model families this
+# investigation targets. The pre-hook is installed unconditionally on
+# whatever module is passed (see ``_patch_general_mm_embed_routine``);
+# this set is only used to tag the recognised-vs-unknown status on the
+# ``lm_forward_input_deepstack`` event so post-run inspection can
+# confirm the harness landed on the intended module.
+KNOWN_LM_CLASS_NAMES = frozenset(
+    {
+        # Qwen3.5 (Attempts 01-02).
+        "Qwen3_5ForCausalLM",
+        "Qwen3_5MoeForCausalLM",
+        # Qwen3-VL / Qwen3-VL-MoE (Attempt 03+; ``self.model`` in
+        # ``Qwen3VLForConditionalGeneration.__init__`` is ``Qwen3LLMModel``
+        # for non-MoE and ``Qwen3MoeLLMModel`` for MoE).
+        "Qwen3LLMModel",
+        "Qwen3MoeLLMModel",
+    }
+)
 
 
 def _log(event: str, **fields: Any) -> None:
@@ -154,12 +188,21 @@ def _make_lm_deepstack_pre_hook(rid: int, zero_mode: bool):
 
             ds = kwargs.get("input_deepstack_embeds")
             before = _tensor_summary(ds)
+            module_cls = type(module).__name__
+            # Walk the MRO so subclass instances of the known classes
+            # still count as "recognised".
+            module_mro = [c.__name__ for c in type(module).mro()]
+            recognised = any(
+                name in KNOWN_LM_CLASS_NAMES for name in module_mro
+            )
             _log(
                 "lm_forward_input_deepstack",
                 request_id=rid,
                 zero_deepstack_mode=zero_mode,
                 fired_count=fired["count"],
-                module_class=type(module).__name__,
+                module_class=module_cls,
+                module_class_recognised=recognised,
+                module_mro=module_mro[:6],
                 input_deepstack_embeds=before,
                 other_kwarg_keys=sorted(
                     k for k in kwargs.keys() if k != "input_deepstack_embeds"

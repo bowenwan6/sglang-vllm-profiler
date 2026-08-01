@@ -642,6 +642,26 @@ success.
    `bcg_zero_deepstack` if Step 7 had passed. Skipped because the
    Step 7 evidence establishes the ablation is trivially non-
    diagnostic on this model target.
+9. **Step 9 (Attempt 03 retarget — Qwen3-VL under monkey-patched
+   BCG) — in flight.** Under
+   `experiments/qwen35_4b/validation_plan.md` Amendment 4
+   (2026-08-01), the repaired harness is retargeted to
+   `Qwen/Qwen3-VL-8B-Instruct @ 0c351dd0` under a profiler-owned
+   test-only monkey-patch (`scripts/bcg_allowlist_patch.py`, opt-in
+   via `QWEN35_PATCH_BCG_ALLOWLIST=1` or `--patch-bcg-allowlist`)
+   that adds `Qwen3VLForConditionalGeneration` and
+   `Qwen3VLMoeForConditionalGeneration` to the frozen SGLang
+   checkout's `multimodal_breakable_cuda_graph_supported_model_archs`
+   list **in memory only**. The frozen SGLang source stays
+   unchanged (`git diff` empty). The instrumentation pre-hook was
+   generalised to recognise Qwen3-VL's `Qwen3LLMModel` /
+   `Qwen3MoeLLMModel` LM classes (recorded as
+   `module_class_recognised=true` on every event). CPU tests in
+   `scripts/test_instrumentation.py` pass (opt-in adds classes,
+   opt-out is no-op, repeated apply is idempotent, hook fires on a
+   toy `Qwen3LLMModel`-named `nn.Module`). Commit
+   `feat(qwen35): retarget harness to Qwen3-VL under monkey-patched BCG`.
+   GPU 2×2 rerun runs next.
 
 Follow-up (queued, not on this branch): to test the source-level
 BCG DeepStack suspicion at runtime, rebaseline the investigation

@@ -41,6 +41,8 @@
 
 ## 2. Model target
 
+### 2.1 Primary target (Attempts 01-02 — Qwen3.5-4B)
+
 | Item | Value | Verify with |
 |---|---|---|
 | Model id | `Qwen/Qwen3.5-4B` | `curl -sL https://huggingface.co/api/models/Qwen/Qwen3.5-4B` |
@@ -50,6 +52,29 @@
 | `pipeline_tag` | `image-text-to-text` | HF API `.pipeline_tag` |
 | `gated` | `false` | HF API `.gated` |
 | `library_name` | `transformers` | HF API `.library_name` |
+| `vision_config.deepstack_visual_indexes` | `[]` (empty in every shipped release; see `latent_bug_analysis.md` § 2) | HF `raw/main/config.json` `.vision_config.deepstack_visual_indexes` |
+
+### 2.2 Retarget target (Attempt 03 onward — Qwen3-VL-8B under monkey-patched BCG)
+
+Introduced 2026-08-01 per `validation_plan.md` Amendment 4. Testable
+under the profiler-owned `scripts/bcg_allowlist_patch.py` monkey-patch
+only; the shipped SGLang allowlist does not include Qwen3-VL.
+
+| Item | Value | Verify with |
+|---|---|---|
+| Model id | `Qwen/Qwen3-VL-8B-Instruct` | `curl -sL https://huggingface.co/api/models/Qwen/Qwen3-VL-8B-Instruct` |
+| HF revision `sha` | `0c351dd01ed87e9c1b53cbc748cba10e6187ff3b` | HF API `.sha` |
+| `config.model_type` | `qwen3_vl` | HF API `.config.model_type` |
+| `config.architectures` | `["Qwen3VLForConditionalGeneration"]` | HF API `.config.architectures` |
+| `pipeline_tag` | `image-text-to-text` | HF API `.pipeline_tag` |
+| `gated` | `false` | HF API `.gated` |
+| `library_name` | `transformers` | HF API `.library_name` |
+| `vision_config.deepstack_visual_indexes` | `[8, 16, 24]` (3 layers) | HF `raw/main/config.json` `.vision_config.deepstack_visual_indexes` |
+| `text_config.hidden_size` | `4096` | HF `raw/main/config.json` `.text_config.hidden_size` |
+| Expected DeepStack tensor shape (per prefill token, at LM entry) | `[N, hidden_size * num_deepstack] = [N, 4096 * 3] = [N, 12288]` | Runtime `lm_forward_input_deepstack.input_deepstack_embeds.shape` |
+| SGLang model source | `python/sglang/srt/models/qwen3_vl.py` (`Qwen3VLForConditionalGeneration`; LM class `Qwen3LLMModel`) | grep frozen checkout at pin |
+| Language-model class name recorded by the pre-hook | `Qwen3LLMModel` (subclass of `Qwen3Model`) | Runtime `lm_forward_input_deepstack.module_class` |
+| Runtime BCG opt-in | `scripts/bcg_allowlist_patch.py` (env `QWEN35_PATCH_BCG_ALLOWLIST=1` or `--patch-bcg-allowlist`); frozen SGLang source unchanged (`git diff` empty) | `python3 scripts/bcg_allowlist_patch.py --apply` |
 
 **Snapshot pinning.** Any future runner **must** pass the exact
 revision to `sglang.launch_server` (or the equivalent HF snapshot

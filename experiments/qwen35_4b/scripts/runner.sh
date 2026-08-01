@@ -34,6 +34,7 @@ FROZEN_SGLANG=""
 MODEL_ID="Qwen/Qwen3.5-4B"
 MODEL_REVISION="851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a"
 SERVER_PORT="30000"
+PATCH_BCG_ALLOWLIST=0
 SERVER_BIND="127.0.0.1"
 LIBCUDA_PRELOAD="${LIBCUDA_PRELOAD:-/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05}"
 LAUNCH_WAIT_SECONDS="${LAUNCH_WAIT_SECONDS:-600}"
@@ -48,6 +49,12 @@ usage: runner.sh --gpu-id 0 --config <label> --attempt-id <id> \
                        bcg_normal   | bcg_zero_deepstack
 --infra-check  bring up the server, verify BCG banner, tear down — no requests
 --dry-run      exercise argument parsing / preflight / cleanup wiring; no CUDA
+--patch-bcg-allowlist
+               install the profiler-owned test-only BCG allowlist monkey-patch
+               (adds Qwen3-VL classes to
+               multimodal_breakable_cuda_graph_supported_model_archs at runtime).
+               See scripts/bcg_allowlist_patch.py and
+               experiments/qwen35_4b/latent_bug_analysis.md § 3.
 EOF
 }
 
@@ -64,6 +71,7 @@ while [ $# -gt 0 ]; do
         --model-id) MODEL_ID="${2:-}"; shift 2 ;;
         --model-revision) MODEL_REVISION="${2:-}"; shift 2 ;;
         --server-port) SERVER_PORT="${2:-}"; shift 2 ;;
+        --patch-bcg-allowlist) PATCH_BCG_ALLOWLIST=1; shift ;;
         --help|-h) show_usage; exit 0 ;;
         *) echo "unknown argument: $1" >&2; show_usage; exit 64 ;;
     esac
@@ -76,6 +84,7 @@ INVESTIGATION_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 FIXTURES_DIR="${FIXTURES_DIR:-${INVESTIGATION_DIR}/fixtures}"
 RESULTS_DIR="${RESULTS_DIR:-${INVESTIGATION_DIR}/results}"
 INSTRUMENTATION_PATH="${SCRIPT_DIR}/instrumentation.py"
+BCG_ALLOWLIST_PATCH_PATH="${SCRIPT_DIR}/bcg_allowlist_patch.py"
 LAUNCHER_PATH="${SCRIPT_DIR}/server_launcher.py"
 
 # --- GPU authorisation gate --------------------------------------------
@@ -161,7 +170,8 @@ cat > "$LAUNCH_CTX_JSON" <<EOF
   "frozen_sglang": "${FROZEN_SGLANG}",
   "model_id": "${MODEL_ID}",
   "model_revision": "${MODEL_REVISION}",
-  "server_port": "${SERVER_PORT}"
+  "server_port": "${SERVER_PORT}",
+  "patch_bcg_allowlist": ${PATCH_BCG_ALLOWLIST}
 }
 EOF
 
@@ -270,6 +280,10 @@ fi
 # scripts/bootstrap/sitecustomize.py — required so the instrumentation
 # is re-installed in every SGLang scheduler / model-worker spawn child.
 export QWEN35_INSTRUMENTATION_PATH="${INSTRUMENTATION_PATH}"
+# Absolute path to the BCG allowlist patch module (loaded by
+# sitecustomize.py in every spawn child). Only actually mutates the
+# child's model_config when QWEN35_PATCH_BCG_ALLOWLIST=1.
+export QWEN35_BCG_ALLOWLIST_PATCH_PATH="${BCG_ALLOWLIST_PATCH_PATH}"
 
 if ! python3 "${SCRIPT_DIR}/preflight_provenance.py" "${PREFLIGHT_ARGS[@]}" \
       > "$PREFLIGHT_JSON_PATH" 2> "$PREFLIGHT_STDERR_PATH"; then
@@ -351,11 +365,17 @@ esac
 INSTR_LOG="${RAW_DIR}/instrumentation_${CONFIG}.jsonl"
 STDERR_PATH="${RAW_DIR}/server_stderr_${CONFIG}.log"
 STDOUT_PATH="${RAW_DIR}/server_stdout_${CONFIG}.log"
+PATCH_LOG="${RAW_DIR}/bcg_allowlist_patch_${CONFIG}.json"
 
 export CUDA_VISIBLE_DEVICES="$GPU_ID"
 export QWEN35_INSTRUMENTATION_LOG="$INSTR_LOG"
 export QWEN35_LAUNCH_ID="$LAUNCH_ID"
 export QWEN35_CONFIG_LABEL="$CONFIG"
+if [ "$PATCH_BCG_ALLOWLIST" = "1" ]; then
+    export QWEN35_PATCH_BCG_ALLOWLIST=1
+else
+    export QWEN35_PATCH_BCG_ALLOWLIST=0
+fi
 case "$CONFIG" in
     eager_zero_deepstack|bcg_zero_deepstack)
         export QWEN35_ZERO_DEEPSTACK=1
@@ -371,12 +391,20 @@ else
     echo "WARN: LIBCUDA_PRELOAD ($LIBCUDA_PRELOAD) missing; continuing without."
 fi
 
-echo "server: launching python3 server_launcher.py -- ${SERVER_FLAGS[*]}"
+LAUNCHER_ARGS=(
+    --instrumentation "$INSTRUMENTATION_PATH"
+    --frozen-sglang "$FROZEN_SGLANG"
+    --frozen-sglang-sha "58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8"
+    --patch-log "$PATCH_LOG"
+)
+if [ "$PATCH_BCG_ALLOWLIST" = "1" ]; then
+    LAUNCHER_ARGS+=(--patch-bcg-allowlist)
+fi
+
+echo "server: launching python3 server_launcher.py ${LAUNCHER_ARGS[*]} -- ${SERVER_FLAGS[*]}"
 # Launch in its own process group so we can signal it cleanly.
 setsid python3 "$LAUNCHER_PATH" \
-    --instrumentation "$INSTRUMENTATION_PATH" \
-    --frozen-sglang "$FROZEN_SGLANG" \
-    --frozen-sglang-sha "58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8" \
+    "${LAUNCHER_ARGS[@]}" \
     -- "${SERVER_FLAGS[@]}" \
     > "$STDOUT_PATH" 2> "$STDERR_PATH" &
 SERVER_PID=$!

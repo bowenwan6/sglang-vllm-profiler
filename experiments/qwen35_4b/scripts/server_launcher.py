@@ -17,10 +17,21 @@ Usage
         --instrumentation /path/to/instrumentation.py \\
         --frozen-sglang <checkout> \\
         --frozen-sglang-sha <sha> \\
+        [--patch-bcg-allowlist] \\
+        [--patch-log <path>] \\
         -- \\
-        --model-path Qwen/Qwen3.5-4B \\
+        --model-path Qwen/Qwen3-VL-8B-Instruct \\
         --port 30000 \\
         ...
+
+The optional ``--patch-bcg-allowlist`` flag (or ``QWEN35_PATCH_BCG_ALLOWLIST=1``
+in the environment) installs the profiler-owned test-only BCG allowlist
+monkey-patch defined in ``scripts/bcg_allowlist_patch.py``. See that
+module's docstring and ``experiments/qwen35_4b/latent_bug_analysis.md``
+§ 3 for the rationale. The launcher writes the pre-mutation /
+post-mutation allowlist snapshots to ``--patch-log`` (default:
+``/tmp/qwen35_bcg_allowlist_patch_<pid>.json``) so provenance is
+auditable.
 """
 
 from __future__ import annotations
@@ -28,6 +39,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import importlib.util
+import json
 import os
 import sys
 from pathlib import Path
@@ -43,6 +55,26 @@ def main() -> int:
     parser.add_argument("--instrumentation", required=True, type=Path)
     parser.add_argument("--frozen-sglang", required=True, type=Path)
     parser.add_argument("--frozen-sglang-sha", required=True)
+    parser.add_argument(
+        "--patch-bcg-allowlist",
+        action="store_true",
+        help=(
+            "Install the test-only BCG allowlist monkey-patch that adds "
+            "Qwen3-VL classes to "
+            "multimodal_breakable_cuda_graph_supported_model_archs at runtime. "
+            "See scripts/bcg_allowlist_patch.py and "
+            "experiments/qwen35_4b/latent_bug_analysis.md § 3."
+        ),
+    )
+    parser.add_argument(
+        "--patch-log",
+        type=Path,
+        default=None,
+        help=(
+            "Where to write the pre/post allowlist snapshot as JSON. Default: "
+            "/tmp/qwen35_bcg_allowlist_patch_<pid>.json"
+        ),
+    )
     parser.add_argument("--help", "-h", action="store_true")
     # Everything after -- is forwarded to sglang.launch_server.
     if "--" in sys.argv:
@@ -101,6 +133,50 @@ def main() -> int:
         _abort(
             f"import sglang resolved to {sglang_path}, "
             f"outside frozen checkout {frozen_python}"
+        )
+
+    # Install the profiler-owned test-only BCG allowlist patch BEFORE
+    # the server reads the allowlist (which happens during model_config
+    # instantiation on server startup). Opt-in via CLI flag OR
+    # QWEN35_PATCH_BCG_ALLOWLIST=1 env var. See
+    # experiments/qwen35_4b/latent_bug_analysis.md § 3.
+    patch_log_path = args.patch_log or Path(
+        f"/tmp/qwen35_bcg_allowlist_patch_{os.getpid()}.json"
+    )
+    try:
+        patch_spec = importlib.util.spec_from_file_location(
+            "qwen35_bcg_allowlist_patch",
+            str(Path(__file__).resolve().parent / "bcg_allowlist_patch.py"),
+        )
+        assert patch_spec is not None and patch_spec.loader is not None
+        patch_mod = importlib.util.module_from_spec(patch_spec)
+        sys.modules["qwen35_bcg_allowlist_patch"] = patch_mod
+        patch_spec.loader.exec_module(patch_mod)  # type: ignore[union-attr]
+        patch_result = patch_mod.install(force=bool(args.patch_bcg_allowlist))
+    except Exception as exc:  # noqa: BLE001
+        patch_result = {
+            "target_archs": [
+                "Qwen3VLForConditionalGeneration",
+                "Qwen3VLMoeForConditionalGeneration",
+            ],
+            "enabled": False,
+            "mutated": False,
+            "error": f"bcg_allowlist_patch failed to load: {exc!r}",
+        }
+    try:
+        patch_log_path.parent.mkdir(parents=True, exist_ok=True)
+        patch_log_path.write_text(
+            json.dumps(patch_result, indent=2, sort_keys=True, default=str) + "\n"
+        )
+        print(
+            f"server_launcher: bcg_allowlist_patch mutated="
+            f"{patch_result.get('mutated')} enabled={patch_result.get('enabled')} "
+            f"log={patch_log_path}"
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(
+            f"server_launcher: WARN: failed to write patch log to {patch_log_path}: {exc!r}",
+            file=sys.stderr,
         )
 
     # Install instrumentation BEFORE the server starts loading modules.
