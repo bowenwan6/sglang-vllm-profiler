@@ -65,7 +65,7 @@ a bug). The five possible verdicts are enumerated in
 | [`validation_plan.md`](validation_plan.md) | Correctness/path experiment design (small matched test + diagnostic ablation), verdict shape, evidence layers, configurations, fixtures, confounder controls; revised 2026-07-31 to remove perf-benchmark controls and the incorrect `--enforce-piecewise-cuda-graph` control. | landed Part 3, corrected 2026-07-31 |
 | [`fixtures/`](fixtures/) | Byte-pinned deterministic assets (image + `manifest.json`). Regeneration must be bit-identical. | landed Part 5 |
 | [`scripts/`](scripts/) | CPU-only scaffolding + live runner (Step 2): fixture generator, provenance preflight, live runner, client, verdict scorer, instrumentation patch. All refuse to touch a GPU without an explicitly authorised ID. | evolving |
-| [`results/`](results/) | Validation attempts (see `results/README.md`). Raw per-attempt outputs are gitignored; only summary / metadata / verdict files are committed. Step 4 INFRA_CHECK landed 2026-08-01 as `infracheck_gpu7_20260801T012122Z` (PASS). Step 5 correctness/path validation landed same day as `attempt_gpu7_20260801T013522Z` with verdict `AMBIGUOUS` — BCG served both image prefills without divergence or error, but the branch instrumentation's `language_model.__call__` interceptor is ineffective on nn.Module, leaving DeepStack presence unverified and the `eager_zero_deepstack` ablation degenerate. | populated as attempts land |
+| [`results/`](results/) | Validation attempts (see `results/README.md`). Raw per-attempt outputs are gitignored; only summary / metadata / verdict files are committed. Step 4 INFRA_CHECK landed 2026-08-01 as `infracheck_gpu7_20260801T012122Z` (PASS). Step 5 correctness/path validation landed same day as `attempt_gpu7_20260801T013522Z` with verdict `AMBIGUOUS` (preserved as historical evidence: `language_model.__call__` instance-dict interceptor ineffective on `nn.Module`, and `<image>` placeholder mismatched the pinned Qwen VL processor's `<\|vision_start\|><\|image_pad\|><\|vision_end\|>`). Both flaws are repaired under `validation_plan.md` Amendment 2 (2026-08-01); subsequent attempts run the four-arm 2×2 design against the repaired harness. | populated as attempts land |
 
 ## Read order for a fresh reader
 
@@ -94,7 +94,7 @@ python3 experiments/qwen35_4b/scripts/preflight_provenance.py --dry-run
 bash experiments/qwen35_4b/scripts/runner.sh --dry-run
 
 # runner must refuse without --gpu-id or QWEN35_GPU_ID set (exit 64).
-# Authorised allowlist: {0, 7} per validation_plan.md Amendment 1.
+# Authorised allowlist: {0, 1, 7} per validation_plan.md Amendment 2.
 bash experiments/qwen35_4b/scripts/runner.sh   # expect FATAL + rc=64
 
 # client + verdict dry runs (no network, no CUDA)
@@ -119,8 +119,8 @@ not touched by this investigation.
 - Preserve exact SHAs, commands, and external PR links.
 - Never claim "confirmed upstream bug" until runtime reproduction is
   in hand.
-- Never launch GPU work outside the authorised allowlist `{0, 7}`
-  (see `validation_plan.md` Amendment 1, 2026-08-01) and without
-  idle-verification of the chosen GPU.
+- Never launch GPU work outside the authorised allowlist `{0, 1, 7}`
+  (see `validation_plan.md` Amendment 1 and Amendment 2, 2026-08-01)
+  and without idle-verification of the chosen GPU.
 - Commit convention: `docs(qwen35): …`, `feat(qwen35): …`,
   `test(qwen35): …`, `fix(qwen35): …` per `CLAUDE.md`.

@@ -7,6 +7,17 @@ server, and records per-request evidence. Never dumps whole hidden-
 state tensors — the runner-side instrumentation is authoritative for
 tensor-level attribution.
 
+The image prompt is built with the exact Qwen3.5-VL visual placeholder
+sequence ``<|vision_start|><|image_pad|><|vision_end|>``, mirroring
+the pinned processor's ``MultimodalSpecialTokens.image_token`` in
+``python/sglang/srt/multimodal/processors/qwen_vl.py``. The prior
+version hard-coded ``<image>`` and produced the SGLang warning
+``More image data items provided than corresponding tokens found in
+the prompt``, which meant the multimodal path was not exercised
+cleanly. Every image request now records the exact rendered prompt,
+the number of image placeholders inside it, and the number of images
+provided, so post-run tools can hard-fail on any mismatch.
+
 Usage
 -----
 
@@ -21,6 +32,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -29,8 +41,27 @@ from pathlib import Path
 
 FIXTURE_NAME = "image_bands.png"
 
-PROMPT_IMAGE = "Describe the colours in this image in one short sentence."
+# Qwen3.5-VL / Qwen3-VL processor image-placeholder token sequence.
+# Source of truth: pinned upstream at
+#   python/sglang/srt/multimodal/processors/qwen_vl.py:338
+#   MultimodalSpecialTokens(image_token="<|vision_start|><|image_pad|><|vision_end|>", ...)
+# Same regex the server uses to split the prompt:
+#   image_token_regex=re.compile(r"<\|vision_start\|>(?:<\|image_pad\|>)+<\|vision_end\|>")
+IMAGE_PLACEHOLDER = "<|vision_start|><|image_pad|><|vision_end|>"
+IMAGE_PLACEHOLDER_REGEX = re.compile(
+    r"<\|vision_start\|>(?:<\|image_pad\|>)+<\|vision_end\|>"
+)
+
+PROMPT_IMAGE_SUFFIX = "Describe the colours in this image in one short sentence."
 PROMPT_TEXT = "Say the words 'hello world' and nothing else."
+
+
+def _render_image_prompt() -> str:
+    """Render the exact multimodal prompt sent to /generate for a
+    P_IMG request. Kept in one place so the recorded evidence and the
+    request payload cannot disagree.
+    """
+    return f"{IMAGE_PLACEHOLDER}{PROMPT_IMAGE_SUFFIX}"
 
 
 def load_launch_ctx(path: Path) -> dict:
@@ -77,6 +108,7 @@ def build_request_schedule(config_label: str, image_b64: str) -> list[dict]:
     """
     now_us = int(time.time() * 1_000_000)
     reqs: list[dict] = []
+    img_prompt = _render_image_prompt()
 
     # 1 text warmup so the server has settled.
     reqs.append({
@@ -94,12 +126,12 @@ def build_request_schedule(config_label: str, image_b64: str) -> list[dict]:
         "text": PROMPT_TEXT,
         "image_b64": None,
     })
-    # Primary image scored.
+    # Primary image scored — text field carries the exact placeholder.
     reqs.append({
         "client_request_id": f"{config_label}-scored-img-1-{now_us + 2}",
         "kind": "P_IMG",
         "role": "scored",
-        "text": PROMPT_IMAGE,
+        "text": img_prompt,
         "image_b64": image_b64,
     })
     # Image repeat for eager noise envelope / BCG confirmation.
@@ -107,10 +139,14 @@ def build_request_schedule(config_label: str, image_b64: str) -> list[dict]:
         "client_request_id": f"{config_label}-scored-img-2-{now_us + 3}",
         "kind": "P_IMG",
         "role": "scored",
-        "text": PROMPT_IMAGE,
+        "text": img_prompt,
         "image_b64": image_b64,
     })
     return reqs
+
+
+def _placeholder_count(text: str) -> int:
+    return len(IMAGE_PLACEHOLDER_REGEX.findall(text))
 
 
 def send_generate(
@@ -142,12 +178,13 @@ def send_generate(
     if return_hidden_states:
         payload["return_hidden_states"] = True
 
+    image_provided = 0
+    placeholder_provided = 0
     if req["image_b64"] is not None:
-        # Qwen3.5-VL uses `<image>` placeholder in the prompt.
-        # Prompt template: "<image>Describe the colours..." — this
-        # matches SGLang's default multimodal handling.
-        payload["text"] = f"<image>{req['text']}"
+        payload["text"] = req["text"]
         payload["image_data"] = [f"data:image/png;base64,{req['image_b64']}"]
+        image_provided = 1
+        placeholder_provided = _placeholder_count(req["text"])
     else:
         payload["text"] = req["text"]
 
@@ -167,8 +204,44 @@ def send_generate(
         "duration_s": dt,
         "error": err,
         "http_response": resp,
+        "rendered_prompt": req["text"],
+        "image_provided_count": image_provided,
+        "placeholder_provided_count": placeholder_provided,
+        "placeholder_token": IMAGE_PLACEHOLDER,
     }
     return record
+
+
+def _extract_output_token_ids(resp) -> list[int] | None:
+    """Pull ``output_ids`` from SGLang's /generate response, if present.
+
+    /generate returns either a dict or a list of dicts. Under
+    ``return_logprob=True`` the ``meta_info`` block holds
+    ``output_token_logprobs`` as a list of ``(logprob, token_id,
+    token_text)`` tuples, from which we recover the greedy token
+    sequence.
+    """
+    if resp is None:
+        return None
+    if isinstance(resp, list) and resp:
+        resp = resp[0]
+    if not isinstance(resp, dict):
+        return None
+    ids = resp.get("output_ids")
+    if isinstance(ids, list) and ids:
+        return list(ids)
+    meta = resp.get("meta_info") or {}
+    otl = meta.get("output_token_logprobs")
+    if isinstance(otl, list) and otl:
+        out = []
+        for entry in otl:
+            if isinstance(entry, (list, tuple)) and len(entry) >= 2:
+                out.append(int(entry[1]))
+            elif isinstance(entry, dict) and "token_id" in entry:
+                out.append(int(entry["token_id"]))
+        if out:
+            return out
+    return None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -218,12 +291,16 @@ def main(argv: list[str] | None = None) -> int:
         "kinds": sorted({r["kind"] for r in schedule}),
         "dry_run": bool(args.dry_run),
         "launch_id": ctx.get("prelaunch_utc"),
+        "image_placeholder_token": IMAGE_PLACEHOLDER,
     }
 
     if args.dry_run:
         summary["network"] = "SKIPPED_DRY_RUN"
         summary["server_ping"] = "SKIPPED_DRY_RUN"
         summary["scheduled_ids"] = [r["client_request_id"] for r in schedule]
+        summary["placeholder_per_image_request"] = _placeholder_count(
+            _render_image_prompt()
+        )
         print(json.dumps(summary, indent=2, sort_keys=True))
         return 0
 
@@ -245,6 +322,10 @@ def main(argv: list[str] | None = None) -> int:
         )
         rec["launch_id"] = ctx.get("prelaunch_utc")
         rec["config"] = label
+        # Post-process: expose output_token_ids at the record level so
+        # downstream verdict comparison does not need to re-parse the
+        # nested response.
+        rec["output_token_ids"] = _extract_output_token_ids(rec.get("http_response"))
         records.append(rec)
 
     out_path = args.results_dir / f"client_records_{label}.json"

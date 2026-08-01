@@ -5,25 +5,25 @@ This module is imported by ``server_launcher.py`` before SGLang's server
 starts. It applies **narrow, reversible** monkey-patches so the runner
 can objectively record, per prefill request:
 
-- whether the model executor dispatched to BCG (`PrefillCudaGraphRunner.execute`)
-  or the eager runner;
-- inside BCG, whether ``_execute_body_capture`` and ``replay_layer_forward``
-  actually ran;
-- for the DeepStack tensor, its shape / dtype / numel / finite-ness /
-  nonzero fraction / a compact checksum (`abs().sum()`, `(x*x).sum()`,
-  16-byte SHA-256 prefix of the .cpu().numpy() bytes);
+- whether the model executor dispatched to BCG (`PrefillCudaGraphRunner.
+  _execute_body_capture`) or the eager runner;
+- for the DeepStack tensor, at the moment the language-model forward is
+  entered: shape / dtype / numel / finite-ness / nonzero fraction /
+  a compact checksum (`abs().sum()`, `(x*x).sum()`, 16-byte SHA-256
+  prefix of the .cpu().numpy() bytes);
 - its `.data_ptr()` value as **diagnostic only** (see source_audit.md
   §4.1 — pointer equality alone is not correctness evidence);
-- greedy token IDs and (when available) logprobs — this is done client
-  side, not here.
+- when ``QWEN35_ZERO_DEEPSTACK=1`` is set, the second-pass summary
+  proving the replacement really is zero (nonzero_frac == 0,
+  abs_sum == 0), with matched shape/dtype.
 
-Optional mode: when ``QWEN35_ZERO_DEEPSTACK=1`` is set at server-launch
-time, the instrumentation additionally replaces
-``input_deepstack_embeds`` with ``torch.zeros_like(...)`` immediately
-before the LM forward call, so the ``is not None and numel() > 0``
-guard still fires but the DeepStack contribution is exactly zero. This
-is the ``eager_zero_deepstack`` diagnostic ablation. It is
-production-invalid and must never be enabled on a real serving system.
+The hook is installed via ``nn.Module.register_forward_pre_hook(
+hook, with_kwargs=True)`` on the ``language_model`` instance for the
+duration of a single ``general_mm_embed_routine`` call, then removed
+in ``finally``. Repeated calls do not accumulate hooks. This replaces
+the earlier ``instance-dict __call__`` assignment which nn.Module
+silently ignored (nn.Module resolves ``__call__`` at the class level,
+not from the instance ``__dict__``).
 
 All events are logged as JSON lines to the file named by
 ``QWEN35_INSTRUMENTATION_LOG``. If that env var is unset, this module
@@ -35,7 +35,6 @@ anything under ``/data/sglang-fork``. Never signals a foreign PID.
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import json
 import os
@@ -43,7 +42,7 @@ import sys
 import threading
 import time
 import traceback
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 
 # --- Configuration ----------------------------------------------------
@@ -134,11 +133,79 @@ def _tensor_summary(t: Any) -> dict:
         return {"present": True, "summary_error": str(exc)[:200]}
 
 
+# --- DeepStack forward-pre-hook ---------------------------------------
+
+
+def _make_lm_deepstack_pre_hook(rid: int, zero_mode: bool):
+    """Return a forward-pre-hook that records / optionally zeros
+    ``input_deepstack_embeds`` in the kwargs of one LM forward call.
+
+    The hook signature must match what
+    ``nn.Module.register_forward_pre_hook(with_kwargs=True)`` invokes:
+
+        hook(module, args, kwargs) -> None | (args, kwargs)
+    """
+    fired = {"count": 0}
+
+    def _hook(module, args, kwargs):
+        fired["count"] += 1
+        try:
+            import torch  # noqa: WPS433
+
+            ds = kwargs.get("input_deepstack_embeds")
+            before = _tensor_summary(ds)
+            _log(
+                "lm_forward_input_deepstack",
+                request_id=rid,
+                zero_deepstack_mode=zero_mode,
+                fired_count=fired["count"],
+                module_class=type(module).__name__,
+                input_deepstack_embeds=before,
+                other_kwarg_keys=sorted(
+                    k for k in kwargs.keys() if k != "input_deepstack_embeds"
+                ),
+                arg_types=[type(a).__name__ for a in args],
+            )
+            if zero_mode and ds is not None and torch.is_tensor(ds) and ds.numel() > 0:
+                zeroed = torch.zeros_like(ds)
+                kwargs["input_deepstack_embeds"] = zeroed
+                after = _tensor_summary(kwargs["input_deepstack_embeds"])
+                _log(
+                    "lm_forward_input_deepstack_zeroed",
+                    request_id=rid,
+                    fired_count=fired["count"],
+                    before=before,
+                    after=after,
+                )
+                # Return the mutated args/kwargs so nn.Module uses them.
+                return args, kwargs
+        except Exception as exc:  # noqa: BLE001
+            _log(
+                "lm_forward_input_deepstack_error",
+                request_id=rid,
+                error=str(exc)[:400],
+            )
+        # No mutation — signal by returning None (pytorch keeps the
+        # unchanged args/kwargs).
+        return None
+
+    _hook._qwen35_fired = fired  # type: ignore[attr-defined]
+    return _hook
+
+
 # --- Monkey-patches ---------------------------------------------------
 
 
 def _patch_prefill_cuda_graph_runner() -> bool:
-    """Wrap `_execute_body_capture` to record entry / exit + arg summary."""
+    """Wrap `_execute_body_capture` to record entry / exit + arg summary.
+
+    This wraps the outer capture-body call so we can attribute a BCG
+    replay to a specific request. We do NOT try to intercept the
+    inline ``replay_layer_forward`` closure — the previous attempt
+    declared a wrapper that was never installed and produced a
+    misleading ``bcg_replay_layer_forward_enter`` event that never
+    fired. Removed.
+    """
     try:
         from sglang.srt.model_executor.runner import (
             prefill_cuda_graph_runner as _pcg,
@@ -190,70 +257,7 @@ def _patch_prefill_cuda_graph_runner() -> bool:
             forward_batch=fb_summary,
         )
 
-        # Wrap the closure that runs at replay time.
-        # We patch the *layer_model.forward* the runner will install by
-        # replacing it AFTER _execute_body_capture assigns it; the
-        # cleanest way is to wrap the model.forward call itself. Since
-        # the closure is created inline, we instead wrap the underlying
-        # layer_model.forward and rely on the runner monkey-patching it
-        # to `replay_layer_forward` for the duration of the call.
-        layer_model = getattr(self, "layer_model", None)
-        original_layer_forward = None
-        if layer_model is not None:
-            original_layer_forward = layer_model.forward
-
-            def _observing_layer_forward(*args, **layer_kwargs):
-                ids = _next_request_id()
-                # This is the closure the runner installed (replay_layer_forward)
-                # observed FROM THE OUTSIDE — layer_model.forward is now the
-                # replay closure. Record what layer_kwargs contains here.
-                try:
-                    ie = layer_kwargs.get("input_embeds")
-                    ids_arg = args[0] if len(args) else None
-                    ids_len = int(ids_arg.shape[0]) if ids_arg is not None else -1
-                    _log(
-                        "bcg_replay_layer_forward_enter",
-                        request_id=rid,
-                        replay_call_id=ids,
-                        num_tokens_arg=ids_len,
-                        input_embeds=_tensor_summary(ie),
-                        input_deepstack_embeds=_tensor_summary(
-                            layer_kwargs.get("input_deepstack_embeds")
-                        ),
-                        layer_kwargs_keys=sorted(layer_kwargs.keys()),
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    _log(
-                        "bcg_replay_layer_forward_enter_error",
-                        request_id=rid,
-                        error=str(exc)[:400],
-                    )
-                out = original_layer_forward(*args, **layer_kwargs)
-                _log(
-                    "bcg_replay_layer_forward_exit",
-                    request_id=rid,
-                    replay_call_id=ids,
-                    hidden_states=_tensor_summary(out),
-                )
-                return out
-
-            # Do NOT install this permanently — the runner is about to
-            # install replay_layer_forward itself. Wrap by swapping AFTER
-            # the runner installs its patch. Simplest: patch after the
-            # try/finally by hooking into a small local wrapper below.
-
         try:
-            # Install an observer that runs INSIDE _execute_body_capture:
-            # since the runner monkey-patches layer_model.forward inline,
-            # we override the runner's assignment by monkey-patching
-            # layer_model.forward's SETTER path — done by re-wrapping
-            # after the fact via a small post-hook.
-            #
-            # Practically: we let the runner install its closure, then we
-            # swap layer_model.forward to a wrapper that calls the runner's
-            # closure and records. We do that by intercepting the setter.
-            saved_setattr = layer_model.__class__.__setattr__ if layer_model is not None else None
-
             output = original_execute_body_capture(
                 self,
                 forward_batch,
@@ -337,16 +341,16 @@ def _patch_model_runner() -> bool:
 
 
 def _patch_general_mm_embed_routine() -> bool:
-    """Record the DeepStack payload before it enters the LM forward.
+    """Install a per-request forward-pre-hook on the ``language_model``
+    module for the duration of ``general_mm_embed_routine``.
 
-    When QWEN35_ZERO_DEEPSTACK=1, this replaces the tensor with
-    torch.zeros_like(...) so the LM's `is not None and numel() > 0`
-    guard still fires but the contribution is exactly zero — the
-    `eager_zero_deepstack` diagnostic.
+    The hook records the incoming ``input_deepstack_embeds`` before
+    the LM forward runs, and (when ``QWEN35_ZERO_DEEPSTACK=1``) replaces
+    it with ``torch.zeros_like``. The handle is removed in ``finally``
+    so no hook persists across requests.
     """
     try:
         from sglang.srt.managers import mm_utils as _mm
-        import torch  # noqa: F401
     except Exception as exc:  # noqa: BLE001
         _log("patch_error", target="mm_utils", error=str(exc)[:400])
         return False
@@ -357,56 +361,66 @@ def _patch_general_mm_embed_routine() -> bool:
     original_routine = _mm.general_mm_embed_routine
 
     def wrapped_routine(*args, **kwargs):
-        # We can't easily intercept the mid-routine kwargs mutation,
-        # so we wrap language_model.forward via a call-once hook
-        # for the duration of this routine.
-        import torch
         rid = _next_request_id()
-        _log("general_mm_embed_routine_enter", request_id=rid)
+        _log(
+            "general_mm_embed_routine_enter",
+            request_id=rid,
+            zero_deepstack_mode=_ZERO_DEEPSTACK,
+        )
 
-        language_model = kwargs.get("language_model") or (args[2] if len(args) > 2 else None)
-        original_lm_call = language_model.__call__ if language_model is not None else None
+        language_model = kwargs.get("language_model")
+        if language_model is None and len(args) > 2:
+            language_model = args[2]
 
-        if language_model is None or original_lm_call is None:
-            return original_routine(*args, **kwargs)
-
-        # Bind an interceptor that records / optionally zeros deepstack.
-        def _lm_call_intercept(*call_args, **call_kwargs):
-            ds = call_kwargs.get("input_deepstack_embeds")
-            _log(
-                "lm_forward_input_deepstack",
-                request_id=rid,
-                zero_deepstack_mode=_ZERO_DEEPSTACK,
-                input_deepstack_embeds=_tensor_summary(ds),
-                other_kwarg_keys=sorted([k for k in call_kwargs.keys() if k != "input_deepstack_embeds"]),
-            )
-            if _ZERO_DEEPSTACK and ds is not None and torch.is_tensor(ds):
-                call_kwargs["input_deepstack_embeds"] = torch.zeros_like(ds)
-                _log("lm_forward_input_deepstack_zeroed",
-                     request_id=rid,
-                     shape=list(ds.shape),
-                     dtype=str(ds.dtype))
-            return original_lm_call(*call_args, **call_kwargs)
-
-        # Install the interceptor for just this routine call.
-        # nn.Module.__call__ is a bound method; setting on the instance
-        # replaces the class-level attribute for this instance only.
+        handle = None
+        hook = None
         try:
-            language_model.__dict__["__call__"] = _lm_call_intercept
+            if language_model is not None and hasattr(
+                language_model, "register_forward_pre_hook"
+            ):
+                hook = _make_lm_deepstack_pre_hook(rid, _ZERO_DEEPSTACK)
+                handle = language_model.register_forward_pre_hook(
+                    hook, with_kwargs=True
+                )
+            else:
+                _log(
+                    "lm_forward_pre_hook_install_error",
+                    request_id=rid,
+                    reason=(
+                        "language_model is None"
+                        if language_model is None
+                        else f"missing register_forward_pre_hook on {type(language_model).__name__}"
+                    ),
+                )
             output = original_routine(*args, **kwargs)
         finally:
-            language_model.__dict__.pop("__call__", None)
-        _log("general_mm_embed_routine_exit", request_id=rid)
+            if handle is not None:
+                try:
+                    handle.remove()
+                except Exception:  # noqa: BLE001
+                    pass
+            fired = 0
+            try:
+                if hook is not None:
+                    fired = hook._qwen35_fired["count"]  # type: ignore[attr-defined]
+            except Exception:  # noqa: BLE001
+                pass
+            _log(
+                "general_mm_embed_routine_exit",
+                request_id=rid,
+                lm_forward_hook_fired=fired,
+            )
         return output
 
     _mm.general_mm_embed_routine = wrapped_routine
     _mm._qwen35_instrumented = True
 
-    # Rebind on the multimodal wrapper too, since it captured the
-    # symbol at import time.
+    # Rebind on any multimodal wrapper that captured the symbol at
+    # import time.
     for mod_name in (
         "sglang.srt.models.qwen3_vl",
         "sglang.srt.models.qwen3_5",
+        "sglang.srt.models.qwen3_vl_moe",
     ):
         try:
             mod = sys.modules.get(mod_name)

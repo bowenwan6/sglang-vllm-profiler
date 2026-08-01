@@ -498,8 +498,8 @@ success.
    the real verdict inference. All CPU-only tests pass. Commit
    `feat(qwen35): add live BCG DeepStack validation runner`.
 3. **Step 3 (authorised-GPU acquisition)** — read-only query the
-   authorised GPU (allowlist `{0, 7}` per `validation_plan.md`
-   Amendment 1, 2026-08-01); qualifies only when zero compute
+   authorised GPU (allowlist `{0, 1, 7}` per `validation_plan.md`
+   Amendments 1 and 2, 2026-08-01); qualifies only when zero compute
    processes, memory ≤ 500 MiB, utilisation ≤ 5 %; the
    10-continuous-minute idle requirement applies unless the operator
    explicitly waives it AND the target GPU is currently qualifying;
@@ -566,11 +566,48 @@ success.
    `/data/sglang-fork` HEAD is still `986c89e69…`. Commit
    `test(qwen35): record Qwen3.5 BCG DeepStack verdict`.
 
-Follow-up (queued, out of scope for this §7 pass): fix the
-`nn.Module`-instance `__call__` interception (register an
-`nn.Module` forward pre-hook, or patch the language-model class),
-use the correct Qwen VL image placeholder, and rerun the three-way
-comparison on the same frozen SGLang SHA.
+6. **Step 6 (harness repair, CPU-only) — landed 2026-08-01.** Under
+   `validation_plan.md` Amendment 2, the two Attempt-01 flaws are
+   fixed on-branch without touching a GPU. The DeepStack observer
+   moves to `language_model.register_forward_pre_hook(hook,
+   with_kwargs=True)` scoped to one `general_mm_embed_routine` call
+   and removed in `finally`; it records shape/dtype/numel/finite/
+   nonzero_frac/abs_sum/sq_sum/SHA-256-16/data_ptr before
+   modification, and in zero mode records a second summary proving
+   the replacement is really zero. The client emits
+   `<|vision_start|><|image_pad|><|vision_end|>` verbatim, records
+   the rendered prompt / placeholder count / image count, and hard-
+   fails any mismatch. `verdict.py` requires the full 2×2
+   (`eager_normal`, `eager_zero_deepstack`, `bcg_normal`,
+   `bcg_zero_deepstack`), valid image/placeholder alignment,
+   nonzero DeepStack in normal arms, verified zero replacement in
+   ablation arms, BCG replay confirmed in BCG arms, and
+   ablation sensitivity (`eager_normal ≠ eager_zero_deepstack`
+   beyond the eager-repeat noise floor) before returning any
+   non-`AMBIGUOUS` verdict. The runner accepts
+   `--config bcg_zero_deepstack`. The GPU allowlist widens to
+   `{0, 1, 7}` — GPU 1 was extended by the operator on 2026-08-01
+   as a standing addition. Proved by
+   `scripts/test_instrumentation.py` on CPU (normal-mode hook
+   fires on a nonzero tensor without changing output; zero-mode
+   hook fires, verified-zero substitution changes output; no hook
+   accumulation across repeated calls). Commit
+   `fix(qwen35): repair DeepStack instrumentation and image input`.
+7. **Step 7 (harness GPU validation) — pending.** Bring the
+   repaired harness up on a qualifying authorised GPU and run only
+   `eager_normal` + `eager_zero_deepstack` against one scored image
+   request. Passes only if all of: no placeholder warning, normal
+   DeepStack nonzero, zero hook fires exactly once, replacement
+   verified zero, `eager_normal` ≠ `eager_zero_deepstack` beyond
+   the eager-repeat noise floor. On PASS, commit
+   `test(qwen35): validate DeepStack measurement harness` and
+   continue. On NOT_DIAGNOSTIC, record and stop.
+8. **Step 8 (scored 2×2 rerun) — pending.** Only after Step 7
+   passes. Run all four arms serially with matched everything,
+   compute the verdict.
+
+Follow-up (queued): full data-flow / hidden-state envelope layer if
+the four-arm design is still ambiguous.
 
 ### 7.7 §7 out of scope
 
@@ -583,5 +620,6 @@ comparison on the same frozen SGLang SHA.
   §7 links historically where useful but treats §4 as read-only.
 - Editing anything under `/data/sglang-fork`. That fork is
   preserved read-only as historical evidence at `986c89e69`.
-- Using any GPU outside the authorised allowlist `{0, 7}` (see
-  `experiments/qwen35_4b/validation_plan.md` Amendment 1).
+- Using any GPU outside the authorised allowlist `{0, 1, 7}` (see
+  `experiments/qwen35_4b/validation_plan.md` Amendment 1 and
+  Amendment 2).

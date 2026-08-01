@@ -44,7 +44,8 @@ usage: runner.sh --gpu-id 0 --config <label> --attempt-id <id> \
                  --results-dir <path> --frozen-sglang <checkout> \
                  [--infra-check] [--dry-run] [--server-port N]
 
---config       one of: eager_normal | eager_zero_deepstack | bcg_normal
+--config       one of: eager_normal | eager_zero_deepstack |
+                       bcg_normal   | bcg_zero_deepstack
 --infra-check  bring up the server, verify BCG banner, tear down — no requests
 --dry-run      exercise argument parsing / preflight / cleanup wiring; no CUDA
 EOF
@@ -92,13 +93,15 @@ if [ "$DRY_RUN" = "0" ]; then
     if [ -z "$GPU_ID" ]; then
         GPU_ID="$env_gpu_id"
     fi
-    # Authorised GPU allowlist. GPU 0 is the default; GPU 7 is the
-    # operator-authorised alternate (see validation_plan.md Amendment 1
-    # 2026-08-01). Any other id is refused.
+    # Authorised GPU allowlist. GPU 0 is the historical default; GPU 7
+    # is the first operator-authorised alternate (Amendment 1); GPU 1
+    # was added on 2026-08-01 (Amendment 2) after the operator extended
+    # the standing authorisation to any currently-idle GPU. Any other
+    # id is refused.
     case "$GPU_ID" in
-        0|7) ;;
+        0|1|7) ;;
         *)
-            echo "FATAL: GPU $GPU_ID is not on the authorised allowlist ({0, 7})." >&2
+            echo "FATAL: GPU $GPU_ID is not on the authorised allowlist ({0, 1, 7})." >&2
             exit 64
             ;;
     esac
@@ -121,7 +124,7 @@ if [ "$DRY_RUN" = "0" ]; then
 fi
 
 case "$CONFIG" in
-    eager_normal|eager_zero_deepstack|bcg_normal|"") ;;
+    eager_normal|eager_zero_deepstack|bcg_normal|bcg_zero_deepstack|"") ;;
     *) echo "FATAL: unknown --config=$CONFIG" >&2; exit 64 ;;
 esac
 
@@ -335,10 +338,13 @@ case "$CONFIG" in
         # applies to all backends.
         SERVER_FLAGS+=( --disable-cuda-graph )
         ;;
-    bcg_normal)
+    bcg_normal|bcg_zero_deepstack)
         # Default (breakable) prefill CUDA graph — DO NOT set
         # --enforce-piecewise-cuda-graph (Qwen3.5 is not on the PCG
-        # allowlist).
+        # allowlist). The `_zero_deepstack` variant is the diagnostic
+        # ablation: BCG is on but the branch-owned pre-hook zeros
+        # `input_deepstack_embeds` immediately before the LM forward
+        # (via QWEN35_ZERO_DEEPSTACK=1).
         ;;
 esac
 
@@ -350,11 +356,14 @@ export CUDA_VISIBLE_DEVICES="$GPU_ID"
 export QWEN35_INSTRUMENTATION_LOG="$INSTR_LOG"
 export QWEN35_LAUNCH_ID="$LAUNCH_ID"
 export QWEN35_CONFIG_LABEL="$CONFIG"
-if [ "$CONFIG" = "eager_zero_deepstack" ]; then
-    export QWEN35_ZERO_DEEPSTACK=1
-else
-    export QWEN35_ZERO_DEEPSTACK=0
-fi
+case "$CONFIG" in
+    eager_zero_deepstack|bcg_zero_deepstack)
+        export QWEN35_ZERO_DEEPSTACK=1
+        ;;
+    *)
+        export QWEN35_ZERO_DEEPSTACK=0
+        ;;
+esac
 if [ -e "$LIBCUDA_PRELOAD" ]; then
     export LD_PRELOAD="${LIBCUDA_PRELOAD}${LD_PRELOAD:+:$LD_PRELOAD}"
     echo "LD_PRELOAD: $LD_PRELOAD"

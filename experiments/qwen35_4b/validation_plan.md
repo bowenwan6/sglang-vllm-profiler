@@ -332,3 +332,107 @@ waived the 10-continuous-minutes idle requirement for this attempt
   modifying `/data/sglang-fork`.
 - The rule that a `FEATURE_GAP_EAGER_FALLBACK` is never labelled
   "PASS" in the strong sense.
+
+## Amendment 2 (2026-08-01) — repaired instrumentation, corrected image prompt, 2×2 design, widened GPU allowlist
+
+**Applies to:** every §7 attempt run on or after 2026-08-01 that uses
+the repaired instrumentation. Attempt `attempt_gpu7_20260801T013522Z`
+stays scored under the original protocol and keeps its `AMBIGUOUS`
+verdict; it is preserved as historical evidence of the two flaws this
+amendment addresses.
+
+**Observed protocol gaps (from `attempt_gpu7_20260801T013522Z`):**
+
+1. `scripts/instrumentation.py`'s `_patch_general_mm_embed_routine`
+   assigned `language_model.__dict__["__call__"] = _lm_call_intercept`.
+   For `nn.Module` subclasses, Python resolves `__call__` on the
+   class, not the instance `__dict__`, so the interceptor never fired.
+   `lm_forward_input_deepstack` events were never recorded and
+   `QWEN35_ZERO_DEEPSTACK=1` was a no-op — collapsing
+   `eager_zero_deepstack` into a second `eager_normal` repeat.
+2. `scripts/client.py` hard-coded `<image>` as the multimodal
+   placeholder. The pinned Qwen VL processor
+   (`python/sglang/srt/multimodal/processors/qwen_vl.py:338`) expects
+   `<|vision_start|><|image_pad|><|vision_end|>`. Every image
+   request emitted the SGLang warning "More image data items provided
+   than corresponding tokens found in the prompt" — the multimodal
+   path was not exercised cleanly.
+3. `scripts/verdict.py` returned `PASS_BCG_CORRECT` on greedy-text
+   equality alone. The predeclared verdict rules require nonzero
+   DeepStack in the normal arm, a verified zero replacement in the
+   ablation arm, and BCG replay on scored image requests before any
+   `PASS`.
+4. Three-arm design (`eager_normal`, `eager_zero_deepstack`,
+   `bcg_normal`) cannot distinguish "BCG preserves DeepStack" from
+   "BCG silently drops DeepStack but the fixture is text-invariant"
+   without a `bcg_zero_deepstack` comparator.
+
+**Amended rules for attempts on or after 2026-08-01:**
+
+1. **Repaired DeepStack interceptor.** Instrumentation installs the
+   DeepStack observer via
+   `language_model.register_forward_pre_hook(hook, with_kwargs=True)`
+   for the duration of one `general_mm_embed_routine` call and
+   removes it in `finally`. The hook records shape / dtype / numel /
+   finite / nonzero_frac / abs_sum / sq_sum / SHA-256-16 / data_ptr
+   before modification, and (in zero mode) records the same summary
+   after replacement to prove the substitution really is zero.
+   Repeated calls do not accumulate hooks. Proved by
+   `scripts/test_instrumentation.py` on CPU.
+2. **Corrected multimodal request construction.** `scripts/client.py`
+   emits `<|vision_start|><|image_pad|><|vision_end|>` verbatim,
+   records the rendered prompt, the placeholder count, and the
+   supplied image count on every request. `scripts/verdict.py`
+   hard-fails on any placeholder-vs-image mismatch or on the
+   presence of the SGLang "More image data items…" warning.
+3. **Predeclared 2×2 design.** Every scored §7 attempt runs four
+   arms serially on the same qualifying GPU with matched revision,
+   fixture, prompts, cache, sampling, and request order:
+   - `eager_normal`         — BCG off, DeepStack computed normally.
+   - `eager_zero_deepstack` — BCG off, DeepStack zeroed by hook.
+   - `bcg_normal`           — BCG on,  DeepStack computed normally.
+   - `bcg_zero_deepstack`   — BCG on,  DeepStack zeroed by hook.
+4. **Predeclared verdict rules (2×2).** Given valid telemetry (image
+   / placeholder aligned, DeepStack observed nonzero in normal arms,
+   zero replacement verified in ablation arms, BCG replay confirmed
+   in both BCG arms, ablation-sensitivity confirmed by
+   `eager_normal ≠ eager_zero_deepstack` beyond the eager-repeat
+   noise envelope):
+   - `bcg_normal == eager_normal` AND `bcg_normal != bcg_zero_deepstack`
+     → `PASS_BCG_CORRECT`.
+   - `bcg_normal != eager_normal` AND `bcg_normal == bcg_zero_deepstack`
+     AND `bcg_zero_deepstack == eager_zero_deepstack` →
+     `FAIL_BCG_DEEPSTACK`.
+   - BCG replay never fires on the scored image request →
+     `FEATURE_GAP_EAGER_FALLBACK`.
+   - Any BCG replay error / illegal memory access → `FAIL_BCG_DEEPSTACK`.
+   - Missing telemetry, placeholder mismatch, ablation not
+     diagnostic, or attribution unclear → `AMBIGUOUS`.
+   - Environment / GPU failure → `INFRA_FAILURE`.
+5. **Widened GPU allowlist to `{0, 1, 7}`.** The operator extended the
+   standing authorisation on 2026-08-01 to GPU 1 (which was fully
+   idle at 0 MiB / 0 %). `scripts/runner.sh` accepts `--gpu-id 0`,
+   `--gpu-id 1`, or `--gpu-id 7`; any other id is exit-64. The
+   Amendment 1 waiver of the 10-continuous-minute idle requirement
+   (immediate launch when the target GPU is already qualifying)
+   continues to apply. Foreign-PID guard is unchanged.
+6. **Runner-side changes.** `scripts/runner.sh` now accepts
+   `--config bcg_zero_deepstack` (BCG on, `QWEN35_ZERO_DEEPSTACK=1`).
+   `scripts/verdict.py` requires all four arms to be present; a
+   missing arm classifies `AMBIGUOUS`.
+7. **Ignore-rule tightening.** `results/.gitignore` covers both
+   `attempt_*/raw/` and `infracheck_*/raw/`. Currently-untracked raw
+   evidence from attempt `attempt_gpu7_20260801T013522Z` and the two
+   INFRA_CHECKs remains on-disk as historical evidence; only the
+   ignore rule changes.
+
+**Not changed by this amendment:**
+
+- Hard SGLang checkout / model-revision / fixture pins.
+- Verdict-label set (still exactly the five in §1).
+- Ban on signalling foreign PIDs, resetting GPUs, or modifying
+  `/data/sglang-fork`.
+- The rule that a `FEATURE_GAP_EAGER_FALLBACK` is never labelled
+  "PASS" in the strong sense.
+- Preservation of prior attempt directories and their recorded
+  verdicts.
