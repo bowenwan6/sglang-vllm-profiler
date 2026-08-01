@@ -295,6 +295,21 @@ profiler commits.
 > or disprove. No GPU work is authorised until the plan lands and a GPU is
 > explicitly approved.
 
+> **Reframe after Attempt 02 (2026-08-01):** the Qwen3.5 target was
+> shown to be unable to exercise DeepStack at all — every shipped
+> `Qwen/Qwen3.5-*` release carries
+> `vision_config.deepstack_visual_indexes = []`, so `input_deepstack_embeds`
+> is empty and the DeepStack `add_` branch is trivially skipped. A cross-arch
+> audit ([`experiments/qwen35_4b/latent_bug_analysis.md`](experiments/qwen35_4b/latent_bug_analysis.md))
+> shows the intersection of "on BCG allowlist" and "actually populates
+> DeepStack" is empty on current upstream. The source-level suspicion
+> remains valid but is a **latent regression** rather than a live-production
+> bug. Attempt 03 will retarget the repaired harness to
+> `Qwen/Qwen3-VL-8B-Instruct` under a profiler-owned test-only
+> monkey-patch that adds Qwen3-VL to the BCG allowlist at runtime, to
+> convert the latent hypothesis into live-fire evidence. No source edit
+> to the frozen SGLang checkout; no upstream fix or issue filed yet.
+
 Active branch: `debug/qwen35-4b-bcg-deepstack` (based on `main` = `a803285`).
 Tracking issue: [profiler-repo issue #9](https://github.com/bowenwan6/sglang-vllm-profiler/issues/9)
 (sub-track of #3; no upstream SGLang issue filed at investigation
