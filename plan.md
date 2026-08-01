@@ -504,15 +504,38 @@ success.
    10-continuous-minute idle requirement applies unless the operator
    explicitly waives it AND the target GPU is currently qualifying;
    never signal a foreign PID.
-4. **Step 4 (INFRA_CHECK)** — smallest real Qwen3.5-4B server
-   configuration; verifies model revision, dependencies, CUDA /
-   libcuda, multimodal readiness, BCG capture banner, clean
-   teardown, GPU memory release. Commit `test(qwen35): verify
-   Qwen3.5 BCG infrastructure`.
+4. **Step 4 (INFRA_CHECK) — PASS (2026-08-01, GPU 7).** Attempt
+   `experiments/qwen35_4b/results/infracheck_gpu7_20260801T012122Z/`
+   brought Qwen3.5-4B up on the authorised alternate GPU 7 under the
+   frozen SGLang checkout `58974ca16…`: every hard pin matched
+   (`Qwen3_5ForConditionalGeneration` @
+   `851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a`, imported sglang
+   `INSIDE_FROZEN`, `/data/sglang-fork` still `986c89e69…`,
+   `sglang-kernel==0.4.5` clearing the prior 0.4.4 blocker),
+   `Multimodal data loading enabled with 16 worker threads` +
+   `Using fa3 as multimodal attention backend`, prefill backend
+   `breakable` captured all 58 shape buckets, warmup exercised BCG
+   (`cuda graph: True`), the server reported `The server is fired up
+   and ready to roll!` at 129 s, teardown signalled only own PGID,
+   GPU 7 memory returned from 111,760 MiB to 4 MiB, and the 11
+   foreign compute processes on other GPUs were unchanged pre-vs-post.
+   One caveat carried into Step 5 — SGLang uses
+   `mp.set_start_method('spawn', force=True)` for scheduler /
+   model-worker subprocesses, so the branch instrumentation installed
+   in the launcher parent does **not** propagate to workers; the
+   authoritative per-batch BCG-vs-eager signal for Step 5 is SGLang's
+   own `cuda graph: True/False` server-log line, and the
+   `eager_zero_deepstack` diagnostic ablation behaves identically to
+   `eager_normal` under this constraint (weakens attribution for the
+   zero-DeepStack signature path only). Commit
+   `test(qwen35): verify Qwen3.5 BCG infrastructure`.
 5. **Step 5 (validation)** — run the predeclared controls
    (`eager_normal`, `eager_zero_deepstack`, `bcg_normal`, text-only
    eager/BCG, small confirmation if signal), score verdict, commit
-   `test(qwen35): record Qwen3.5 BCG DeepStack verdict`.
+   `test(qwen35): record Qwen3.5 BCG DeepStack verdict`. Path
+   attribution derives from the server-log `cuda graph: True/False`
+   per prefill batch (authoritative under the Step-4 spawn caveat);
+   greedy-text divergence across configs is captured client-side.
 
 ### 7.7 §7 out of scope
 
