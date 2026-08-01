@@ -1,0 +1,51 @@
+{
+  "verdict": "AMBIGUOUS",
+  "evidence": {
+    "why_ambiguous": [
+      "Per validation_plan.md sec 6, AMBIGUOUS is triggered when 'ablation arm was corrupted'. Here the eager_zero_deepstack ablation did not fire (0 lm_forward_input_deepstack_zeroed events) because the branch instrumentation's language_model.__call__ interceptor writes to the instance __dict__ but nn.Module resolves __call__ on the class, so the write is silently overridden.",
+      "The Qwen VL image placeholder mismatch ('<image>' vs the expected '<|vision_start|><|image_pad|><|vision_end|>') caused the 'More image data items provided than corresponding tokens found in the prompt' warning on every image prefill. The DeepStack tensor's nonzero fraction was not measured (interceptor limitation above), and the fixture may not have exercised DeepStack meaningfully.",
+      "PASS_BCG_CORRECT requires positive evidence that input_deepstack_embeds.nonzero_frac > 0 for the scored image request AND greedy tokens match eager_normal exactly. We have the second but not the first, so PASS cannot be strictly claimed."
+    ],
+    "notes_supporting_no_bug_observed": [
+      "bcg_normal exercised BCG for every scored image request (bcg_execute_body_enter events with contains_mm_inputs=true, shape_key size=16, no bcg_execute_body_error events, both image prefill batches logged 'cuda graph: True' in server stderr).",
+      "bcg_normal greedy image text is bit-identical to eager_normal for both image prefills.",
+      "bcg_normal did not crash, did not raise, did not emit illegal-memory-access errors.",
+      "This is consistent with (but does not conclusively demonstrate) BCG serving Qwen3.5-4B image requests correctly. FAIL_BCG_DEEPSTACK is contraindicated by the absence of any divergence and any error."
+    ],
+    "verdict_paths_ruled_out": {
+      "PASS_BCG_CORRECT": "requires input_deepstack_embeds.nonzero_frac > 0 evidence, which the broken language_model.__call__ interceptor prevented us from measuring",
+      "FEATURE_GAP_EAGER_FALLBACK": "image prefill batches in bcg_normal logged 'cuda graph: True' and bcg_execute_body_enter fired with contains_mm_inputs=true -- BCG was NOT bypassed",
+      "FAIL_BCG_DEEPSTACK": "no greedy-text divergence between bcg_normal and eager_normal, no bcg_execute_body_error events, no illegal-memory-access reports",
+      "INFRA_FAILURE": "server came up on GPU 7 in 108 s, all preflight hard pins matched, no foreign PID appeared on GPU 7, teardown clean"
+    },
+    "per_config_execution_path_counts": {
+      "eager_normal": {"bcg_execute_body_enter": 0, "model_runner_forward_enter": 145, "general_mm_embed_routine_enter": 145, "prefill_cuda_graph_true": 0, "prefill_cuda_graph_false": 7, "requests_error": 0},
+      "eager_zero_deepstack": {"bcg_execute_body_enter": 0, "model_runner_forward_enter": 145, "general_mm_embed_routine_enter": 145, "prefill_cuda_graph_true": 0, "prefill_cuda_graph_false": 7, "lm_forward_input_deepstack_zeroed": 0, "requests_error": 0},
+      "bcg_normal": {"bcg_execute_body_enter": 5, "bcg_execute_body_exit": 5, "bcg_execute_body_error": 0, "model_runner_forward_enter": 145, "general_mm_embed_routine_enter": 115, "prefill_cuda_graph_true": 5, "prefill_cuda_graph_false": 2, "can_run_graph_true_count": 143, "can_run_graph_false_count": 2, "requests_error": 0}
+    },
+    "greedy_texts": {
+      "eager_normal_image_scored_1": "\n\n<think>\n\n</think>\n\nThe image features a vibrant palette of warm oranges, deep reds, and rich browns, accented by touches of green and yellow",
+      "eager_zero_deepstack_image_scored_1": "\n\n<think>\n\n</think>\n\nThe image features a vibrant palette of warm oranges, deep reds, and rich browns, accented by touches of green and yellow",
+      "bcg_normal_image_scored_1": "\n\n<think>\n\n</think>\n\nThe image features a vibrant palette of warm oranges, deep reds, and rich browns, accented by touches of green and yellow",
+      "bcg_normal_image_scored_2": "\n\n<think>\n\n</think>\n\nThe image features a vibrant palette of warm oranges, deep reds, and rich browns, accented by touches of green and yellow"
+    },
+    "actual_paths_per_scored_leg": [
+      "eager_normal image scored 1: eager (model_runner forward, cuda graph: False)",
+      "eager_normal image scored 2: eager (cuda graph: False)",
+      "eager_zero_deepstack image scored 1: eager (cuda graph: False); ablation not applied (language_model.__call__ interceptor broken)",
+      "eager_zero_deepstack image scored 2: eager (cuda graph: False); ablation not applied",
+      "bcg_normal image scored 1: BCG (bcg_execute_body_enter contains_mm_inputs=true, shape_key size=16, cuda graph: True)",
+      "bcg_normal image scored 2: BCG (bcg_execute_body_enter contains_mm_inputs=true, shape_key size=16, cuda graph: True)"
+    ],
+    "deepstack_presence_evidence": "Not measured. The language_model.__call__ interceptor did not fire in any config (a limitation of setting __call__ on nn.Module instance __dict__), so lm_forward_input_deepstack summary events were never emitted; input_deepstack_embeds.nonzero_frac / checksum / diagnostic pointer observations are all unavailable for this attempt.",
+    "token_logprob_hidden_state_comparison": "Client requested return_logprob=True by default; per-token top-5 logprobs are in the raw client_records JSON but the primary greedy-text comparison (all three configs bit-identical) is sufficient for this verdict. No hidden-state RMS was requested (--return-hidden-states defaulted false) since the greedy-text comparison alone already ruled out FAIL and cross-config divergence.",
+    "which_bcg_normal_track": "bcg_normal image text matches eager_normal exactly (also matches eager_zero_deepstack, but that config is degenerate/uninformative because the ablation did not fire). Under a working ablation, bcg_normal matching eager_normal (and eager_zero_deepstack differing from it) would score PASS_BCG_CORRECT. Under the broken ablation, we cannot distinguish 'BCG correctly preserved DeepStack' from 'DeepStack was trivially zero and BCG had nothing to preserve'.",
+    "real_upstream_bug_demonstrated": "NOT YET. No divergence and no crash observed. The source-level suspicion (BCG has no input_deepstack_embeds slot / no per-request copy) is not confirmed by runtime evidence in this attempt; it is also not refuted. A definitive PASS_BCG_CORRECT would require: (1) fixing the language_model.__call__ interceptor so the ablation and DeepStack summaries fire in worker subprocesses, (2) a fixture prompt using Qwen VL's correct '<|vision_start|><|image_pad|><|vision_end|>' placeholder so the vision-token / DeepStack alignment is exercised, and (3) rerunning the three-way comparison. That work is out of scope for this attempt per the plan (no fix in this pass).",
+    "sufficient_to_design_fix_or_upstream_issue": "NO. There is no observed divergence or crash to design a fix around. The most that can be said is: the source-level suspicion is not disproven, and a follow-up attempt with a working DeepStack ablation and a correctly-formatted image prompt is the natural next step."
+  },
+  "launch_ids_per_config": {
+    "eager_normal": "2026-08-01T01-35-29Z",
+    "eager_zero_deepstack": "2026-08-01T01-39-15Z",
+    "bcg_normal": "2026-08-01T01-41-50Z"
+  }
+}

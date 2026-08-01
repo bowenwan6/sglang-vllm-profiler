@@ -1,0 +1,159 @@
+{
+  "attempt_id": "attempt_gpu7_20260801T013522Z",
+  "attempt_kind": "correctness_path_validation",
+  "gpu_id": "7",
+  "gpu_uuid": "GPU-da0d9c21-eb80-f5c6-c12c-bfc5bcb9f207",
+  "profiler_repo_branch": "debug/qwen35-4b-bcg-deepstack",
+  "profiler_repo_head_at_step5_start": "7a95b4e",
+  "frozen_sglang": {
+    "path": "/tmp/claude-0/-data-sglang-vllm-profiler/1617f0f1-bb43-4914-afad-2284642acd9f/scratchpad/sglang_checkout/sglang",
+    "pinned_sha": "58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8",
+    "observed_sha": "58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8",
+    "imported_sglang_status": "INSIDE_FROZEN"
+  },
+  "sglang_fork_guardrail": {
+    "path": "/data/sglang-fork",
+    "expected_head": "986c89e69c25882ab6f3d396f8eb306f38f2c8d2",
+    "observed_head": "986c89e69c25882ab6f3d396f8eb306f38f2c8d2",
+    "branch": "fix/pcg-vlm-deepstack-warmup"
+  },
+  "hf_model": {
+    "id": "Qwen/Qwen3.5-4B",
+    "revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+    "architecture": "Qwen3_5ForConditionalGeneration",
+    "model_type": "qwen3_5"
+  },
+  "kernel": {"sglang_kernel_version": "0.4.5"},
+  "environment": {
+    "python": "3.12.3",
+    "torch": "2.11.0+cu130",
+    "libcuda_preload": "/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05",
+    "attention_backend": "fa3",
+    "multimodal_attention_backend": "fa3"
+  },
+  "instrumentation_propagation": {
+    "mechanism": "scripts/bootstrap/sitecustomize.py + QWEN35_INSTRUMENTATION_PATH env var",
+    "confirmed_in_worker_subprocesses": true,
+    "install_start_events_per_config": 3,
+    "install_done_events_per_config": 3,
+    "patch_ok_events_per_config": 6,
+    "note": "SGLang uses mp.set_start_method('spawn', force=True) (engine.py:1621); the bootstrap sitecustomize installs the instrumentation at every Python interpreter startup via a builtins.__import__ hook, gated on the target modules having their key attributes present (indicating fully executed module bodies). Confirmed by patch_ok events emitted from spawn-child PIDs (e.g. pid 779861 in eager_normal, pid 785983 in bcg_normal) different from the launcher parent pid."
+  },
+  "instrumentation_language_model_interceptor": {
+    "status": "INEFFECTIVE",
+    "reason": "The general_mm_embed_routine wrapper attempts to intercept language_model.__call__ by setting language_model.__dict__['__call__']. For nn.Module subclasses, Python resolves __call__ on the class, not the instance dict, so the interceptor never fires. The 'lm_forward_input_deepstack' events therefore never appear, and QWEN35_ZERO_DEEPSTACK=1 does not zero the tensor.",
+    "impact": "eager_zero_deepstack is effectively identical to eager_normal. This triggers the AMBIGUOUS verdict's 'ablation arm was corrupted' clause (validation_plan.md section 6)."
+  },
+  "configs_run": ["eager_normal", "eager_zero_deepstack", "bcg_normal"],
+  "per_config_launch_ids": {
+    "eager_normal": "2026-08-01T01-35-29Z",
+    "eager_zero_deepstack": "2026-08-01T01-39-15Z",
+    "bcg_normal": "2026-08-01T01-41-50Z"
+  },
+  "per_config_summary": {
+    "eager_normal": {
+      "server_flags_extra": ["--disable-cuda-graph"],
+      "cuda_graph_prefill_lines_true": 0,
+      "cuda_graph_prefill_lines_false": 7,
+      "bcg_execute_body_enter": 0,
+      "model_runner_forward_enter": 145,
+      "general_mm_embed_routine_enter": 145,
+      "requests_total": 4,
+      "requests_error": 0,
+      "img_text_scored_1": "\n\n<think>\n\n</think>\n\nThe image features a vibrant palette of warm oranges, deep reds, and rich browns, accented by touches of green and yellow",
+      "img_text_scored_2": "\n\n<think>\n\n</think>\n\nThe image features a vibrant palette of warm oranges, deep reds, and rich browns, accented by touches of green and yellow",
+      "img_text_equal_across_repeats": true
+    },
+    "eager_zero_deepstack": {
+      "server_flags_extra": ["--disable-cuda-graph"],
+      "zero_deepstack_env": true,
+      "cuda_graph_prefill_lines_true": 0,
+      "cuda_graph_prefill_lines_false": 7,
+      "bcg_execute_body_enter": 0,
+      "model_runner_forward_enter": 145,
+      "general_mm_embed_routine_enter": 145,
+      "lm_forward_input_deepstack_zeroed": 0,
+      "requests_total": 4,
+      "requests_error": 0,
+      "img_text_scored_1": "\n\n<think>\n\n</think>\n\nThe image features a vibrant palette of warm oranges, deep reds, and rich browns, accented by touches of green and yellow",
+      "img_text_scored_2": "\n\n<think>\n\n</think>\n\nThe image features a vibrant palette of warm oranges, deep reds, and rich browns, accented by touches of green and yellow",
+      "note": "Ablation did not fire (nn.Module __call__ interceptor limitation); this config is effectively an independent eager_normal repeat."
+    },
+    "bcg_normal": {
+      "server_flags_extra": [],
+      "server_health_first_200_after_seconds": 108,
+      "cuda_graph_prefill_lines_true": 5,
+      "cuda_graph_prefill_lines_false": 2,
+      "bcg_execute_body_enter": 5,
+      "bcg_execute_body_exit": 5,
+      "bcg_execute_body_error": 0,
+      "model_runner_forward_enter": 145,
+      "general_mm_embed_routine_enter": 115,
+      "can_run_graph_true_count": 143,
+      "can_run_graph_false_count": 2,
+      "requests_total": 4,
+      "requests_error": 0,
+      "img_text_scored_1": "\n\n<think>\n\n</think>\n\nThe image features a vibrant palette of warm oranges, deep reds, and rich browns, accented by touches of green and yellow",
+      "img_text_scored_2": "\n\n<think>\n\n</think>\n\nThe image features a vibrant palette of warm oranges, deep reds, and rich browns, accented by touches of green and yellow",
+      "img_prefills_via_bcg": true,
+      "img_prefill_bcg_evidence": {
+        "bcg_execute_body_events_with_contains_mm_inputs_true": 3,
+        "img_scored_request_prefill_batches_cuda_graph_true": 2,
+        "shape_keys_seen_for_img_prefills": ["ShapeKey(size=16, stream_idx=None, variant_label=None)"]
+      }
+    }
+  },
+  "cross_config_greedy_text_comparison": {
+    "img_prompt_bcg_normal_equals_eager_normal": true,
+    "img_prompt_eager_zero_deepstack_equals_eager_normal": true,
+    "img_prompt_bcg_normal_equals_eager_zero_deepstack": true,
+    "txt_prompt_bcg_normal_equals_eager_normal": true
+  },
+  "fixture_caveat": {
+    "server_warning": "More image data items provided than corresponding tokens found in the prompt.",
+    "note": "The client used '<image>' as the image placeholder in the prompt text, while SGLang's Qwen VL processor expects '<|vision_start|><|image_pad|><|vision_end|>'. The image was still processed (contains_mm_inputs=true seen in bcg_execute_body events) but the placeholder/token alignment produced this warning for both image prefills in every config. Whether the DeepStack tensor was non-trivially nonzero for the LM forward is therefore not verified from these runs.",
+    "consequence": "Reinforces the AMBIGUOUS verdict: even if the language_model.__call__ interceptor had worked and could have measured input_deepstack_embeds.nonzero_frac, the fixture may not have driven a meaningful DeepStack contribution."
+  },
+  "gpu7_snapshot": {
+    "pre_run_memory_mib": 4,
+    "pre_run_utilization_pct": 0,
+    "pre_run_foreign_compute_apps": 0,
+    "post_run_memory_mib": 4,
+    "post_run_utilization_pct": 0,
+    "post_run_foreign_compute_apps": 0,
+    "foreign_pids_pre_run_all_gpus": 11,
+    "foreign_pids_post_run_all_gpus": 11,
+    "foreign_pids_unchanged": true
+  },
+  "cleanup": {
+    "own_pgid_signaled_only": true,
+    "cleanup_notes": [
+      "eager_normal cleanup: SIGTERM to server pgid 779487; graceful drain 0 remaining requests; SIGKILL fallback after 2 s.",
+      "eager_zero_deepstack cleanup: SIGTERM to server pgid 782908; SIGKILL fallback after 2 s.",
+      "bcg_normal cleanup: SIGTERM to server pgid 785599; graceful drain 0 remaining requests; SIGKILL fallback after 2 s.",
+      "No foreign PID signalled at any point."
+    ]
+  },
+  "raw_evidence_files": {
+    "per_config_preflight_json": {
+      "eager_normal": "raw/preflight_eager_normal_2026-08-01T01-35-29Z.json",
+      "eager_zero_deepstack": "raw/preflight_eager_zero_deepstack_2026-08-01T01-39-15Z.json",
+      "bcg_normal": "raw/preflight_bcg_normal_2026-08-01T01-41-50Z.json"
+    },
+    "per_config_server_stderr": {
+      "eager_normal": "raw/server_stderr_eager_normal.log",
+      "eager_zero_deepstack": "raw/server_stderr_eager_zero_deepstack.log",
+      "bcg_normal": "raw/server_stderr_bcg_normal.log"
+    },
+    "per_config_instrumentation_jsonl": {
+      "eager_normal": "raw/instrumentation_eager_normal.jsonl",
+      "eager_zero_deepstack": "raw/instrumentation_eager_zero_deepstack.jsonl",
+      "bcg_normal": "raw/instrumentation_bcg_normal.jsonl"
+    },
+    "per_config_client_records_json": {
+      "eager_normal": "raw/client_records_eager_normal.json",
+      "eager_zero_deepstack": "raw/client_records_eager_zero_deepstack.json",
+      "bcg_normal": "raw/client_records_bcg_normal.json"
+    }
+  }
+}

@@ -255,9 +255,18 @@ PREFLIGHT_JSON_PATH="${RAW_DIR}/preflight_${CONFIG:-cpu}_${PRELAUNCH_UTC}.json"
 PREFLIGHT_STDERR_PATH="${RAW_DIR}/preflight_${CONFIG:-cpu}_${PRELAUNCH_UTC}.stderr"
 
 # For the imported_sglang_path check, PYTHONPATH must include the frozen checkout.
+# Also prepend the bootstrap dir so its sitecustomize.py runs at the top of
+# every spawn subprocess (see scripts/bootstrap/sitecustomize.py).
+BOOTSTRAP_DIR="${SCRIPT_DIR}/bootstrap"
 if [ -n "$FROZEN_SGLANG" ]; then
-    export PYTHONPATH="${FROZEN_SGLANG}/python${PYTHONPATH:+:$PYTHONPATH}"
+    export PYTHONPATH="${BOOTSTRAP_DIR}:${FROZEN_SGLANG}/python${PYTHONPATH:+:$PYTHONPATH}"
+else
+    export PYTHONPATH="${BOOTSTRAP_DIR}${PYTHONPATH:+:$PYTHONPATH}"
 fi
+# Absolute path to the instrumentation module used by
+# scripts/bootstrap/sitecustomize.py — required so the instrumentation
+# is re-installed in every SGLang scheduler / model-worker spawn child.
+export QWEN35_INSTRUMENTATION_PATH="${INSTRUMENTATION_PATH}"
 
 if ! python3 "${SCRIPT_DIR}/preflight_provenance.py" "${PREFLIGHT_ARGS[@]}" \
       > "$PREFLIGHT_JSON_PATH" 2> "$PREFLIGHT_STDERR_PATH"; then

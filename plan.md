@@ -529,13 +529,48 @@ success.
    `eager_normal` under this constraint (weakens attribution for the
    zero-DeepStack signature path only). Commit
    `test(qwen35): verify Qwen3.5 BCG infrastructure`.
-5. **Step 5 (validation)** — run the predeclared controls
-   (`eager_normal`, `eager_zero_deepstack`, `bcg_normal`, text-only
-   eager/BCG, small confirmation if signal), score verdict, commit
-   `test(qwen35): record Qwen3.5 BCG DeepStack verdict`. Path
-   attribution derives from the server-log `cuda graph: True/False`
-   per prefill batch (authoritative under the Step-4 spawn caveat);
-   greedy-text divergence across configs is captured client-side.
+5. **Step 5 (validation) — AMBIGUOUS (2026-08-01, GPU 7).** Attempt
+   `experiments/qwen35_4b/results/attempt_gpu7_20260801T013522Z/`
+   ran the three predeclared configs. Instrumentation propagation
+   into SGLang spawn workers was unblocked by
+   `experiments/qwen35_4b/scripts/bootstrap/sitecustomize.py`, so
+   `bcg_execute_body_enter`, `model_runner_forward_enter`, and
+   `general_mm_embed_routine_enter/exit` events fired inside the
+   scheduler / worker subprocesses as intended. `bcg_normal` served
+   both scored image prefills via BCG replay
+   (`bcg_execute_body_enter` with `contains_mm_inputs=true`,
+   `shape_key size=16`, `cuda graph: True`, no
+   `bcg_execute_body_error`), and greedy text was bit-identical to
+   `eager_normal` for every scored request. That rules out both
+   `FEATURE_GAP_EAGER_FALLBACK` (BCG was not bypassed) and
+   `FAIL_BCG_DEEPSTACK` (no divergence, no crash). However,
+   `PASS_BCG_CORRECT` requires positive evidence that
+   `input_deepstack_embeds.nonzero_frac > 0` at LM forward time, and
+   this is not available: the branch instrumentation's
+   `language_model.__call__` interceptor writes to the instance
+   `__dict__` but `nn.Module` resolves `__call__` on the class, so
+   `lm_forward_input_deepstack` never fires and `QWEN35_ZERO_DEEPSTACK=1`
+   is a no-op — the `eager_zero_deepstack` ablation degenerates to
+   `eager_normal`. A fixture caveat compounds this: the client's
+   prompt used `<image>` rather than Qwen VL's expected
+   `<|vision_start|><|image_pad|><|vision_end|>`, producing the
+   "More image data items provided than corresponding tokens found
+   in the prompt" warning on every image prefill. Under
+   `validation_plan.md` §6, both conditions ("ablation arm was
+   corrupted", fixture may not exercise DeepStack) trigger
+   `AMBIGUOUS`. No upstream correctness bug is demonstrated; the
+   source-level suspicion is neither confirmed nor refuted. No fix
+   was implemented and no upstream issue was opened, per §7.7. GPU 7
+   returned clean (4 MiB / 0 % / 0 apps), the 11 foreign compute
+   processes on other GPUs are unchanged pre-vs-post, and
+   `/data/sglang-fork` HEAD is still `986c89e69…`. Commit
+   `test(qwen35): record Qwen3.5 BCG DeepStack verdict`.
+
+Follow-up (queued, out of scope for this §7 pass): fix the
+`nn.Module`-instance `__call__` interception (register an
+`nn.Module` forward pre-hook, or patch the language-model class),
+use the correct Qwen VL image placeholder, and rerun the three-way
+comparison on the same frozen SGLang SHA.
 
 ### 7.7 §7 out of scope
 
