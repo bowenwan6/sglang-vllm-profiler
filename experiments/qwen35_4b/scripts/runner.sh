@@ -358,7 +358,7 @@ echo "server: launching python3 server_launcher.py -- ${SERVER_FLAGS[*]}"
 setsid python3 "$LAUNCHER_PATH" \
     --instrumentation "$INSTRUMENTATION_PATH" \
     --frozen-sglang "$FROZEN_SGLANG" \
-    --frozen-sglang-sha "89f4a80c1f5e71c1c960df120f1e03b43dfd3c1d" \
+    --frozen-sglang-sha "58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8" \
     -- "${SERVER_FLAGS[@]}" \
     > "$STDOUT_PATH" 2> "$STDERR_PATH" &
 SERVER_PID=$!

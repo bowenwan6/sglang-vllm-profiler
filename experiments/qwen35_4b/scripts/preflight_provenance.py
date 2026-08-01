@@ -35,9 +35,9 @@ from pathlib import Path
 
 # Hard pin — the executed local SGLang checkout SHA. Preflight aborts
 # on mismatch (see check_frozen_checkout).
-PINNED_FROZEN_SGLANG_SHA = "89f4a80c1f5e71c1c960df120f1e03b43dfd3c1d"
+PINNED_FROZEN_SGLANG_SHA = "58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8"
 # Informational — the remote main HEAD at rebaseline. Drift is WARN only.
-PINNED_UPSTREAM_SGLANG_HEAD = "89f4a80c1f5e71c1c960df120f1e03b43dfd3c1d"
+PINNED_UPSTREAM_SGLANG_HEAD = "58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8"
 PINNED_MODEL_ID = "Qwen/Qwen3.5-4B"
 PINNED_MODEL_SHA = "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a"
 PINNED_MODEL_ARCH = ["Qwen3_5ForConditionalGeneration"]

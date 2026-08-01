@@ -2,7 +2,7 @@
 
 > **Purpose.** Design a small correctness/path experiment that, run on
 > the frozen upstream SGLang `main` checkout at
-> `89f4a80c1f5e71c1c960df120f1e03b43dfd3c1d` with `Qwen/Qwen3.5-4B`,
+> `58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8` with `Qwen/Qwen3.5-4B`,
 > produces objective per-request evidence sufficient to pick exactly
 > one of the five outcomes in `hypothesis.md` §5.
 >
@@ -33,7 +33,7 @@ softening requires an explicit written amendment recorded in
 Every attempt records, before executing any request:
 
 1. **Frozen local SGLang checkout SHA** (hard pin;
-   `89f4a80c1f5e71c1c960df120f1e03b43dfd3c1d`). Preflight aborts if
+   `58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8`). Preflight aborts if
    drifted.
 2. **Upstream `main` HEAD SHA at query time** — informational only,
    WARN on drift.

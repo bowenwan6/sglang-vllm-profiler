@@ -11,12 +11,18 @@
 - **Model target:** `Qwen/Qwen3.5-4B` (HF, `sha=851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a`,
   `config.architectures=["Qwen3_5ForConditionalGeneration"]`,
   `model_type=qwen3_5`, ungated).
-- **Upstream anchor (rebaselined 2026-07-31):** SGLang `main` @
-  `89f4a80c1f5e71c1c960df120f1e03b43dfd3c1d`. All line references in
-  this subtree resolve to this SHA.
+- **Upstream anchor (rebaselined 2026-08-01):** SGLang `main` @
+  `58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8`. All line references in
+  this subtree resolve to this SHA. This is a 21-commit refresh from
+  the earlier `89f4a80c1f…` anchor; the source-audit spot-checks are
+  recorded in `source_audit.md` § 1.
 - **Executed local checkout:** an isolated `git clone` under
   `<scratchpad>/sglang_checkout/sglang/` at the same SHA. Runners
-  source it via `PYTHONPATH`; **`/data/sglang-fork` is not modified**.
+  source it via `PYTHONPATH`. `/data/sglang-fork` is also refreshed
+  to upstream `main` on this date; the historical Qwen3-VL branch
+  `fix/pcg-vlm-deepstack-warmup` is preserved untouched.
+- **sglang-kernel:** upgraded system-wide 2026-08-01 to `0.4.5` to
+  satisfy the frozen SGLang `assert_pkg_version` floor (was `0.4.4`).
 - **Plan-level context:** `plan.md` §7.
 
 ## What this investigation is about

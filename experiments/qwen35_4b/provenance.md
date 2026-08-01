@@ -11,8 +11,8 @@
 | Profiler repo | `bowenwan6/sglang-vllm-profiler` (this repo) | `git remote -v` |
 | Profiler branch | `debug/qwen35-4b-bcg-deepstack` | `git branch --show-current` |
 | Profiler base commit | `a803285` (`main`, PR #8 merge) | `git merge-base HEAD main` |
-| **Executed local SGLang checkout (HARD PIN)** | `<scratchpad>/sglang_checkout/sglang` cloned from `https://github.com/sgl-project/sglang.git`, HEAD pinned to `89f4a80c1f5e71c1c960df120f1e03b43dfd3c1d`. The runner sources this via `PYTHONPATH=<scratchpad>/sglang_checkout/sglang/python` and verifies `sglang.__file__` resolves inside it. | `cd <scratchpad>/sglang_checkout/sglang && git rev-parse HEAD` and `python3 -c 'import sglang; print(sglang.__file__)'` |
-| Upstream SGLang `main` HEAD at audit rebaseline | `89f4a80c1f5e71c1c960df120f1e03b43dfd3c1d` (2026-07-31, subject `Support fastsafetensors no-GDS loading and page-cache release (#31859)`) | `gh api repos/sgl-project/sglang/commits/main --jq .sha` |
+| **Executed local SGLang checkout (HARD PIN)** | `<scratchpad>/sglang_checkout/sglang` cloned from `https://github.com/sgl-project/sglang.git`, HEAD pinned to `58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8`. The runner sources this via `PYTHONPATH=<scratchpad>/sglang_checkout/sglang/python` and verifies `sglang.__file__` resolves inside it. | `cd <scratchpad>/sglang_checkout/sglang && git rev-parse HEAD` and `python3 -c 'import sglang; print(sglang.__file__)'` |
+| Upstream SGLang `main` HEAD at audit rebaseline | `58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8` (2026-08-01 refresh, subject `[perf] Assemble flat prompt top logprobs scheduler-side as numpy arrays (#32223)`) | `gh api repos/sgl-project/sglang/commits/main --jq .sha` |
 | SGLang PR #30872 (`Enable multimodal prefill BCG for VL and audio models`) | **MERGED** 2026-07-28T22:47:40Z, merge SHA `c9947b087bf9d3d16b5198234ba4c39b68bb79e9`. Added Qwen3.5 to `multimodal_breakable_cuda_graph_supported_model_archs`, registered `input_embeds` slot, added `replay_layer_forward` copy of `input_embeds`. No DeepStack slot / copy on the BCG path. | `gh pr view 30872 --repo sgl-project/sglang` |
 | SGLang PR #30868 (`fix: fix vlm cuda graph shape stability`) | **MERGED** 2026-07-19T14:35:51Z, merge SHA `d4801be44773`. Added `run_dummy_multimodal_deepstack_forward` and a defensive eager fallback, **both scoped to `tc_piecewise_cuda_graph_backend`**, not BCG. | `gh pr view 30868 --repo sgl-project/sglang` |
 | Historical Qwen3-VL fork `/data/sglang-fork` | `986c89e69c25882ab6f3d396f8eb306f38f2c8d2` | read-only reference; not touched by §7 |
@@ -24,7 +24,7 @@
   preflight aborts with a non-zero exit code if:
   - the frozen checkout directory does not exist, or
   - its git HEAD does not equal
-    `89f4a80c1f5e71c1c960df120f1e03b43dfd3c1d`, or
+    `58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8`, or
   - `python3 -c 'import sglang; print(sglang.__file__)'` does not
     resolve inside that checkout after the runner's `PYTHONPATH`
     override.
@@ -65,7 +65,7 @@ The Qwen3-VL sub-track froze a working environment at:
 | CUDA runtime | `13.0` | environment snapshot |
 | Host libcuda | `libcuda.so.595.71.05` (driver 595.71.05) at `/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05`; the `cuda-compat-13-0` loader precedence at `/usr/local/cuda-13.0/compat/libcuda.so.1` must be overridden with `LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05` | R6 Amendment A3 |
 | flashinfer | `0.6.12` | Qwen3-VL R6 provenance |
-| sgl_kernel | `0.4.4` | Qwen3-VL R6 provenance |
+| sgl_kernel | `0.4.5` | upgraded 2026-08-01 for frozen SGLang `58974ca16` `assert_pkg_version` floor (was `0.4.4` in Qwen3-VL R6 provenance) |
 | Profiling client env | `/opt/miniconda3/envs/profiling` (torch `2.11.0+cu130`, vLLM `0.21.0`) | Qwen3-VL R6 provenance |
 
 **Warning.** These are the *starting expectations*. The validation

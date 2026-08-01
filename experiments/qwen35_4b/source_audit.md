@@ -8,13 +8,19 @@
 
 ## 1. Provenance of this audit
 
-- **Upstream SGLang `main` HEAD read (rebaselined 2026-07-31):**
-  `89f4a80c1f5e71c1c960df120f1e03b43dfd3c1d` (subject: `Support
-  fastsafetensors no-GDS loading and page-cache release (#31859)`,
-  verified via `GET /repos/sgl-project/sglang/commits/main`). This SHA
-  supersedes the earlier `5f9b0db1…` audit anchor; every line number
-  and citation below refers to this SHA.
-- **Files fetched via `raw.githubusercontent.com/sgl-project/sglang/89f4a80c…/…`**
+- **Upstream SGLang `main` HEAD read (rebaselined 2026-08-01):**
+  `58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8` (subject: `[perf]
+  Assemble flat prompt top logprobs scheduler-side as numpy arrays
+  (#32223)`, verified via `GET
+  /repos/sgl-project/sglang/commits/main`). This SHA supersedes the
+  earlier `89f4a80c1f…` and `5f9b0db1…` audit anchors; every line
+  number and citation below refers to this SHA. The 21-commit bump
+  from `89f4a80c` was a routine refresh; the BCG/PCG allowlists,
+  `run_dummy_multimodal_deepstack_forward`, `replay_layer_forward`
+  copy of `input_embeds` (but not `input_deepstack_embeds`), and the
+  Qwen3.5 wrapper's DeepStack propagation are unchanged in that
+  range — see the re-verification block at the end of this section.
+- **Files fetched via `raw.githubusercontent.com/sgl-project/sglang/58974ca1…/…`**
   and cached under `<scratchpad>/sglang_snapshot/*` during the audit;
   **not committed** to this repository (per artifact rules). A
   companion isolated `git clone` of upstream `main` at the same SHA
@@ -26,6 +32,38 @@
   ["Qwen3_5ForConditionalGeneration"]`, `config.model_type =
   "qwen3_5"`, `gated = false` (verified via `GET
   /api/models/Qwen/Qwen3.5-4B`).
+
+### 2026-08-01 re-verification (pin bump 89f4a80c → 58974ca1, +21 commits)
+
+The substantive claims in sections 2–8 below were spot-checked against
+the new SHA and still hold; only line numbers have drifted by ~10–60
+lines in a few files. Line numbers below refer to `89f4a80c` for
+historical continuity; the runtime instrumentation
+(`scripts/instrumentation.py`) targets Python symbols and is unaffected.
+
+Verified stable at `58974ca1`:
+
+- `model_config.py`: both allowlists still present, still distinct;
+  `multimodal_piecewise_cuda_graph_supported_model_archs` at line 1836,
+  `multimodal_breakable_cuda_graph_supported_model_archs` at line 1845.
+- `qwen3_5.py`: `Qwen3_5ForCausalLM.forward` at 1408, DeepStack
+  parameter at 1415, `is not None and .numel() > 0` guard at 1450–1451,
+  DeepStack in-place add across the first 3 language-model layers unchanged.
+- `mm_utils.py`: DeepStack allocated as `torch.zeros(...)` at 1123 and
+  1206 inside helpers reachable from `general_mm_embed_routine` (defined
+  at 1252). No stable-slot allocation.
+- `prefill_cuda_graph_runner.py`: `_execute_body_capture` at 1540,
+  `replay_layer_forward` at 1554. Replay slot copy still targets
+  `input_embeds` only (line 1563–1568). No `input_deepstack_embeds`
+  copy on the BCG replay path.
+- `cuda_graph_buffer_registry.py`: `register_input_embeds` gate at 794,
+  slot registration at 867. No `input_deepstack_embeds` slot.
+- `run_dummy_multimodal_deepstack_forward` still present at
+  ~672–732, still scoped to the tc-piecewise backend Dynamo warmup
+  (PR #30868), not BCG replay.
+
+The runtime hypothesis (`FAIL_BCG_DEEPSTACK` is possible because BCG
+replay reads no DeepStack slot) is therefore unchanged by the pin bump.
 
 ## 2. Qwen3.5 architecture registration — BCG vs PCG lists are DISTINCT
 

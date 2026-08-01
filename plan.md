@@ -94,7 +94,7 @@ source the fork via `PYTHONPATH=/data/sglang-fork/python`.
 | Stock SGLang SHA | `da802ddcafe55e25b3e1db86b1e0444afc3e05bc` |
 | Final fork SHA | `986c89e69c25882ab6f3d396f8eb306f38f2c8d2` |
 | Model snapshot | `0c351dd01ed87e9c1b53cbc748cba10e6187ff3b` |
-| System python | `python 3.12.3` · torch 2.11.0+cu130 · flashinfer 0.6.12 · sgl_kernel 0.4.4 |
+| System python | `python 3.12.3` · torch 2.11.0+cu130 · flashinfer 0.6.12 · sgl_kernel 0.4.5 |
 | Profiling env | `/opt/miniconda3/envs/profiling` — torch 2.11.0+cu130, vLLM 0.21.0 |
 | Text dataset | `datasets/qwen3vl8b/caseA_short.jsonl` (SHA-256 `fab4917772…`) |
 | Runtime libcuda | `LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05` (host driver 595.71.05, fixes `cuda-compat-13-0` loader precedence) |
@@ -322,14 +322,14 @@ Values verified against `sgl-project/sglang` on 2026-07-31 via GitHub API.
 
 | Item | Value |
 |---|---|
-| **Executed local SGLang checkout (HARD PIN)** | isolated `git clone` under `<scratchpad>/sglang_checkout/sglang/`, HEAD pinned to `89f4a80c1f5e71c1c960df120f1e03b43dfd3c1d`. The runner sources it via `PYTHONPATH` and verifies `sglang.__file__` resolves inside it. |
-| Upstream SGLang `main` HEAD at rebaseline | `89f4a80c1f5e71c1c960df120f1e03b43dfd3c1d` (subject: `Support fastsafetensors no-GDS loading and page-cache release (#31859)`). Later remote-main movement is informational only, not a hard failure — see `provenance.md` §1. |
+| **Executed local SGLang checkout (HARD PIN)** | isolated `git clone` under `<scratchpad>/sglang_checkout/sglang/`, HEAD pinned to `58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8`. The runner sources it via `PYTHONPATH` and verifies `sglang.__file__` resolves inside it. |
+| Upstream SGLang `main` HEAD at rebaseline | `58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8` (2026-08-01 refresh, subject: `[perf] Assemble flat prompt top logprobs scheduler-side as numpy arrays (#32223)`). `/data/sglang-fork` main was also fast-forwarded to this SHA on the same date; the historical `fix/pcg-vlm-deepstack-warmup` branch stays at `986c89e69c25882ab6f3d396f8eb306f38f2c8d2`. Later remote-main movement is informational only, not a hard failure — see `provenance.md` §1. |
 | PR #30872 (`Enable multimodal prefill BCG for VL and audio models`) | **MERGED** 2026-07-28T22:47:40Z — merge commit `c9947b087bf9d3d16b5198234ba4c39b68bb79e9`. Adds Qwen3.5 to `multimodal_breakable_cuda_graph_supported_model_archs` (the **BCG** allowlist), registers the `input_embeds` static slot, and adds the `replay_layer_forward` per-request copy of `input_embeds`. **Contains no `input_deepstack_embeds` slot or copy on the BCG code path.** |
 | PR #30868 (`fix: fix vlm cuda graph shape stability`) | **MERGED** 2026-07-19T14:35:51Z. Introduces `run_dummy_multimodal_deepstack_forward` and a defensive eager fallback, **both scoped to `tc_piecewise_cuda_graph_backend`**. This is a Dynamo shape-stability warmup for **TC piecewise / PCG**, not a BCG capture / replay slot. |
 | Local mirror `/sgl-workspace/sglang` | `da802dd` — stale older HEAD; the installed sglang at that path is **not** the runner's source of truth. Runners override via `PYTHONPATH` to the frozen checkout and assert `sglang.__file__` resolves inside it. |
 | Historical local fork `/data/sglang-fork` | `986c89e69c25882ab6f3d396f8eb306f38f2c8d2` — untouched by §7; read-only reference only. The runner sanity-checks that this HEAD is unchanged before and after every attempt. |
 
-### 7.3 Established facts (source-level, on upstream `main` @ `89f4a80c`)
+### 7.3 Established facts (source-level, on upstream `main` @ `58974ca1`)
 
 Verified by inspection of files under
 `python/sglang/srt/{models,model_executor,managers,configs}`. All line
@@ -434,7 +434,7 @@ numbers refer to raw upstream files captured 2026-07-31.
 Given §7.3, the working hypothesis is:
 
 > On current upstream SGLang `main` at
-> `89f4a80c1f5e71c1c960df120f1e03b43dfd3c1d`, when
+> `58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8`, when
 > `Qwen/Qwen3.5-4B` serves an image request under the default
 > breakable prefill backend, the BCG-captured layer-body graph has
 > no DeepStack `add_` kernels (the branch was cold at capture) and

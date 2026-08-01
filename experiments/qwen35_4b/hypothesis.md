@@ -8,7 +8,7 @@
 
 Every item here is directly verifiable in `source_audit.md` against
 upstream SGLang `main` at frozen SHA
-`89f4a80c1f5e71c1c960df120f1e03b43dfd3c1d`.
+`58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8`.
 
 - **[F1]** `Qwen/Qwen3.5-4B` reports architectures
   `["Qwen3_5ForConditionalGeneration"]` (HF revision
