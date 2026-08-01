@@ -92,10 +92,16 @@ if [ "$DRY_RUN" = "0" ]; then
     if [ -z "$GPU_ID" ]; then
         GPU_ID="$env_gpu_id"
     fi
-    if [ "$GPU_ID" != "0" ]; then
-        echo "FATAL: GPU 0 is the only authorised device; got --gpu-id=$GPU_ID." >&2
-        exit 64
-    fi
+    # Authorised GPU allowlist. GPU 0 is the default; GPU 7 is the
+    # operator-authorised alternate (see validation_plan.md Amendment 1
+    # 2026-08-01). Any other id is refused.
+    case "$GPU_ID" in
+        0|7) ;;
+        *)
+            echo "FATAL: GPU $GPU_ID is not on the authorised allowlist ({0, 7})." >&2
+            exit 64
+            ;;
+    esac
     if [ -z "$CONFIG" ]; then
         echo "FATAL: --config is required for a live run." >&2
         exit 64
@@ -126,10 +132,10 @@ RUNNER_PGID="$$"
 LAUNCH_ID="${ATTEMPT_ID}-${CONFIG}-${PRELAUNCH_UTC}"
 LAUNCH_CTX_JSON="/tmp/qwen35_launch_ctx_${LAUNCH_ID}.json"
 
-# GPU 0 UUID (queried read-only, no side effects). Best-effort in dry-run.
+# Authorised-GPU UUID (queried read-only, no side effects). Best-effort in dry-run.
 GPU_UUID=""
 if command -v nvidia-smi >/dev/null 2>&1 && [ "$DRY_RUN" = "0" ]; then
-    GPU_UUID="$(nvidia-smi --query-gpu=uuid --format=csv,noheader --id=0 2>/dev/null || true)"
+    GPU_UUID="$(nvidia-smi --query-gpu=uuid --format=csv,noheader --id="${GPU_ID:-0}" 2>/dev/null || true)"
 fi
 
 cat > "$LAUNCH_CTX_JSON" <<EOF
@@ -169,18 +175,18 @@ foreign_pid_check() {
         echo "foreign_pid_check: NVIDIA-SMI MISSING; aborting." >&2
         exit 71
     fi
-    # Filter to GPU 0 only, by UUID.
+    # Filter to the authorised GPU only, by UUID.
     if [ -z "$GPU_UUID" ]; then
-        echo "foreign_pid_check: GPU 0 UUID unavailable; aborting." >&2
+        echo "foreign_pid_check: GPU $GPU_ID UUID unavailable; aborting." >&2
         exit 71
     fi
     local raw
     raw="$(nvidia-smi --query-compute-apps=pid,gpu_uuid,used_gpu_memory --format=csv,noheader 2>/dev/null || true)"
-    # Reject if any process is on GPU 0's UUID.
+    # Reject if any process is on the authorised GPU's UUID.
     local hits
     hits="$(printf "%s\n" "$raw" | awk -v uuid="$GPU_UUID" -F', *' '$2 == uuid {print}')"
     if [ -n "$hits" ]; then
-        echo "foreign_pid_check: existing compute apps present on GPU 0 ($GPU_UUID):"
+        echo "foreign_pid_check: existing compute apps present on GPU $GPU_ID ($GPU_UUID):"
         printf "%s\n" "$hits"
         echo "foreign_pid_check: aborting; the runner refuses to co-inhabit." >&2
         exit 71
@@ -331,7 +337,7 @@ INSTR_LOG="${RAW_DIR}/instrumentation_${CONFIG}.jsonl"
 STDERR_PATH="${RAW_DIR}/server_stderr_${CONFIG}.log"
 STDOUT_PATH="${RAW_DIR}/server_stdout_${CONFIG}.log"
 
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES="$GPU_ID"
 export QWEN35_INSTRUMENTATION_LOG="$INSTR_LOG"
 export QWEN35_LAUNCH_ID="$LAUNCH_ID"
 export QWEN35_CONFIG_LABEL="$CONFIG"
@@ -389,9 +395,9 @@ if [ "$INFRA_CHECK" = "1" ]; then
     sleep 5
     echo "INFRA_CHECK: looking for BCG capture banner in $STDERR_PATH"
     grep -E "Capturing num tokens|Compiling num tokens|cuda graph|BreakableCudaGraph|prefill_cuda_graph|multimodal" "$STDERR_PATH" | head -20 || true
-    # Verify GPU 0 memory is now non-trivial (server is loaded).
-    used_mib="$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits --id=0 2>/dev/null | tr -d ' ' || echo 0)"
-    echo "INFRA_CHECK: GPU 0 memory used: ${used_mib} MiB"
+    # Verify the authorised GPU's memory is now non-trivial (server is loaded).
+    used_mib="$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits --id="$GPU_ID" 2>/dev/null | tr -d ' ' || echo 0)"
+    echo "INFRA_CHECK: GPU $GPU_ID memory used: ${used_mib} MiB"
     # No client requests fired.
     echo "INFRA_CHECK: complete, tearing down."
     exit 0
