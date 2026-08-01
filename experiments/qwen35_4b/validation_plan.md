@@ -276,3 +276,59 @@ If any protocol change is required at any point, it must:
   under the original protocol.
 
 No silent rewrites, no "corrections" without an amendment block.
+
+## Amendment 1 (2026-08-01) — GPU 7 authorisation and idle-gate waiver
+
+**Applies to:** every §7 attempt run on or after 2026-08-01. Previous
+attempts (none exist at time of writing) would remain under the
+original protocol.
+
+**Original text preserved verbatim** (from §9 sequencing and §7
+confounder-controls table):
+
+> 2. **GPU 0 authorisation.** GPU 0 is the only authorised device.
+> 3. **GPU 0 acquisition protocol** — see `plan.md` §7. Read-only
+>    query first; require 10 continuous minutes of idle (zero compute
+>    processes, memory ≤ 500 MiB, utilisation ≤ 5 %); recheck
+>    immediately before the first server launch to leave no idle gap;
+>    never signal any foreign PID; never switch GPUs.
+>
+> | Shared-GPU noise | Foreign-PID guard aborts to `INFRA_FAILURE`; the acquisition protocol (`plan.md` §7 Step 3) requires 10 continuous minutes of GPU 0 idle before launch and continuous monitoring during execution. |
+
+**Observed protocol gap.** At Step-3 acquisition on 2026-08-01,
+GPU 0 was heavily occupied by foreign compute (~69 GiB / 25 %
+utilisation / 2 foreign PIDs) with no visible path to the qualifying
+state in a reasonable window. The operator explicitly authorised
+GPU 7 mid-turn ("you can use gpu7") and then (having observed GPU 7
+was already fully idle: 0 MiB / 0 % / 0 compute apps) explicitly
+waived the 10-continuous-minutes idle requirement for this attempt
+("you dont need to wait, if it is idle, you can run directly").
+
+**Amended rules for attempts on or after 2026-08-01:**
+
+1. The authorised-GPU allowlist is now `{0, 7}`. GPU 7 is used when
+   GPU 0 is not qualifying and the operator has confirmed the switch.
+   No other GPU may be touched.
+2. The 10-continuous-minute idle requirement is waived **only** when
+   the operator confirms an immediate launch AND the target GPU is
+   currently in the qualifying state (0 compute processes, ≤ 500 MiB,
+   ≤ 5 % utilisation) at the moment of launch.
+3. The foreign-PID guard (Step 3 point 7 / §2 point 8) is unchanged:
+   any foreign PID that appears on the authorised GPU **during**
+   execution still classifies the attempt as `INFRA_FAILURE`; the
+   runner stops only its own process group, records evidence,
+   commits, and stops.
+4. Runner-side changes: `scripts/runner.sh` accepts `--gpu-id 0` or
+   `--gpu-id 7` (exit 64 for any other id) and uses `$GPU_ID`
+   consistently for `CUDA_VISIBLE_DEVICES`, the `--id` argument to
+   `nvidia-smi` and the foreign-PID / GPU-memory checks.
+
+**Not changed by this amendment:**
+
+- Hard SGLang checkout / model-revision / fixture pins.
+- Instrumentation semantics, verdict labels, or evidence-layer
+  requirements.
+- The prohibition on signalling foreign PIDs, resetting GPUs, or
+  modifying `/data/sglang-fork`.
+- The rule that a `FEATURE_GAP_EAGER_FALLBACK` is never labelled
+  "PASS" in the strong sense.

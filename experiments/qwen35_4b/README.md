@@ -87,7 +87,8 @@ python3 experiments/qwen35_4b/scripts/preflight_provenance.py --dry-run
 # runner dry-run (writes /tmp/qwen35_launch_ctx_*.json, no server)
 bash experiments/qwen35_4b/scripts/runner.sh --dry-run
 
-# runner must refuse without --gpu-id 0 / QWEN35_GPU_ID=0 (exit 64)
+# runner must refuse without --gpu-id or QWEN35_GPU_ID set (exit 64).
+# Authorised allowlist: {0, 7} per validation_plan.md Amendment 1.
 bash experiments/qwen35_4b/scripts/runner.sh   # expect FATAL + rc=64
 
 # client + verdict dry runs (no network, no CUDA)
@@ -112,6 +113,8 @@ not touched by this investigation.
 - Preserve exact SHAs, commands, and external PR links.
 - Never claim "confirmed upstream bug" until runtime reproduction is
   in hand.
-- Never launch GPU work without GPU 0 authorised and idle-verified.
+- Never launch GPU work outside the authorised allowlist `{0, 7}`
+  (see `validation_plan.md` Amendment 1, 2026-08-01) and without
+  idle-verification of the chosen GPU.
 - Commit convention: `docs(qwen35): …`, `feat(qwen35): …`,
   `test(qwen35): …`, `fix(qwen35): …` per `CLAUDE.md`.

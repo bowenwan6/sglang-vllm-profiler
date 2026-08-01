@@ -497,11 +497,13 @@ success.
    instrumentation patch, the live runner, the live client, and
    the real verdict inference. All CPU-only tests pass. Commit
    `feat(qwen35): add live BCG DeepStack validation runner`.
-3. **Step 3 (GPU 0 acquisition)** — read-only query GPU 0; qualifies
-   only when zero compute processes, memory ≤ 500 MiB, utilisation
-   ≤ 5 %; require 10 continuous minutes idle; recheck and launch
-   with no intentional gap; never signal a foreign PID; never
-   switch GPUs.
+3. **Step 3 (authorised-GPU acquisition)** — read-only query the
+   authorised GPU (allowlist `{0, 7}` per `validation_plan.md`
+   Amendment 1, 2026-08-01); qualifies only when zero compute
+   processes, memory ≤ 500 MiB, utilisation ≤ 5 %; the
+   10-continuous-minute idle requirement applies unless the operator
+   explicitly waives it AND the target GPU is currently qualifying;
+   never signal a foreign PID.
 4. **Step 4 (INFRA_CHECK)** — smallest real Qwen3.5-4B server
    configuration; verifies model revision, dependencies, CUDA /
    libcuda, multimodal readiness, BCG capture banner, clean
@@ -523,4 +525,5 @@ success.
   §7 links historically where useful but treats §4 as read-only.
 - Editing anything under `/data/sglang-fork`. That fork is
   preserved read-only as historical evidence at `986c89e69`.
-- Using any GPU other than GPU 0.
+- Using any GPU outside the authorised allowlist `{0, 7}` (see
+  `experiments/qwen35_4b/validation_plan.md` Amendment 1).
