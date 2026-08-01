@@ -593,21 +593,47 @@ success.
    hook fires, verified-zero substitution changes output; no hook
    accumulation across repeated calls). Commit
    `fix(qwen35): repair DeepStack instrumentation and image input`.
-7. **Step 7 (harness GPU validation) — pending.** Bring the
-   repaired harness up on a qualifying authorised GPU and run only
-   `eager_normal` + `eager_zero_deepstack` against one scored image
-   request. Passes only if all of: no placeholder warning, normal
-   DeepStack nonzero, zero hook fires exactly once, replacement
-   verified zero, `eager_normal` ≠ `eager_zero_deepstack` beyond
-   the eager-repeat noise floor. On PASS, commit
-   `test(qwen35): validate DeepStack measurement harness` and
-   continue. On NOT_DIAGNOSTIC, record and stop.
-8. **Step 8 (scored 2×2 rerun) — pending.** Only after Step 7
-   passes. Run all four arms serially with matched everything,
-   compute the verdict.
+7. **Step 7 (harness GPU validation) — HARNESS_NOT_DIAGNOSTIC
+   (2026-08-01, GPU 1).** Attempt
+   `experiments/qwen35_4b/results/harness_gpu1_20260801T062833Z/`
+   ran `eager_normal` + `eager_zero_deepstack` on GPU 1 under the
+   repaired harness. The `nn.Module.register_forward_pre_hook`
+   interceptor fired 111 times per arm on real
+   `Qwen3_5ForCausalLM` prefills; the corrected
+   `<|vision_start|><|image_pad|><|vision_end|>` placeholder
+   produced zero "More image data items…" warnings (down from 2
+   per arm in Attempt 01); image data was really consumed
+   (greedy output describes the fixture's colours). However,
+   `Qwen/Qwen3.5-4B`'s `vision_config.deepstack_visual_indexes = []`
+   (verified against every publicly released `Qwen/Qwen3.5-*`
+   size: 0.8B / 2B / 4B / 9B / 27B / 35B-A3B), so
+   `num_deepstack_embeddings = 0`, `input_deepstack_embeds` is
+   allocated with `shape=(N, 0)` / `numel = 0`, and
+   `Qwen3_5ForCausalLM.forward`'s DeepStack `add_` branch is
+   trivially skipped by its `numel() > 0` guard. Runtime
+   instrumentation confirms `nonzero_frac = 0.0` on every image
+   request; the zero-substitution guard correctly skips the
+   empty tensor; `eager_normal` == `eager_zero_deepstack` bit-for-
+   bit. Per the brief's Step 2 fail-path rule and
+   `validation_plan.md` Amendment 3, Step 8 (scored 2×2 rerun) is
+   **skipped by design**. The source-level BCG DeepStack suspicion
+   (F5, F6, F7, F8) remains **not testable** against any
+   publicly-released `Qwen/Qwen3.5-*` checkpoint at the pinned
+   SGLang SHA. GPU 1 returned clean (0 MiB / 0 % / 0 compute
+   apps pre and post); `/data/sglang-fork` HEAD unchanged. Commit
+   `test(qwen35): validate DeepStack measurement harness`.
+8. **Step 8 (scored 2×2 rerun) — skipped by design.** Would run
+   `eager_normal` + `eager_zero_deepstack` + `bcg_normal` +
+   `bcg_zero_deepstack` if Step 7 had passed. Skipped because the
+   Step 7 evidence establishes the ablation is trivially non-
+   diagnostic on this model target.
 
-Follow-up (queued): full data-flow / hidden-state envelope layer if
-the four-arm design is still ambiguous.
+Follow-up (queued, not on this branch): to test the source-level
+BCG DeepStack suspicion at runtime, rebaseline the investigation
+onto a checkpoint whose config ships a non-empty
+`deepstack_visual_indexes` list (e.g. a Qwen3-VL model — that has
+its own PCG investigation on
+`debug/v2-imgA-pcg-capture-stream-fix`).
 
 ### 7.7 §7 out of scope
 

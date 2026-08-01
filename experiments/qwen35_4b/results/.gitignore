@@ -15,3 +15,7 @@ infracheck_*/raw/
 infracheck_*/logs/
 infracheck_*/*.log
 infracheck_*/*.jsonl
+harness_*/raw/
+harness_*/logs/
+harness_*/*.log
+harness_*/*.jsonl

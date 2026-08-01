@@ -158,6 +158,20 @@ BCG outputs), not by elimination.
   `input_deepstack_embeds.abs().sum() > 0`. If DeepStack is trivially
   zero on this fixture the whole test is a no-op and the run is
   classified `INFRA_FAILURE` or `AMBIGUOUS`.
+  **[A3-DISPROVED] 2026-08-01.** Attempt
+  `harness_gpu1_20260801T062833Z` records
+  `vision_config.deepstack_visual_indexes = []` on the served
+  checkpoint (and on every publicly released `Qwen/Qwen3.5-*` size).
+  `num_deepstack_embeddings = 0` at model init; runtime
+  instrumentation shows `input_deepstack_embeds` allocated with
+  `shape = (N, 0)` / `numel = 0` on every observed request; the
+  DeepStack `add_` branch in `Qwen3_5ForCausalLM.forward` is
+  trivially skipped by its `numel() > 0` guard. Consequence: [A3]
+  as originally stated cannot hold for any `Qwen/Qwen3.5-*`
+  checkpoint, and hypotheses [H_A], [H_B], [H_C], [H_D] are all
+  unverifiable against this model target at the pinned SGLang SHA
+  — the target itself does not exercise DeepStack. See
+  `validation_plan.md` Amendment 3 for the follow-up rule.
 - **[A4]** Comparing hidden states / logits between BCG and eager
   paths on the same input is achievable via a small
   instrumentation patch limited to this branch (implemented in

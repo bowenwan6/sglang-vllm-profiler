@@ -436,3 +436,65 @@ amendment addresses.
   "PASS" in the strong sense.
 - Preservation of prior attempt directories and their recorded
   verdicts.
+
+**Step-2-only classification.** `HARNESS_NOT_DIAGNOSTIC` is a
+Step-2-only label defined in the brief for the harness-validation
+run that precedes the scored 2×2. It fires when the repaired
+harness is confirmed to instrument correctly (pre-hook fires,
+image is really consumed, no placeholder warnings) but the model
++ fixture combination cannot produce a measurable ablation
+difference. It is **not** one of the five predeclared verdicts in
+§1 and does not score against any hypothesis in `hypothesis.md`
+§3 — it is metadata about the harness, not evidence for or
+against BCG's DeepStack handling.
+
+## Amendment 3 (2026-08-01) — target-model DeepStack gap
+
+**Applies to:** every §7 attempt on `Qwen/Qwen3.5-*` targets at the
+pinned SGLang SHA `58974ca16…`.
+
+**Observed protocol gap (from `harness_gpu1_20260801T062833Z`):**
+the repaired harness (Amendment 2) works correctly on GPU, but the
+DeepStack code path in `Qwen3_5ForCausalLM.forward` cannot fire on
+any publicly released `Qwen/Qwen3.5-*` checkpoint because every one
+of them ships `vision_config.deepstack_visual_indexes = []`.
+Verified against the HuggingFace API for
+`Qwen/Qwen3.5-{0.8B, 2B, 4B, 9B, 27B, 35B-A3B}`. Consequence
+chain:
+
+1. `Qwen3VLForConditionalGeneration.__init__`
+   (`models/qwen3_vl.py:1302`) sets
+   `self.deepstack_visual_indexes = config.vision_config.deepstack_visual_indexes = []`.
+2. `num_deepstack_embeddings = len([]) = 0`.
+3. `general_mm_embed_routine`
+   (`managers/mm_utils.py:1116-1129`) allocates
+   `input_deepstack_embeds = torch.zeros((N, hidden_size * 0))` →
+   `shape=(N, 0)`, `numel = 0`.
+4. `Qwen3_5ForCausalLM.forward`
+   (`models/qwen3_5.py:1449-1457`) gates on
+   `input_deepstack_embeds is not None and .numel() > 0` → False,
+   so the `add_(input_deepstack_embeds[:, sep : sep + hidden_size])`
+   branch is skipped on every request.
+5. Runtime instrumentation confirms this:
+   `harness_gpu1_20260801T062833Z` records `nonzero_frac = 0.0` and
+   `numel = 0` on every observed `lm_forward_input_deepstack`
+   event.
+
+**Amended rule for attempts on or after 2026-08-01:** the source-
+level BCG DeepStack suspicion (F5, F6, F7, F8) is **not testable
+against `Qwen/Qwen3.5-*`** at the pinned SGLang SHA. A future
+§7-track attempt that wants to test that suspicion must (a) pick
+a model target whose config ships a non-empty
+`deepstack_visual_indexes` list (e.g. a Qwen3-VL / Qwen3-Omni
+checkpoint), and (b) predeclare that model swap in its own
+Amendment N in this file with matching updates to `README.md`,
+`plan.md` §7, `provenance.md`, `hypothesis.md`, and
+`source_audit.md`. This branch does not perform that model swap;
+the §7 investigation closes out at Amendment 3 with the source-
+level readings recorded and the runtime hypothesis unverifiable
+against the current model target.
+
+**Not changed by this amendment:** hard SGLang checkout / fixture
+pins, verdict labels (still exactly the five in §1 plus the
+Step-2-only `HARNESS_NOT_DIAGNOSTIC`), ban on signalling foreign
+PIDs / resetting GPUs / modifying `/data/sglang-fork`.

@@ -1,0 +1,65 @@
+{
+  "arms_not_run": [
+    "bcg_normal",
+    "bcg_zero_deepstack"
+  ],
+  "arms_run": [
+    "eager_normal",
+    "eager_zero_deepstack"
+  ],
+  "attempt_id": "harness_gpu1_20260801T062833Z",
+  "authorised_allowlist": [
+    0,
+    1,
+    7
+  ],
+  "foreign_pid_pre_snapshot_lines": 11,
+  "frozen_sglang_sha": "58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8",
+  "gpu_id": 1,
+  "kind": "harness_validation",
+  "launch_context": {
+    "attempt_id": "harness_gpu1_20260801T062833Z",
+    "gpu_id": "1",
+    "prelaunch_utc": "2026-08-01T06-28-41Z"
+  },
+  "model": {
+    "architectures": [
+      "Qwen3_5ForConditionalGeneration"
+    ],
+    "id": "Qwen/Qwen3.5-4B",
+    "model_type": "qwen3_5",
+    "revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a"
+  },
+  "model_config_observed": {
+    "note": "Public Qwen/Qwen3.5-* checkpoints (0.8B, 2B, 4B, 9B, 27B, 35B-A3B) all ship deepstack_visual_indexes=[]. num_deepstack_embeddings=0, input_deepstack_embeds allocated with shape=(N,0)/numel=0, and Qwen3_5ForCausalLM.forward gates DeepStack on \"is not None and numel() > 0\" \u2014 so the DeepStack add_ branch cannot fire on ANY publicly released Qwen/Qwen3.5 checkpoint at the pinned SGLang SHA.",
+    "vision_config.deepstack_visual_indexes": []
+  },
+  "placeholder_token_used": "<|vision_start|><|image_pad|><|vision_end|>",
+  "preflight_status": "PASS",
+  "server_flags_common": [
+    "--model-path",
+    "Qwen/Qwen3.5-4B",
+    "--revision",
+    "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+    "--port",
+    "30001",
+    "--host",
+    "127.0.0.1",
+    "--tp",
+    "1",
+    "--dtype",
+    "bfloat16",
+    "--disable-radix-cache",
+    "--mem-fraction-static",
+    "0.75",
+    "--log-level",
+    "info",
+    "--allow-auto-truncate",
+    "--trust-remote-code",
+    "--disable-cuda-graph"
+  ],
+  "server_ready_seconds_per_arm": {
+    "eager_normal": 41
+  },
+  "why_arms_not_run": "Step 2 harness validation. Ablation is non-diagnostic on this model (DeepStack numel is 0), so per Amendment 2 / brief, Step 3 is skipped."
+}
