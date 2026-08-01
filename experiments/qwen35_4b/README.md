@@ -70,6 +70,30 @@ a profiler-owned test-only monkey-patch that adds Qwen3-VL to the
 BCG allowlist at runtime, to convert the latent hypothesis into
 live-fire evidence.
 
+**Live-fire evidence (Attempt 03 — 2026-08-01, GPU 1, verdict `FAIL_BCG_DEEPSTACK`).**
+Under the profiler-owned test-only monkey-patch that adds
+`Qwen3VLForConditionalGeneration` to
+`multimodal_breakable_cuda_graph_supported_model_archs` at runtime,
+`Qwen/Qwen3-VL-8B-Instruct @ 0c351dd0` ran the 2×2. All four arms
+served the scored 893-token image prefill; both BCG arms served it
+under `cuda graph: True` with no `bcg_execute_body_error`. The
+DeepStack tensor was observed at LM entry with `shape=[896, 12288]`
+(`= [N, hidden_size * 3]` for text hidden=4096) and `nonzero_frac ≈
+0.98` in the two normal arms; the zero-substitution guard verified
+the ablation replacement (nonzero_frac → 0.0, abs_sum → 0.0) in the
+two zero arms. Greedy tokens: `eager_normal` = "The image displays
+three vertical stripes of red, green, and blue." (15 tokens);
+`eager_zero_deepstack` diverges at token 7. `bcg_normal` matches
+`bcg_zero_deepstack` exactly (20/20 identical tokens, mean logprob
+diff 0.0), and both track `eager_zero_deepstack`. This is the
+predicted `FAIL_BCG_DEEPSTACK` signature: SGLang's
+`replay_layer_forward` bridge silently drops the DeepStack
+contribution under BCG replay. The bug is now live-fire — see
+`results/attempt_gpu1_20260801T115524Z/`. Attempt landed under
+commit `test(qwen35): rerun 2x2 with Qwen3-VL under patched BCG`.
+Caveat: obtained under the monkey-patched allowlist; no shipped
+config reaches this code path today.
+
 - Retarget scaffolding landed 2026-08-01 as
   `feat(qwen35): retarget harness to Qwen3-VL under monkey-patched BCG`:
   new `scripts/bcg_allowlist_patch.py` sibling module mutates the
@@ -106,7 +130,7 @@ live-fire evidence.
 | [`scripts/bcg_allowlist_patch.py`](scripts/bcg_allowlist_patch.py) | Profiler-owned test-only monkey-patch that mutates the frozen SGLang checkout's `multimodal_breakable_cuda_graph_supported_model_archs` list in memory to include `Qwen3VLForConditionalGeneration` / `Qwen3VLMoeForConditionalGeneration`. Opt-in via `QWEN35_PATCH_BCG_ALLOWLIST=1` or `--patch-bcg-allowlist`; idempotent; frozen SGLang source unchanged. | landed 2026-08-01 |
 | [`fixtures/`](fixtures/) | Byte-pinned deterministic assets (image + `manifest.json`). Regeneration must be bit-identical. | landed Part 5 |
 | [`scripts/`](scripts/) | CPU-only scaffolding + live runner (Step 2): fixture generator, provenance preflight, live runner, client, verdict scorer, instrumentation patch. All refuse to touch a GPU without an explicitly authorised ID. | evolving |
-| [`results/`](results/) | Validation attempts (see `results/README.md`). Raw per-attempt outputs are gitignored; only summary / metadata / verdict files are committed. Step 4 INFRA_CHECK landed 2026-08-01 as `infracheck_gpu7_20260801T012122Z` (PASS). Step 5 correctness/path validation landed same day as `attempt_gpu7_20260801T013522Z` with verdict `AMBIGUOUS` (preserved as historical evidence: `language_model.__call__` instance-dict interceptor ineffective on `nn.Module`, and `<image>` placeholder mismatched the pinned Qwen VL processor's `<\|vision_start\|><\|image_pad\|><\|vision_end\|>`). Both flaws are repaired under `validation_plan.md` Amendment 2 (2026-08-01). The harness-validation follow-up `harness_gpu1_20260801T062833Z` (2026-08-01, GPU 1) confirms the repair works on GPU (pre-hook fires, placeholder warnings gone) but records `HARNESS_NOT_DIAGNOSTIC`: every publicly released `Qwen/Qwen3.5-*` checkpoint ships `vision_config.deepstack_visual_indexes = []`, so `input_deepstack_embeds` is empty (`numel = 0`) and the DeepStack `add_` branch is trivially skipped on every request. Under `validation_plan.md` Amendment 3, the source-level suspicion is not testable against this model family without a model swap. | populated as attempts land |
+| [`results/`](results/) | Validation attempts (see `results/README.md`). Raw per-attempt outputs are gitignored; only summary / metadata / verdict files are committed. Step 4 INFRA_CHECK landed 2026-08-01 as `infracheck_gpu7_20260801T012122Z` (PASS). Step 5 correctness/path validation landed same day as `attempt_gpu7_20260801T013522Z` with verdict `AMBIGUOUS` (preserved as historical evidence: `language_model.__call__` instance-dict interceptor ineffective on `nn.Module`, and `<image>` placeholder mismatched the pinned Qwen VL processor's `<\|vision_start\|><\|image_pad\|><\|vision_end\|>`). Both flaws are repaired under `validation_plan.md` Amendment 2 (2026-08-01). The harness-validation follow-up `harness_gpu1_20260801T062833Z` (2026-08-01, GPU 1) confirms the repair works on GPU (pre-hook fires, placeholder warnings gone) but records `HARNESS_NOT_DIAGNOSTIC`: every publicly released `Qwen/Qwen3.5-*` checkpoint ships `vision_config.deepstack_visual_indexes = []`, so `input_deepstack_embeds` is empty (`numel = 0`) and the DeepStack `add_` branch is trivially skipped on every request. Under `validation_plan.md` Amendment 3, the source-level suspicion is not testable against this model family without a model swap. Attempt 03 (`attempt_gpu1_20260801T115524Z`, 2026-08-01, GPU 1) retargets to `Qwen/Qwen3-VL-8B-Instruct` under the profiler-owned test-only BCG allowlist monkey-patch (`scripts/bcg_allowlist_patch.py`, opt-in via `QWEN35_PATCH_BCG_ALLOWLIST=1` / `--patch-bcg-allowlist`) and records verdict **`FAIL_BCG_DEEPSTACK`** — live-fire confirmation of the source-level suspicion in `latent_bug_analysis.md` § 2. `bcg_normal` produces the same greedy output as `bcg_zero_deepstack` and diverges from `eager_normal` in the exact zero-DeepStack signature. Caveat: obtained under the runtime monkey-patch; no shipped upstream configuration currently reaches this code path. | populated as attempts land |
 
 ## Read order for a fresh reader
 

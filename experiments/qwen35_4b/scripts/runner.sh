@@ -195,12 +195,34 @@ foreign_pid_check() {
     fi
     local raw
     raw="$(nvidia-smi --query-compute-apps=pid,gpu_uuid,used_gpu_memory --format=csv,noheader 2>/dev/null || true)"
-    # Reject if any process is on the authorised GPU's UUID.
-    local hits
-    hits="$(printf "%s\n" "$raw" | awk -v uuid="$GPU_UUID" -F', *' '$2 == uuid {print}')"
-    if [ -n "$hits" ]; then
-        echo "foreign_pid_check: existing compute apps present on GPU $GPU_ID ($GPU_UUID):"
-        printf "%s\n" "$hits"
+    # Filter to hits on the authorised GPU's UUID, then drop any PIDs
+    # that have no /proc entry — those are stale driver bookkeeping
+    # entries left behind by processes that already died and cannot
+    # actually contend for compute or memory. Real foreign processes
+    # (with a live /proc/PID) still abort the run.
+    local raw_hits
+    raw_hits="$(printf "%s\n" "$raw" | awk -v uuid="$GPU_UUID" -F', *' '$2 == uuid {print}')"
+    local live_hits=""
+    local stale_hits=""
+    if [ -n "$raw_hits" ]; then
+        while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            local pid
+            pid="$(printf "%s" "$line" | awk -F', *' '{print $1}')"
+            if [ -e "/proc/$pid" ]; then
+                live_hits="${live_hits}${live_hits:+$'\n'}${line}"
+            else
+                stale_hits="${stale_hits}${stale_hits:+$'\n'}${line}"
+            fi
+        done <<<"$raw_hits"
+    fi
+    if [ -n "$stale_hits" ]; then
+        echo "foreign_pid_check: STALE driver bookkeeping (PIDs not in /proc; skipped):"
+        printf "%s\n" "$stale_hits"
+    fi
+    if [ -n "$live_hits" ]; then
+        echo "foreign_pid_check: existing LIVE compute apps present on GPU $GPU_ID ($GPU_UUID):"
+        printf "%s\n" "$live_hits"
         echo "foreign_pid_check: aborting; the runner refuses to co-inhabit." >&2
         exit 71
     fi

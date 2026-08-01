@@ -101,14 +101,36 @@ def _read_text(path: Path) -> str:
 
 
 def collect_config_records(
-    attempt_dir: Path, launch_id: str
+    attempt_dir: Path, launch_id: str,
+    arm_launch_ids: dict[str, str] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Return {config_label: {"client": ..., "instrumentation": ...,
-    "server_stderr": ..., "placeholder_warning": bool}}."""
+    "server_stderr": ..., "placeholder_warning": bool}}.
+
+    Historical guard: refuses to score across mismatched launches.
+    ``launch_id`` is the attempt-level guard used when the metadata
+    supplies a single launch_id and every arm was launched under that
+    ID. When ``arm_launch_ids`` is provided (introduced 2026-08-01 to
+    support the fresh-server-per-arm 2×2 design), each arm's record is
+    validated against the arm-specific launch_id in that mapping AND
+    the arm's expected instrumentation launch_id prefix must start
+    with the attempt_id, so cross-attempt scoring is still refused.
+    """
     raw = attempt_dir / "raw"
     out: dict[str, dict[str, Any]] = {}
     if not raw.is_dir():
         return out
+    arm_launch_ids = arm_launch_ids or {}
+
+    def _accept(label: str, recorded: str | None) -> bool:
+        if recorded is None:
+            return False
+        if recorded == launch_id:
+            return True
+        expected_arm = arm_launch_ids.get(label)
+        if expected_arm is not None and recorded == expected_arm:
+            return True
+        return False
 
     for cf in sorted(raw.glob("client_records_*.json")):
         label = cf.stem[len("client_records_") :]
@@ -118,9 +140,11 @@ def collect_config_records(
             print(f"REJECT: {cf.name} unreadable: {exc}", file=sys.stderr)
             continue
         recorded = (data.get("summary") or {}).get("launch_id")
-        if recorded != launch_id:
+        if not _accept(label, recorded):
             print(
-                f"REJECT: {cf.name} launch_id={recorded!r} != {launch_id!r}",
+                f"REJECT: {cf.name} launch_id={recorded!r} does not match "
+                f"attempt launch_id {launch_id!r} nor arm launch_id "
+                f"{arm_launch_ids.get(label)!r}",
                 file=sys.stderr,
             )
             continue
@@ -129,11 +153,27 @@ def collect_config_records(
     for inst in sorted(raw.glob("instrumentation_*.jsonl")):
         label = inst.stem[len("instrumentation_") :]
         events = load_jsonl(inst)
-        # Filter by launch_id when present.
-        events = [
-            e for e in events
-            if e.get("launch_id") in (None, "", launch_id)
-        ]
+        # Filter by launch_id when present; accept event launch_ids that
+        # embed either the attempt-level launch_id or the arm-specific
+        # launch_id (or are unset — the install-time events pre-date the
+        # per-launch tagging).
+        acceptable_ids = {launch_id, arm_launch_ids.get(label)}
+        acceptable_ids.discard(None)
+
+        def _event_ok(e: dict) -> bool:
+            eid = e.get("launch_id")
+            if eid in (None, ""):
+                return True
+            if eid in acceptable_ids:
+                return True
+            # Instrumentation tags launches with
+            # "<attempt_id>-<config>-<arm_launch_id>". Accept when the
+            # event ID CONTAINS any acceptable id — that keeps the
+            # historical guard against cross-attempt scoring while
+            # tolerating the composite label.
+            return any(a and a in eid for a in acceptable_ids)
+
+        events = [e for e in events if _event_ok(e)]
         out.setdefault(label, {})["instrumentation"] = events
 
     for se in sorted(raw.glob("server_stderr_*.log")):
@@ -660,7 +700,17 @@ def main(argv: list[str] | None = None) -> int:
         print("FATAL: metadata.json missing launch_context.prelaunch_utc", file=sys.stderr)
         return 1
 
-    per_config = collect_config_records(attempt_dir, launch_id)
+    # Fresh-server-per-arm 2×2 designs (Amendment 2 / Amendment 4)
+    # record a per-arm launch_id in metadata under ``arm_launch_ids``.
+    # When present, the per-arm ID is accepted alongside the attempt-
+    # level ID.
+    arm_launch_ids = (
+        metadata.get("arm_launch_ids")
+        or launch_ctx.get("arm_launch_ids")
+        or {}
+    )
+
+    per_config = collect_config_records(attempt_dir, launch_id, arm_launch_ids)
 
     if args.dry_run and not per_config:
         verdict = "INFRA_FAILURE"

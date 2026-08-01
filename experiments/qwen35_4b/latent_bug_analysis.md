@@ -130,6 +130,35 @@ defensive upstream note: `replay_layer_forward` should either
 Which framing to file with upstream depends on the retarget runtime outcome.
 Do not file anything until attempt 03 verdict is in.
 
+### 4.1 Attempt 03 outcome (2026-08-01, GPU 1)
+
+Verdict: **`FAIL_BCG_DEEPSTACK`** — live-fire under the monkey-patched
+allowlist (see `results/attempt_gpu1_20260801T115524Z/`). The 4-arm
+2×2 shows `bcg_normal` bit-identical to `bcg_zero_deepstack`, both
+tracking `eager_zero_deepstack`, while `eager_zero_deepstack`
+measurably diverges from `eager_normal` at the first non-boilerplate
+token (7/15 common prefix, max abs logprob diff 1.14). BCG replay was
+confirmed on the scored image prefills (`bcg_execute_body_enter` with
+`contains_mm_inputs=true` at `shape_key.size=896`, server stderr
+`cuda graph: True`, zero `bcg_execute_body_error`). The DeepStack
+tensor was verifiably present at the LM entry
+(`shape=[896, 12288]`, `nonzero_frac ≈ 0.98`, `module_class =
+Qwen3LLMModel`, `module_class_recognised = true`) — the bug is not
+that DeepStack fails to reach the LM's forward kwargs; it is that the
+BCG replay bridge silently drops its contribution before it can
+propagate through the layers.
+
+**Framing for a future upstream filing:** the "register a slot and
+copy" fix is the natural extension of what `replay_layer_forward`
+already does for `input_embeds` (per PR #30872). A "numel guard
++ eager fallback" would be a minimal defensive change that fails
+fast rather than silently producing the wrong tokens. Filing the
+upstream note is **out of scope for this branch** per the brief's
+"Do not implement an upstream fix. Do not open an upstream SGLang
+issue" rule; the decision is deferred to a follow-up branch that
+can present both the source-level argument and the live-fire
+evidence from this attempt.
+
 ## 5. What this document is not
 
 - Not a fix. `plan.md` §7 still says "no fix in this pass."
