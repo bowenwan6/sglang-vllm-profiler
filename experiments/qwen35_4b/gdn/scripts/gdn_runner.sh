@@ -286,19 +286,23 @@ export LD_PRELOAD="${LD_PRELOAD:-$LIBCUDA_PRELOAD}"
 export CUDA_VISIBLE_DEVICES="$GPU_ID"
 export QWEN35_GDN_RUN_MODE="$ARM"
 
-set -m
-(
-    setsid python3 "$DS_SCRIPTS/server_launcher.py" \
-        "${LAUNCHER_ARGS[@]}" -- "${SGLANG_FORWARDED[@]}" \
-        > "$SERVER_LOG" 2>&1
-) &
-SERVER_PGID=$!
-set +m
-echo "gdn_runner: server PGID $SERVER_PGID; log $SERVER_LOG"
+# Launch server_launcher.py directly under setsid so the resulting
+# python process is its own session leader (PID == PGID). Using a
+# subshell here previously caused $! to capture the subshell PID
+# rather than the setsid'd python PID, so the readiness check
+# (kill -0 -PGID) misfired and we killed the trap early while the
+# real launcher continued to hold the GPU.
+setsid python3 "$DS_SCRIPTS/server_launcher.py" \
+    "${LAUNCHER_ARGS[@]}" -- "${SGLANG_FORWARDED[@]}" \
+    > "$SERVER_LOG" 2>&1 &
+SERVER_PID=$!
+# The setsid'd python is a session leader, so its PID is also its PGID.
+SERVER_PGID="$SERVER_PID"
+echo "gdn_runner: server PID/PGID $SERVER_PID; log $SERVER_LOG"
 
 # --- teardown trap (own PGID only) --------------------------------
 
-trap 'echo "gdn_runner: teardown for PGID $SERVER_PGID"; kill -TERM -"$SERVER_PGID" 2>/dev/null || true; sleep 3; kill -KILL -"$SERVER_PGID" 2>/dev/null || true' EXIT
+trap 'echo "gdn_runner: teardown for PGID $SERVER_PGID"; kill -TERM -"$SERVER_PGID" 2>/dev/null || true; sleep 5; kill -KILL -"$SERVER_PGID" 2>/dev/null || true' EXIT
 
 # --- readiness wait -----------------------------------------------
 
@@ -309,8 +313,12 @@ while [ $((SECONDS - start_ts)) -lt "$LAUNCH_WAIT_SECONDS" ]; do
         ready=1
         break
     fi
-    if ! kill -0 -"$SERVER_PGID" 2>/dev/null; then
-        echo "FATAL: server PGID $SERVER_PGID died during startup." >&2
+    # Use kill -0 on the launcher PID (positive) — not on the PGID
+    # (negative), which returns 0 as long as any process in the group
+    # exists and can lie during the brief window between spawn workers
+    # coming up and the parent finishing setup.
+    if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+        echo "FATAL: server launcher PID $SERVER_PID died during startup." >&2
         exit 75
     fi
     sleep 2
