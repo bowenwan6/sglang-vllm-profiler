@@ -1056,13 +1056,49 @@ def test_correctness_dry_run_command_ok() -> None:
     _ok("correctness_dry_run_command_ok")
 
 
+def _gs_all_pass():
+    return {
+        "per_gate": {i: {"overall": "PASS"} for i in (1, 2, 3, 4)},
+        "all_pass": True,
+        "any_missing": False,
+        "any_failed": False,
+        "partial": False,
+    }
+
+
+def _gs_gate2_failed():
+    return {
+        "per_gate": {
+            1: {"overall": "PASS"},
+            2: {"overall": "FAIL"},
+            3: {"overall": "PASS"},
+            4: {"overall": "PASS"},
+        },
+        "all_pass": False,
+        "any_missing": False,
+        "any_failed": True,
+        "partial": False,
+    }
+
+
+def _gs_gate2_missing():
+    return {
+        "per_gate": {
+            1: {"overall": "PASS"},
+            2: {"overall": "MISSING"},
+            3: {"overall": "PASS"},
+            4: {"overall": "PASS"},
+        },
+        "all_pass": False,
+        "any_missing": True,
+        "any_failed": False,
+        "partial": True,
+    }
+
+
 def test_verdict_all_gates_pass_no_perf_gap_is_ambiguous() -> None:
     # Without perf findings, the verdict should be AMBIGUOUS (perf side
     # has no signal to declare either way).
-    gate_summary = {
-        "per_gate": {i: {"overall": "PASS"} for i in (1, 2, 3, 4)},
-        "all_pass": True,
-    }
     perf_summary = {
         "findings": [],
         "any_H_A": False,
@@ -1070,17 +1106,13 @@ def test_verdict_all_gates_pass_no_perf_gap_is_ambiguous() -> None:
         "any_H_C": False,
         "any_bcg_gap": False,
     }
-    v = gv.decide(gate_summary, perf_summary, infra_failure=False)
+    v = gv.decide(_gs_all_pass(), perf_summary, infra_failure=False)
     if v != "AMBIGUOUS":
         _fail("verdict_all_gates_pass_no_perf_gap_is_ambiguous", v)
     _ok("verdict_all_gates_pass_no_perf_gap_is_ambiguous")
 
 
 def test_verdict_gate_failure_wins_over_perf() -> None:
-    gate_summary = {
-        "per_gate": {1: {"overall": "PASS"}, 2: {"overall": "FAIL"}, 3: {"overall": "PASS"}, 4: {"overall": "PASS"}},
-        "all_pass": False,
-    }
     perf_summary = {
         "findings": [{"any": "thing"}],
         "any_H_A": True,
@@ -1088,17 +1120,29 @@ def test_verdict_gate_failure_wins_over_perf() -> None:
         "any_H_C": False,
         "any_bcg_gap": True,
     }
-    v = gv.decide(gate_summary, perf_summary, infra_failure=False)
+    v = gv.decide(_gs_gate2_failed(), perf_summary, infra_failure=False)
     if v != "FAIL_BCG_GDN_CORRECTNESS":
         _fail("verdict_gate_failure_wins_over_perf", v)
     _ok("verdict_gate_failure_wins_over_perf")
 
 
-def test_verdict_notable_gap_when_gates_pass_and_h_a() -> None:
-    gate_summary = {
-        "per_gate": {i: {"overall": "PASS"} for i in (1, 2, 3, 4)},
-        "all_pass": True,
+def test_verdict_partial_sweep_when_gate_missing_but_others_pass() -> None:
+    """T5 fix: MISSING gate with no FAIL emits PARTIAL_SWEEP, not
+    FAIL_BCG_GDN_CORRECTNESS."""
+    perf_summary = {
+        "findings": [],
+        "any_H_A": False,
+        "any_H_B": False,
+        "any_H_C": False,
+        "any_bcg_gap": False,
     }
+    v = gv.decide(_gs_gate2_missing(), perf_summary, infra_failure=False)
+    if v != "PARTIAL_SWEEP":
+        _fail("verdict_partial_sweep_when_gate_missing_but_others_pass", v)
+    _ok("verdict_partial_sweep_when_gate_missing_but_others_pass")
+
+
+def test_verdict_notable_gap_when_gates_pass_and_h_a() -> None:
     perf_summary = {
         "findings": [{"any": "thing"}],
         "any_H_A": True,
@@ -1106,17 +1150,13 @@ def test_verdict_notable_gap_when_gates_pass_and_h_a() -> None:
         "any_H_C": False,
         "any_bcg_gap": True,
     }
-    v = gv.decide(gate_summary, perf_summary, infra_failure=False)
+    v = gv.decide(_gs_all_pass(), perf_summary, infra_failure=False)
     if v != "PASS_BCG_GDN_NOTABLE_GAP":
         _fail("verdict_notable_gap_when_gates_pass_and_h_a", v)
     _ok("verdict_notable_gap_when_gates_pass_and_h_a")
 
 
 def test_verdict_no_gap_when_gates_pass_findings_no_hypothesis() -> None:
-    gate_summary = {
-        "per_gate": {i: {"overall": "PASS"} for i in (1, 2, 3, 4)},
-        "all_pass": True,
-    }
     perf_summary = {
         "findings": [{"any": "thing"}],
         "any_H_A": False,
@@ -1124,17 +1164,13 @@ def test_verdict_no_gap_when_gates_pass_findings_no_hypothesis() -> None:
         "any_H_C": False,
         "any_bcg_gap": False,
     }
-    v = gv.decide(gate_summary, perf_summary, infra_failure=False)
+    v = gv.decide(_gs_all_pass(), perf_summary, infra_failure=False)
     if v != "PASS_BCG_GDN_NO_GAP":
         _fail("verdict_no_gap_when_gates_pass_findings_no_hypothesis", v)
     _ok("verdict_no_gap_when_gates_pass_findings_no_hypothesis")
 
 
 def test_verdict_infra_failure_wins_over_everything() -> None:
-    gate_summary = {
-        "per_gate": {i: {"overall": "PASS"} for i in (1, 2, 3, 4)},
-        "all_pass": True,
-    }
     perf_summary = {
         "findings": [],
         "any_H_A": True,
@@ -1142,10 +1178,66 @@ def test_verdict_infra_failure_wins_over_everything() -> None:
         "any_H_C": True,
         "any_bcg_gap": True,
     }
-    v = gv.decide(gate_summary, perf_summary, infra_failure=True)
+    v = gv.decide(_gs_all_pass(), perf_summary, infra_failure=True)
     if v != "INFRA_FAILURE":
         _fail("verdict_infra_failure_wins_over_everything", v)
     _ok("verdict_infra_failure_wins_over_everything")
+
+
+def test_verdict_h_a_ignores_A2() -> None:
+    """T5 fix: H_A scoped to BCG-enabled arms {A1, A3} only.
+
+    Synthetic perf rows where only A2 shows kernel-count inflation must
+    NOT trigger a PASS_BCG_GDN_NOTABLE_GAP verdict — the audit's B8
+    scoping bug would have wrongly attributed a decode-CG artefact
+    to the BCG hypothesis.
+    """
+    rows = []
+    for _ in range(3):
+        rows.append(
+            {"arm": "A0", "prompt_len": "128", "batch": "1",
+             "kernel_count_gdn": "100", "p95_launch_gap_us": "5.0",
+             "graph_breaks": "0"}
+        )
+    for _ in range(3):
+        rows.append(
+            {"arm": "A2", "prompt_len": "128", "batch": "1",
+             "kernel_count_gdn": "500", "p95_launch_gap_us": "5.0",
+             "graph_breaks": "0"}
+        )
+    perf = gv._score_perf(rows)
+    if perf["any_H_A"]:
+        _fail(
+            "verdict_h_a_ignores_A2",
+            f"H_A should be False when only A2 inflates: {perf}",
+        )
+    if perf["any_bcg_gap"]:
+        _fail(
+            "verdict_h_a_ignores_A2",
+            f"any_bcg_gap should be False; got {perf}",
+        )
+    _ok("verdict_h_a_ignores_A2")
+
+
+def test_verdict_h_a_triggers_on_A1() -> None:
+    """T5 sanity: H_A does trigger for a BCG-enabled arm."""
+    rows = []
+    for _ in range(3):
+        rows.append(
+            {"arm": "A0", "prompt_len": "128", "batch": "1",
+             "kernel_count_gdn": "100", "p95_launch_gap_us": "5.0",
+             "graph_breaks": "0"}
+        )
+    for _ in range(3):
+        rows.append(
+            {"arm": "A1", "prompt_len": "128", "batch": "1",
+             "kernel_count_gdn": "500", "p95_launch_gap_us": "5.0",
+             "graph_breaks": "0"}
+        )
+    perf = gv._score_perf(rows)
+    if not perf["any_H_A"]:
+        _fail("verdict_h_a_triggers_on_A1", f"expected H_A True, got {perf}")
+    _ok("verdict_h_a_triggers_on_A1")
 
 
 def test_verdict_dry_run_command_ok() -> None:
@@ -1169,6 +1261,7 @@ def test_verdict_labels_are_exact_strings() -> None:
         "PASS_BCG_GDN_NOTABLE_GAP",
         "PASS_BCG_GDN_NO_GAP",
         "FAIL_BCG_GDN_CORRECTNESS",
+        "PARTIAL_SWEEP",
         "AMBIGUOUS",
         "INFRA_FAILURE",
     }
@@ -1329,9 +1422,12 @@ TESTS = (
     test_correctness_dry_run_command_ok,
     test_verdict_all_gates_pass_no_perf_gap_is_ambiguous,
     test_verdict_gate_failure_wins_over_perf,
+    test_verdict_partial_sweep_when_gate_missing_but_others_pass,
     test_verdict_notable_gap_when_gates_pass_and_h_a,
     test_verdict_no_gap_when_gates_pass_findings_no_hypothesis,
     test_verdict_infra_failure_wins_over_everything,
+    test_verdict_h_a_ignores_A2,
+    test_verdict_h_a_triggers_on_A1,
     test_verdict_dry_run_command_ok,
     test_verdict_labels_are_exact_strings,
     test_nsys_capture_requires_separator,

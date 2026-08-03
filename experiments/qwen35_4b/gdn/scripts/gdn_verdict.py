@@ -50,9 +50,16 @@ VERDICT_LABELS = (
     "PASS_BCG_GDN_NOTABLE_GAP",
     "PASS_BCG_GDN_NO_GAP",
     "FAIL_BCG_GDN_CORRECTNESS",
+    "PARTIAL_SWEEP",
     "AMBIGUOUS",
     "INFRA_FAILURE",
 )
+
+# BCG-enabled arms only (audit fix: H_A previously iterated A2 too,
+# risking a false positive PASS_BCG_GDN_NOTABLE_GAP from a decode-CG
+# artefact — A2's prefill is eager, so any GDN-side kernel divergence
+# there cannot be attributed to BCG).
+_BCG_ARMS = ("A1", "A3")
 
 # From validation_plan.md §6.
 KERNEL_INFLATION_FACTOR = 0.10  # >= 10% over A0 mean
@@ -71,20 +78,39 @@ def _load_gate(path_or_arg: str) -> tuple[int, dict]:
 
 
 def _score_gates(gates: dict[int, dict]) -> dict:
-    """Score the correctness gates."""
+    """Score the correctness gates.
+
+    Distinguishes MISSING from FAIL so decide() can emit PARTIAL_SWEEP
+    when a scaffolding gap left a gate unrun, versus a real correctness
+    failure. Previously any MISSING silently collapsed to
+    FAIL_BCG_GDN_CORRECTNESS.
+    """
     per_gate = {}
     all_pass = True
+    any_missing = False
+    any_failed = False
     for n in (1, 2, 3, 4):
         g = gates.get(n)
         if g is None:
             per_gate[n] = {"overall": "MISSING"}
+            any_missing = True
             all_pass = False
             continue
         overall = g.get("overall", "MISSING")
         per_gate[n] = {"overall": overall}
-        if overall != "PASS":
+        if overall == "MISSING":
+            any_missing = True
             all_pass = False
-    return {"per_gate": per_gate, "all_pass": all_pass}
+        elif overall != "PASS":
+            any_failed = True
+            all_pass = False
+    return {
+        "per_gate": per_gate,
+        "all_pass": all_pass,
+        "any_missing": any_missing,
+        "any_failed": any_failed,
+        "partial": any_missing and not any_failed,
+    }
 
 
 def _read_nsys_csv(csv_dir: Path) -> list[dict]:
@@ -144,18 +170,21 @@ def _score_perf(rows: list[dict]) -> dict:
             gap_p95 = statistics.fmean(arm_gap) if arm_gap else None
             max_breaks = max(arm_breaks) if arm_breaks else 0.0
 
-            # H_A: kernel inflation.
+            # H_A: kernel inflation. BCG-enabled arms only — A2's
+            # prefill is eager, so any GDN-side kernel divergence there
+            # cannot be attributed to BCG (audit B8 fix).
             h_a = (
-                kern_mean is not None
+                arm in _BCG_ARMS
+                and kern_mean is not None
                 and a0_kern_mean > 0
                 and kern_mean >= a0_kern_mean * (1 + KERNEL_INFLATION_FACTOR)
                 and (kern_mean - a0_kern_mean) > KERNEL_STDDEV_MULTIPLIER * a0_kern_std
             )
             # H_B: graph break present (BCG-enabled arms only).
-            h_b = arm in ("A1", "A3") and max_breaks > 0
+            h_b = arm in _BCG_ARMS and max_breaks > 0
             # H_C: launch-gap inflation (BCG-enabled arms only).
             h_c = (
-                arm in ("A1", "A3")
+                arm in _BCG_ARMS
                 and gap_p95 is not None
                 and a0_gap_p95 > 0
                 and gap_p95 >= LAUNCH_GAP_MULTIPLIER * a0_gap_p95
@@ -194,8 +223,15 @@ def decide(
 ) -> str:
     if infra_failure:
         return "INFRA_FAILURE"
-    if not gate_summary["all_pass"]:
+    # A true correctness failure (gate reached, FAIL result) wins over
+    # PARTIAL_SWEEP: even if other gates were skipped, one gate FAILing
+    # is decisive evidence.
+    if gate_summary.get("any_failed"):
         return "FAIL_BCG_GDN_CORRECTNESS"
+    # Missing gates without any failure means the sweep did not
+    # complete enough to conclude — emit PARTIAL_SWEEP (audit B9 fix).
+    if gate_summary.get("partial"):
+        return "PARTIAL_SWEEP"
     if perf_summary.get("any_bcg_gap"):
         return "PASS_BCG_GDN_NOTABLE_GAP"
     if perf_summary.get("findings"):
@@ -215,6 +251,9 @@ def run(
         gate_summary = {
             "per_gate": {i: {"overall": "PASS"} for i in (1, 2, 3, 4)},
             "all_pass": True,
+            "any_missing": False,
+            "any_failed": False,
+            "partial": False,
         }
         perf_summary = {
             "findings": [],

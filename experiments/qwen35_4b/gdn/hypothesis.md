@@ -183,3 +183,31 @@ Recorded here so they are not re-litigated:
   (2026-08-03); a GPU qualifies only when compute processes = 0,
   memory ≤ 500 MiB, and utilisation ≤ 5 %. Never signal foreign
   PIDs.
+
+## 7. Amendments
+
+### Amendment 2 (2026-08-03) — `PARTIAL_SWEEP` verdict + `H_A` scoping
+
+Landed as Phase-4 T5 of the execution plan, motivated by the audit's
+blocking gaps B8 and B9.
+
+- **`PARTIAL_SWEEP` added to the verdict label set** in §5. Defined as:
+  "investigation stopped short with insufficient evidence for any
+  verdict; at least one predeclared gate was MISSING (never run) but
+  no gate returned FAIL". `PARTIAL_SWEEP` is emitted by
+  `scripts/gdn_verdict.py`'s `decide()` when `any_missing=True` and
+  `any_failed=False` — previously a MISSING gate silently collapsed to
+  `FAIL_BCG_GDN_CORRECTNESS`, making a scaffolding gap
+  indistinguishable from a real correctness failure. **Precedence**:
+  `INFRA_FAILURE > FAIL_BCG_GDN_CORRECTNESS > PARTIAL_SWEEP >
+  PASS_BCG_GDN_NOTABLE_GAP > PASS_BCG_GDN_NO_GAP > AMBIGUOUS`. A real
+  gate FAIL still wins over PARTIAL_SWEEP (even if other gates were
+  missing, one FAIL is decisive evidence).
+- **`H_A` scoped to `{A1, A3}` only.** Previously
+  `scripts/gdn_verdict.py:_score_perf` iterated `("A1", "A2", "A3")`
+  for the kernel-count-inflation test. A2 (`eager_dcg`) uses eager
+  prefill, so any GDN-side kernel divergence there cannot be
+  attributed to BCG — allowing A2 to trigger `H_A` risked a false
+  positive `PASS_BCG_GDN_NOTABLE_GAP`. The scoping now matches §4.1's
+  `[H_A]` definition ("under BCG-enabled prefill (arm `A1` or `A3`)").
+  Confirmed by `test_verdict_h_a_ignores_A2` in `scripts/test_gdn_scaffolding.py`.
