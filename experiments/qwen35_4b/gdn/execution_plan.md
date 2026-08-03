@@ -557,3 +557,171 @@ patch scope is meaningfully large) or `SIGNAL_GOOD` (small internal decision).
   for any verdict; document what was completed and what remains.
 
 Nothing else.
+
+---
+
+## 13. Plan review (Phase 3, 2026-08-03)
+
+Internal red-team of §§0-12 above from the three audit-agent perspectives.
+Each subsection lists the questions the operating model requires that
+perspective to ask, and this lead agent's answer. Corrections and safeguards
+that emerged from the review are applied inline (revisions R1-R3 below).
+
+### 13.1 Agent 1 (repository / harness) questions
+
+- **Can the harness prove which server process it launched?**
+  After T1 the runner writes `preflight.json` AFTER exporting `LD_PRELOAD` and
+  `CUDA_VISIBLE_DEVICES`, so those fields will reflect reality. **However, the
+  runner does not currently write `metadata.json` — the smoke's was hand-
+  composed by the operator.** Without runner-written metadata, per-cell
+  provenance for a batched sweep is unreliable. **Revision R1** applies (§13.4).
+- **Can teardown kill the complete process tree?**
+  Yes — after the setsid PGID fix (`5736f96`), `kill -TERM -"$SERVER_PGID"`
+  targets the whole session; the smoke verified 0 MiB post-teardown.
+- **Can logprob and token parsing silently fail?**
+  After T3 (hard-fail on partial-batch, no `contextlib.suppress`) and T4 (hard-
+  fail on missing `output_ids` / `output_logprobs`) — no. Both layers of
+  Gate 1's false-pass hole are closed.
+- **Are prompt-length labels tokenizer-exact?**
+  After T3's `/tokenize` call, `prompt_actual_token_count` is recorded per
+  record; the plan uses `prompt_actual_token_count` (not the target) for
+  cell labels and bucket assignment.
+- **Can repeated requests accidentally reuse results or caches?**
+  Cold server per arm (fresh bring-up), and each self-repeat in Phase 5 is
+  itself a fresh bring-up. SGLang's radix cache is per-server, so it's empty
+  at start of each cell.
+- **Can missing cells be mistaken for passing cells?**
+  After T5's `PARTIAL_SWEEP` label + `_score_gates` returning `partial: True`
+  on any MISSING gate — no. A stopped sweep cannot claim a scored verdict.
+
+### 13.2 Agent 2 (SGLang / BCG source) questions
+
+- **Is the suspected code path reachable on Qwen3.5-4B?**
+  Yes — 24 GDN layers × alt-stream branch predicate always True when the
+  padded bucket is `< 1024`. `models/qwen3_5.py:551-585`.
+- **Is it reachable under BCG specifically?**
+  Yes. `_gdn_use_alt_stream = True` unconditionally on CUDA; `get_is_capture_mode()`
+  is True during BCG capture AND replay; no BCG-specific short-circuit exists.
+  See audit §3.3 for citations.
+- **Is the sequence-length threshold based on actual tokens or padded shape?**
+  **Padded bucket size.** `seq_len = hidden_states.shape[0]` at
+  `qwen3_5.py:560` is post-`_pad_to_bucket` under BCG. This means d3 (~900
+  actual tokens) and d4 (~1200 actual tokens) in §4 must be verified against
+  the server's actual `capture_num_tokens` bucket list — not the requested
+  count. If the bucket list has (e.g.) `[…, 960, 1024, …]`, then a 900-token
+  prompt might pad up to 960 (branch fires: 960 < 1024) and a 1200-token
+  prompt might pad up to 1280 (branch skipped: 1280 > 1024). **Revision R2**
+  applies (§13.4).
+- **Does `get_is_capture_mode()` distinguish all relevant graph modes?**
+  It returns True for BCG capture, BCG replay, and eager-in-capture-scope.
+  It's False for Full and TC piecewise contexts. Sufficient for our arms —
+  A0 sees it False, A1/A3 see it True.
+- **Is the alt-stream branch actually used on the target hardware?**
+  Yes on H200 (SM90); `_gdn_use_alt_stream` reduces to `_is_cuda = True`.
+- **Could TC piecewise and BCG intentionally require different behavior?**
+  TC piecewise disables the alt-stream branch because dynamo cannot trace
+  side-stream fork/join (would graph-break the compiled callable). BCG
+  captures raw CUDA API calls via `torch.cuda.CUDAGraph`, so tracer
+  constraints don't apply. Whether the omission of a BCG short-circuit is
+  intentional or oversight is not evident from source; the patch memo in
+  Phase 8 must acknowledge both possibilities.
+- **Is recurrent state involved in prefill in the assumed way?**
+  Yes — state pool tensors pinned, `cache_indices` recomputed per replay by
+  the eager `GDNAttnBackend.forward_extend` between BCG segments. Low
+  correctness risk (audit R13.3).
+- **Could the suspected wait be required for correctness?**
+  R13.4 in the audit — the alt-stream join `current_stream.wait_stream(alt_stream)`
+  ensures `in_proj_ba` completes before the fused split consumes it. If the
+  BCG capture hook silently drops the join under any driver condition, we
+  would see a subtle correctness divergence. **Gate 1 covers this** — token
+  divergence would show up in the equality check. This is exactly why Gate 1
+  is a blocking prerequisite for any perf conclusion.
+
+### 13.3 Agent 3 (validation / methodology) questions
+
+- **Does the experiment vary only one independent variable at a time?**
+  Yes: A0 vs A1 differs only in prefill backend; A0 vs A2 differs only in
+  decode backend; A0 vs A3 differs in both — that's why the smallest-cell
+  test runs all three separately.
+- **Is the sample size sufficient for the proposed verdict?**
+  Kernel counts are quasi-deterministic (σ often 0), so `H_A`'s `> 2σ` clause
+  degenerates to just `≥ 10% mean gap` — acceptable for a quantised metric.
+  For `p95_launch_gap`, the plan reports the metric *per request* (many
+  launches per request) then aggregates across 8 timed requests — that's
+  the right structure. `MIN_CAPTURES_FOR_REPRO=2` enforces reproducibility
+  across cells.
+- **Is the noise-floor threshold justified?**
+  `max(0.05, 3 × noise_floor)` is a standard 3σ rule; noise_floor is measured
+  per cell so tolerance is cell-specific. Defensible.
+- **Can Nsight overhead change the execution path?**
+  Yes — Nsight slows CPU, potentially shifting stream ordering. The plan's
+  §3 mentions this but does not scaffold the disclosure step. **Revision R3**
+  applies (§13.4): add explicit A0-unprofiled-vs-A0-profiled comparison at
+  the smallest cell before drawing perf conclusions.
+- **Are warm-up and steady-state measurements separated?**
+  Yes — 2 warm rounds discarded + 8 timed.
+- **Are graph capture cost and graph replay cost separated?**
+  Yes — capture happens at server startup (recorded in server bring-up time);
+  Nsight timing per timed request is replay-only.
+- **Does the profile identify graph replay rather than only server activity?**
+  T6's CSV extractor emits `cudagraphlaunch_count` per request. Phase-6
+  preflight asserts this is > 0 for A1/A3 and 0 for A0/A2 on the prefill
+  side. If those assertions fail, the arm didn't actually engage BCG.
+- **Can a single measurement incorrectly drive a performance conclusion?**
+  No — `MIN_CAPTURES_FOR_REPRO=2` requires ≥ 2 captures per cell for any
+  `H_A/H_B/H_C` support; and Phase 7 requires ≥ 2 cells with the signal.
+
+### 13.4 Revisions applied
+
+- **R1 (T1 addendum).** Runner writes `$RESULTS_DIR/metadata.json`
+  automatically at the end of each cell, containing: attempt_id, arm,
+  arm_flags, prompt/batch/timing config, gpu_id, gpu_uuid, gpu_pre_state,
+  gpu_post_state (from T1's post-teardown check), frozen_sglang_sha, model
+  pins, fixture sha, tokenizer_source (from T3), preflight statuses, and
+  the runner exit code. Removes reliance on operator hand-composition.
+- **R2 (Phase 6/7 addendum).** Before running d3 and d4, parse the server
+  bring-up log (from any of the A0 baseline runs) for the
+  `capture_num_tokens` bucket list; select `prompt_actual_token_count` values
+  that map to buckets straddling the 1024 threshold. Record the derived
+  bucket size alongside each timed record. Cell labels use the *padded*
+  bucket, not the target prompt length.
+- **R3 (Phase 6 addendum).** After Phase 6's Nsight captures land, take one
+  A0 sub-capture at the smallest cell with `nsys` disabled (regular runner
+  invocation) and compare token equality + e2e latency against the Phase-5
+  A0 baseline for the same cell. If the delta exceeds the Phase-5 noise
+  floor, Nsight is perturbing the code path enough to compromise arm
+  comparison — reduce trace channels and rerun.
+
+### 13.5 Lead-agent synthesis
+
+- **Accepted:** most of §§0-12. The tooling order T1-T6 is dependency-correct
+  and each patch is small enough for a single commit. The 4-cell A0 ladder
+  + smallest-cell 3-arm comparison + evidence-triggered escalation is the
+  minimum-cost path to a defensible verdict.
+- **Corrections:** three revisions above (R1-R3), all applied inline as
+  addenda to the affected phases. R1 slots into Phase-4 T1. R2 slots into
+  Phases 6 and 7. R3 slots into Phase 6.
+- **Removed assumptions:** none — the source-side reachability is verified
+  in audit §3 (facts, not hypotheses).
+- **Added safeguards:** runner-written metadata (R1), padded-bucket
+  verification for the threshold-ladder cells (R2), explicit Nsight-overhead
+  disclosure (R3).
+- **Remaining uncertainty:**
+  1. R13.4 (alt-stream capture join integrity) — covered by Gate 1 but not
+     independently testable without live evidence.
+  2. Whether coarse Nsight metrics (kernel counts, cudagraphlaunch_count,
+     launch gaps without NVTX attribution) will be enough to attribute the
+     mechanism. If not, Phase 7 escalates to NVTX-tagged instrumentation.
+  3. Whether Qwen3.5-4B's actual `capture_num_tokens` bucket list places a
+     natural boundary near 1024 — verified only at first server bring-up
+     (Phase 5).
+- **Major blocker check:** none. All revisions are within scope, reversible,
+  and don't require frozen-source modification.
+
+### 13.6 Classification
+
+**PLAN_APPROVED_WITH_REVISIONS.**
+
+Revisions R1-R3 are integrated above. Autonomous execution continues to
+Phase 4 (tooling hardening).
+
