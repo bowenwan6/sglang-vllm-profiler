@@ -864,8 +864,20 @@ def test_correctness_gate1_requires_A0_reference() -> None:
 
 def test_correctness_gate2_pairwise_isolation() -> None:
     labelled = {
-        "alone": [{"prompt_source_id": "p0", "output_ids": [1, 2, 3]}],
-        "batched": [{"prompt_source_id": "p0", "output_ids": [1, 2, 3]}],
+        "alone": [
+            {
+                "prompt_source_id": "p0",
+                "output_ids": [1, 2, 3],
+                "output_logprobs": [-0.1, -0.2, -0.3],
+            }
+        ],
+        "batched": [
+            {
+                "prompt_source_id": "p0",
+                "output_ids": [1, 2, 3],
+                "output_logprobs": [-0.1, -0.2, -0.3],
+            }
+        ],
     }
     v = gc.gate_verdict(2, labelled, tolerance=0.05)
     if v["overall"] != "PASS":
@@ -875,13 +887,157 @@ def test_correctness_gate2_pairwise_isolation() -> None:
 
 def test_correctness_gate3_pairwise_chunking() -> None:
     labelled = {
-        "small_chunk": [{"prompt_source_id": "p0", "output_ids": [4, 5]}],
-        "single_chunk": [{"prompt_source_id": "p0", "output_ids": [4, 5]}],
+        "small_chunk": [
+            {
+                "prompt_source_id": "p0",
+                "output_ids": [4, 5],
+                "output_logprobs": [-0.1, -0.2],
+            }
+        ],
+        "single_chunk": [
+            {
+                "prompt_source_id": "p0",
+                "output_ids": [4, 5],
+                "output_logprobs": [-0.1, -0.2],
+            }
+        ],
     }
     v = gc.gate_verdict(3, labelled, tolerance=0.05)
     if v["overall"] != "PASS":
         _fail("correctness_gate3_pairwise_chunking", json.dumps(v))
     _ok("correctness_gate3_pairwise_chunking")
+
+
+def test_gate1_fails_when_output_ids_missing() -> None:
+    """T4: whitespace fallback removed — missing output_ids => hard FAIL."""
+    labelled = {
+        "A0": [
+            {
+                "prompt_source_id": "p0",
+                "output_text": "hello world",
+                "output_logprobs": [-0.1, -0.2],
+            }
+        ],
+        "A1": [
+            {
+                "prompt_source_id": "p0",
+                "output_text": "hello world",
+                "output_logprobs": [-0.1, -0.2],
+            }
+        ],
+    }
+    v = gc.gate_verdict(1, labelled, tolerance=0.05)
+    if v["overall"] != "FAIL":
+        _fail("gate1_fails_when_output_ids_missing", json.dumps(v))
+    reason_seen = str(v)
+    if "MISSING_OUTPUT_IDS" not in reason_seen:
+        _fail(
+            "gate1_fails_when_output_ids_missing",
+            f"expected MISSING_OUTPUT_IDS in reasons; got {reason_seen}",
+        )
+    _ok("gate1_fails_when_output_ids_missing")
+
+
+def test_gate1_fails_when_logprobs_missing() -> None:
+    """T4: missing output_logprobs no longer treated as within tolerance."""
+    labelled = {
+        "A0": [{"prompt_source_id": "p0", "output_ids": [1, 2]}],
+        "A1": [{"prompt_source_id": "p0", "output_ids": [1, 2]}],
+    }
+    v = gc.gate_verdict(1, labelled, tolerance=0.05)
+    if v["overall"] != "FAIL":
+        _fail("gate1_fails_when_logprobs_missing", json.dumps(v))
+    if "MISSING_LOGPROBS" not in str(v):
+        _fail(
+            "gate1_fails_when_logprobs_missing",
+            "expected MISSING_LOGPROBS in reasons",
+        )
+    _ok("gate1_fails_when_logprobs_missing")
+
+
+def test_gate1_uses_noise_floor_scaled_tolerance() -> None:
+    """T4: max(0.05, 3 * noise_floor). With noise_floor=0.02, tol=0.06."""
+    tol = gc.resolve_tolerance(base=0.05, noise_floor=0.02)
+    if abs(tol - 0.06) > 1e-9:
+        _fail("gate1_uses_noise_floor_scaled_tolerance", f"tol={tol}")
+    # A pair with delta 0.055 passes under tol=0.06 but fails under tol=0.05.
+    labelled = {
+        "A0": [
+            {
+                "prompt_source_id": "p0",
+                "output_ids": [1, 2, 3],
+                "output_logprobs": [-0.1, -0.2, -0.3],
+            }
+        ],
+        "A1": [
+            {
+                "prompt_source_id": "p0",
+                "output_ids": [1, 2, 3],
+                "output_logprobs": [-0.1, -0.2, -0.355],  # delta 0.055
+            }
+        ],
+    }
+    v_high = gc.gate_verdict(1, labelled, tolerance=0.06)
+    v_low = gc.gate_verdict(1, labelled, tolerance=0.05)
+    if v_high["overall"] != "PASS":
+        _fail(
+            "gate1_uses_noise_floor_scaled_tolerance",
+            f"expected PASS at tol=0.06; got {v_high}",
+        )
+    if v_low["overall"] != "FAIL":
+        _fail(
+            "gate1_uses_noise_floor_scaled_tolerance",
+            f"expected FAIL at tol=0.05; got {v_low}",
+        )
+    _ok("gate1_uses_noise_floor_scaled_tolerance", f"3*0.02={tol}")
+
+
+def test_gate1_requires_all_repeat_samples_to_match() -> None:
+    """T4: aggregate across all timed records per prompt id.
+
+    One PASS record and one FAIL record for the same prompt id should
+    aggregate to FAIL (previously only the first record was compared).
+    """
+    labelled = {
+        "A0": [
+            {
+                "prompt_source_id": "p0",
+                "output_ids": [1, 2, 3],
+                "output_logprobs": [-0.1, -0.2, -0.3],
+            },
+            {
+                "prompt_source_id": "p0",
+                "output_ids": [1, 2, 3],
+                "output_logprobs": [-0.1, -0.2, -0.3],
+            },
+        ],
+        "A1": [
+            {
+                "prompt_source_id": "p0",
+                "output_ids": [1, 2, 3],  # PASS pair with A0[0]
+                "output_logprobs": [-0.1, -0.2, -0.3],
+            },
+            {
+                "prompt_source_id": "p0",
+                "output_ids": [1, 2, 4],  # FAIL pair (token diff)
+                "output_logprobs": [-0.1, -0.2, -0.3],
+            },
+        ],
+    }
+    v = gc.gate_verdict(1, labelled, tolerance=0.05)
+    if v["overall"] != "FAIL":
+        _fail("gate1_requires_all_repeat_samples_to_match", json.dumps(v))
+    _ok("gate1_requires_all_repeat_samples_to_match")
+
+
+def test_resolve_tolerance_uses_floor() -> None:
+    if gc.resolve_tolerance(0.05, 0.0) != 0.05:
+        _fail("resolve_tolerance_uses_floor", "noise_floor=0 should return base")
+    if gc.resolve_tolerance(0.05, 0.03) != 0.09:
+        _fail("resolve_tolerance_uses_floor", "3 * 0.03 = 0.09 > 0.05")
+    if gc.resolve_tolerance(0.05, -0.5) != 0.05:
+        _fail("resolve_tolerance_uses_floor", "negative noise_floor should be clamped")
+    _ok("resolve_tolerance_uses_floor")
 
 
 def test_correctness_dry_run_command_ok() -> None:
@@ -1165,6 +1321,11 @@ TESTS = (
     test_correctness_gate1_requires_A0_reference,
     test_correctness_gate2_pairwise_isolation,
     test_correctness_gate3_pairwise_chunking,
+    test_gate1_fails_when_output_ids_missing,
+    test_gate1_fails_when_logprobs_missing,
+    test_gate1_uses_noise_floor_scaled_tolerance,
+    test_gate1_requires_all_repeat_samples_to_match,
+    test_resolve_tolerance_uses_floor,
     test_correctness_dry_run_command_ok,
     test_verdict_all_gates_pass_no_perf_gap_is_ambiguous,
     test_verdict_gate_failure_wins_over_perf,

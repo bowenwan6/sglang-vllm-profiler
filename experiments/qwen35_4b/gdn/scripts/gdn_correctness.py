@@ -50,10 +50,14 @@ from pathlib import Path
 
 # --- Predeclared tolerances (mirror validation_plan.md §4) ------------
 
-# Per-token max-abs logprob delta. Actual tolerance at score time is
-# max(BASE_LOGPROB_TOLERANCE, 3 * noise_floor); the caller provides the
-# noise floor in the records or via --noise-floor.
+# Per-token max-abs logprob delta floor. Actual tolerance at score
+# time is max(BASE_LOGPROB_TOLERANCE, 3 * noise_floor).
 BASE_LOGPROB_TOLERANCE = 0.05
+
+
+def resolve_tolerance(base: float, noise_floor: float) -> float:
+    """Apply the plan's max(base, 3 * noise_floor) rule."""
+    return max(base, 3.0 * max(noise_floor, 0.0))
 
 
 def load_records(path: Path) -> list[dict]:
@@ -61,70 +65,77 @@ def load_records(path: Path) -> list[dict]:
     return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
-def _by_prompt(records: list[dict]) -> dict[str, dict]:
-    """Index records by prompt_source_id → first record with that id."""
-    out: dict[str, dict] = {}
+def _by_prompt_all(records: list[dict]) -> dict[str, list[dict]]:
+    """Index records by prompt_source_id → list of all records with that id."""
+    out: dict[str, list[dict]] = {}
     for r in records:
         pid = r.get("prompt_source_id")
         if pid is None:
             continue
-        out.setdefault(pid, r)
+        out.setdefault(pid, []).append(r)
     return out
-
-
-def _token_stream(record: dict) -> list[str]:
-    """Return a token-like stream from a record.
-
-    Prefers server-returned ``output_ids`` when present; otherwise
-    splits on whitespace as a coarse fallback so the gate logic still
-    runs on plain-text records (with a WARN in the summary).
-    """
-    ids = record.get("output_ids")
-    if isinstance(ids, list):
-        return [str(i) for i in ids]
-    text = record.get("output_text", "")
-    return text.split()
 
 
 def _cmp_records(
     lhs: dict, rhs: dict, tolerance: float
 ) -> dict:
-    """Return a per-pair comparison verdict."""
-    lhs_tokens = _token_stream(lhs)
-    rhs_tokens = _token_stream(rhs)
+    """Return a per-pair comparison verdict.
+
+    Hard-fails on missing output_ids or missing output_logprobs — no
+    whitespace fallback (audit B1b). Both sides must carry the fields.
+    """
+    lhs_ids = lhs.get("output_ids")
+    rhs_ids = rhs.get("output_ids")
+    lhs_lp = lhs.get("output_logprobs")
+    rhs_lp = rhs.get("output_logprobs")
+
+    reasons: list[str] = []
+    if not isinstance(lhs_ids, list) or not isinstance(rhs_ids, list):
+        reasons.append("MISSING_OUTPUT_IDS")
+    if not isinstance(lhs_lp, list) or not lhs_lp or not isinstance(rhs_lp, list) or not rhs_lp:
+        reasons.append("MISSING_LOGPROBS")
+
+    if reasons:
+        return {
+            "prompt_source_id": lhs.get("prompt_source_id"),
+            "tokens_equal": None,
+            "common_prefix": None,
+            "lhs_token_len": len(lhs_ids) if isinstance(lhs_ids, list) else None,
+            "rhs_token_len": len(rhs_ids) if isinstance(rhs_ids, list) else None,
+            "max_abs_logprob_diff": None,
+            "within_logprob_tolerance": False,
+            "verdict": "FAIL",
+            "reason": reasons,
+            "used_output_ids": bool(
+                isinstance(lhs_ids, list) and isinstance(rhs_ids, list)
+            ),
+            "tolerance": tolerance,
+        }
+
     common_prefix = 0
-    for a, b in zip(lhs_tokens, rhs_tokens):
+    for a, b in zip(lhs_ids, rhs_ids):
         if a == b:
             common_prefix += 1
         else:
             break
-    equal = lhs_tokens == rhs_tokens
+    equal = lhs_ids == rhs_ids
 
-    logprobs_lhs = lhs.get("output_logprobs") or []
-    logprobs_rhs = rhs.get("output_logprobs") or []
-    max_abs_logprob_diff = None
-    if logprobs_lhs and logprobs_rhs:
-        L = min(len(logprobs_lhs), len(logprobs_rhs))
-        deltas = [abs(a - b) for a, b in zip(logprobs_lhs[:L], logprobs_rhs[:L])]
-        max_abs_logprob_diff = max(deltas) if deltas else 0.0
-
-    within_tolerance = (
-        max_abs_logprob_diff is None or max_abs_logprob_diff <= tolerance
-    )
+    L = min(len(lhs_lp), len(rhs_lp))
+    deltas = [abs(a - b) for a, b in zip(lhs_lp[:L], rhs_lp[:L])]
+    max_abs_logprob_diff = max(deltas) if deltas else 0.0
+    within_tolerance = max_abs_logprob_diff <= tolerance
 
     return {
         "prompt_source_id": lhs.get("prompt_source_id"),
         "tokens_equal": equal,
         "common_prefix": common_prefix,
-        "lhs_token_len": len(lhs_tokens),
-        "rhs_token_len": len(rhs_tokens),
+        "lhs_token_len": len(lhs_ids),
+        "rhs_token_len": len(rhs_ids),
         "max_abs_logprob_diff": max_abs_logprob_diff,
         "within_logprob_tolerance": within_tolerance,
         "verdict": "PASS" if (equal and within_tolerance) else "FAIL",
-        "used_output_ids": bool(
-            isinstance(lhs.get("output_ids"), list)
-            and isinstance(rhs.get("output_ids"), list)
-        ),
+        "used_output_ids": True,
+        "tolerance": tolerance,
     }
 
 
@@ -135,12 +146,36 @@ def gate_pairwise(
     records_rhs: list[dict],
     tolerance: float,
 ) -> dict:
-    lhs_by = _by_prompt(records_lhs)
-    rhs_by = _by_prompt(records_rhs)
+    """Compare every timed sample of every prompt id, both sides.
+
+    Aggregates by requiring **all** LHS samples of a prompt id to match
+    **all** RHS samples of the same id (audit fix: previously only the
+    first sample per id was used).
+    """
+    lhs_by = _by_prompt_all(records_lhs)
+    rhs_by = _by_prompt_all(records_rhs)
     common_pids = sorted(set(lhs_by) & set(rhs_by))
-    pairs = [_cmp_records(lhs_by[p], rhs_by[p], tolerance) for p in common_pids]
-    passed = sum(1 for p in pairs if p["verdict"] == "PASS")
-    failed = sum(1 for p in pairs if p["verdict"] == "FAIL")
+    per_prompt: list[dict] = []
+    for pid in common_pids:
+        pair_results = []
+        for lhs_rec in lhs_by[pid]:
+            for rhs_rec in rhs_by[pid]:
+                pair_results.append(_cmp_records(lhs_rec, rhs_rec, tolerance))
+        n_pairs = len(pair_results)
+        n_fail = sum(1 for p in pair_results if p["verdict"] == "FAIL")
+        per_prompt.append(
+            {
+                "prompt_source_id": pid,
+                "n_lhs_samples": len(lhs_by[pid]),
+                "n_rhs_samples": len(rhs_by[pid]),
+                "n_pairs_compared": n_pairs,
+                "n_pairs_failed": n_fail,
+                "verdict": "PASS" if n_fail == 0 else "FAIL",
+                "sample_pair": pair_results[0] if pair_results else None,
+            }
+        )
+    passed = sum(1 for p in per_prompt if p["verdict"] == "PASS")
+    failed = sum(1 for p in per_prompt if p["verdict"] == "FAIL")
     overall = "PASS" if failed == 0 and passed > 0 else "FAIL"
     return {
         "lhs_label": label_lhs,
@@ -152,7 +187,7 @@ def gate_pairwise(
         "n_passed": passed,
         "n_failed": failed,
         "overall": overall,
-        "pairs": pairs,
+        "per_prompt": per_prompt,
     }
 
 
@@ -285,18 +320,29 @@ def main(argv: list[str] | None = None) -> int:
         type=float,
         default=BASE_LOGPROB_TOLERANCE,
         help=(
-            f"Per-token max-abs logprob tolerance (default: "
-            f"{BASE_LOGPROB_TOLERANCE}). Set higher only under an "
-            f"Amendment in hypothesis.md."
+            f"Per-token max-abs logprob tolerance floor (default: "
+            f"{BASE_LOGPROB_TOLERANCE}). Combined with --noise-floor as "
+            f"max(tolerance, 3 * noise_floor)."
+        ),
+    )
+    p.add_argument(
+        "--noise-floor",
+        type=float,
+        default=0.0,
+        help=(
+            "Measured noise floor from A0 self-repeat (max-abs logprob "
+            "delta across two identical A0 runs). Combined with "
+            "--tolerance as max(tolerance, 3 * noise_floor)."
         ),
     )
     p.add_argument("--dry-run", action="store_true")
     args = p.parse_args(argv)
+    effective_tolerance = resolve_tolerance(args.tolerance, args.noise_floor)
     return run(
         gate=args.gate,
         records_args=args.records,
         output=args.output,
-        tolerance=args.tolerance,
+        tolerance=effective_tolerance,
         dry_run=args.dry_run,
     )
 
