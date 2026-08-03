@@ -752,9 +752,35 @@ Investigation anchor: `experiments/qwen35_4b/gdn/README.md`.
   chunked-prefill equivalence; graph-bucket equivalence.
 - **Rule:** do not modify upstream SGLang source until the baseline
   profile identifies one specific BCG limitation.
-- GPU allowlist unchanged (`{0, 1, 7}`) and idle-verification rules
-  from `experiments/qwen35_4b/validation_plan.md` Amendments 1 and 2
-  continue to apply.
+- GPU allowlist widened to `{0..7}` per
+  [`gdn/validation_plan.md`](experiments/qwen35_4b/gdn/validation_plan.md)
+  Amendment 1 (2026-08-03, operator authorisation); idle-verification
+  rules from `experiments/qwen35_4b/validation_plan.md` Amendments 1
+  and 2 continue to apply on every attempt.
 - Preservation invariants unchanged: read-only `/data/sglang-fork`
   at `986c89e69`; frozen SGLang checkout unchanged; §4 evidence
   read-only.
+
+### 8.1 Phase log
+
+- **2026-08-03** — GDN charter landed (`1b6c1b1`); CPU-only foundation
+  scaffolding + fixture + preflight + tests (`de0569d`); 4-arm runner
+  + sweep client + baseline instrumentation (`ff66db6`); correctness
+  verifier + verdict runner + Nsight wrapper (`d9e185f`); allowlist
+  widened to `{0..7}` (`47e6a37`); three live-fire fixes surfaced by
+  smoke — preflight `text_config` (`66d91cd`), canonical prefill/
+  decode flag names (`271a666`), setsid PID capture (`5736f96`);
+  smoke test on GPU 2 recorded `SCAFFOLDING_PASS` (`2490057`).
+- **2026-08-03** — Phase 1 consolidated audit landed
+  ([`gdn/audit.md`](experiments/qwen35_4b/gdn/audit.md)). Three
+  parallel agent reports (repo/harness, source/BCG, validation/
+  methodology) merged into one document with three `SIGNAL_GOOD`
+  records. 13 blocking harness gaps + no major blocker. Leading perf
+  hypothesis for the smallest-cell test: GDN alt-stream branch is
+  active under BCG for every prefill bucket with `padded_num_tokens <
+  1024` (`_gdn_use_alt_stream = True` unconditionally on CUDA at
+  `models/qwen3_5.py:128`; `get_is_capture_mode()` True during both
+  BCG capture and replay; no BCG-specific short-circuit exists —
+  only TC piecewise zeroes the threshold). One correctness risk
+  added to Gate-1 attention list (R13.4 alt-stream capture join
+  integrity, `runner_backend_utils/breakable_cuda_graph/breakable_cuda_graph.py:112-136`).
