@@ -381,6 +381,79 @@ def test_runner_dry_run_context_blob_valid_json() -> None:
     _ok("runner_dry_run_context_blob_valid_json", ctx_path)
 
 
+def test_runner_env_exports_precede_preflight() -> None:
+    """T1 fix: env exports must be BEFORE the preflight write.
+
+    Regression guard for audit B4 — LD_PRELOAD / CUDA_VISIBLE_DEVICES
+    must be visible to gdn_preflight.py.
+    """
+    runner = (HERE / "gdn_runner.sh").read_text()
+    preflight_ix = runner.find("python3 \"$HERE/gdn_preflight.py\"")
+    ld_preload_ix = runner.find('export LD_PRELOAD=')
+    cuda_ix = runner.find('export CUDA_VISIBLE_DEVICES=')
+    if preflight_ix < 0 or ld_preload_ix < 0 or cuda_ix < 0:
+        _fail(
+            "runner_env_exports_precede_preflight",
+            f"missing markers: preflight={preflight_ix} ld={ld_preload_ix} cuda={cuda_ix}",
+        )
+    if ld_preload_ix >= preflight_ix:
+        _fail(
+            "runner_env_exports_precede_preflight",
+            f"LD_PRELOAD export at {ld_preload_ix} not before preflight at {preflight_ix}",
+        )
+    if cuda_ix >= preflight_ix:
+        _fail(
+            "runner_env_exports_precede_preflight",
+            f"CUDA_VISIBLE_DEVICES export at {cuda_ix} not before preflight at {preflight_ix}",
+        )
+    _ok("runner_env_exports_precede_preflight")
+
+
+def test_runner_writes_gpu_post_and_metadata() -> None:
+    """T1 fix: the runner writes gpu_post.txt and metadata.json.
+
+    Static-analysis regression guard for audit B6 + R1.
+    """
+    runner = (HERE / "gdn_runner.sh").read_text()
+    if "GPU_RETURNED_CLEAN" not in runner:
+        _fail("runner_writes_gpu_post_and_metadata", "missing GPU_RETURNED_CLEAN literal")
+    if "GPU_STILL_HOLDS_" not in runner:
+        _fail("runner_writes_gpu_post_and_metadata", "missing GPU_STILL_HOLDS_ literal")
+    if "gpu_post.txt" not in runner:
+        _fail("runner_writes_gpu_post_and_metadata", "missing gpu_post.txt write")
+    if "metadata.json" not in runner:
+        _fail("runner_writes_gpu_post_and_metadata", "missing metadata.json write")
+    if "written_by" not in runner or "gdn_runner.sh" not in runner:
+        _fail(
+            "runner_writes_gpu_post_and_metadata",
+            "metadata payload missing written_by field",
+        )
+    if 'exit 77' not in runner:
+        _fail(
+            "runner_writes_gpu_post_and_metadata",
+            "missing exit 77 on GPU-not-clean path",
+        )
+    _ok("runner_writes_gpu_post_and_metadata")
+
+
+def test_runner_mkdir_before_preflight_write() -> None:
+    """T1 fix: RESULTS_DIR must be mkdir-p'd before the preflight write."""
+    runner = (HERE / "gdn_runner.sh").read_text()
+    mkdir_ix = runner.find('mkdir -p "$RESULTS_DIR"')
+    preflight_ix = runner.find("python3 \"$HERE/gdn_preflight.py\"")
+    if mkdir_ix < 0:
+        _fail(
+            "runner_mkdir_before_preflight_write",
+            "missing mkdir -p $RESULTS_DIR",
+        )
+    if mkdir_ix >= preflight_ix:
+        _fail(
+            "runner_mkdir_before_preflight_write",
+            f"mkdir at {mkdir_ix} not before preflight at {preflight_ix}",
+        )
+    _ok("runner_mkdir_before_preflight_write")
+
+
 def test_gdn_instrumentation_install_is_noop() -> None:
     import gdn_instrumentation as gi
     # install() should not raise and should not import torch or sglang
@@ -764,6 +837,9 @@ TESTS = (
     test_runner_rejects_missing_gpu_id,
     test_runner_rejects_gpu_outside_allowlist,
     test_runner_dry_run_context_blob_valid_json,
+    test_runner_env_exports_precede_preflight,
+    test_runner_writes_gpu_post_and_metadata,
+    test_runner_mkdir_before_preflight_write,
     test_gdn_instrumentation_install_is_noop,
     test_correctness_gate1_pass_on_identical_arms,
     test_correctness_gate1_fail_on_token_divergence,

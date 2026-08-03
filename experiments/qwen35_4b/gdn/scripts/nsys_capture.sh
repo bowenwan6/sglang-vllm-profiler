@@ -3,7 +3,8 @@
 #
 # Wraps `gdn_runner.sh` under `nsys profile`, capturing CUDA + NVTX +
 # OSRT + cuBLAS + cuDNN traces for the target (arm, prompt_len, batch)
-# cell. Refuses to launch without --gpu-id from the {0, 1, 7} allowlist.
+# cell. Refuses to launch without --gpu-id from the {0..7} allowlist
+# (Amendment 1).
 #
 # The raw .nsys-rep is written to <results-dir>/raw/ (gitignored). A
 # post-run `nsys stats` extraction to CSV is left to

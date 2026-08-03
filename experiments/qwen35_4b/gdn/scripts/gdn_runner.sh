@@ -3,7 +3,8 @@
 #
 # Given --arm { A0 | A1 | A2 | A3 } and an authorised --gpu-id, this
 # script:
-#   1. Verifies GPU authorisation (allowlist {0, 1, 7}) and preflight.
+#   1. Verifies GPU authorisation (allowlist {0..7} — see Amendment 1)
+#      and preflight.
 #   2. Runs the GDN provenance preflight (fields, hybrid check, env).
 #   3. Verifies the target GPU is unoccupied (foreign PID guard, by UUID).
 #   4. Applies the GDN baseline instrumentation (no-op module) via
@@ -222,7 +223,23 @@ if [ "$DRY_RUN" -eq 1 ]; then
     exit 0
 fi
 
-# --- GDN preflight (blocking) --------------------------------------
+# --- env exports (BEFORE preflight so it can see them) -------------
+
+# Ordered before preflight so that LD_PRELOAD / CUDA_VISIBLE_DEVICES are
+# visible when gdn_preflight.py records env state. Previously these lived
+# after preflight and every preflight.json recorded both as null despite
+# the runner setting them — bug B4 in audit.md.
+export PYTHONPATH="$FROZEN_SGLANG/python:${PYTHONPATH:-}"
+export PYTHONPATH="$DS_SCRIPTS/bootstrap:$PYTHONPATH"
+export LD_PRELOAD="${LD_PRELOAD:-$LIBCUDA_PRELOAD}"
+export CUDA_VISIBLE_DEVICES="$GPU_ID"
+export QWEN35_GDN_RUN_MODE="$ARM"
+
+# --- results dir + GDN preflight (blocking) ------------------------
+
+# mkdir before preflight write — previously $RESULTS_DIR was not created
+# until the RAW_DIR mkdir below, so a fresh attempt dir would fail here.
+mkdir -p "$RESULTS_DIR"
 
 if ! python3 "$HERE/gdn_preflight.py" --strict --json > "$RESULTS_DIR/preflight.json"; then
     echo "FATAL: gdn_preflight rejected the environment." >&2
@@ -278,14 +295,6 @@ SGLANG_FORWARDED=(
     "${ARM_FLAGS[@]}"
 )
 
-# Set up subprocess env; the sitecustomize bootstrap propagates the
-# same environment into SGLang scheduler / worker spawn children.
-export PYTHONPATH="$FROZEN_SGLANG/python:${PYTHONPATH:-}"
-export PYTHONPATH="$DS_SCRIPTS/bootstrap:$PYTHONPATH"
-export LD_PRELOAD="${LD_PRELOAD:-$LIBCUDA_PRELOAD}"
-export CUDA_VISIBLE_DEVICES="$GPU_ID"
-export QWEN35_GDN_RUN_MODE="$ARM"
-
 # Launch server_launcher.py directly under setsid so the resulting
 # python process is its own session leader (PID == PGID). Using a
 # subshell here previously caused $! to capture the subshell PID
@@ -329,11 +338,13 @@ if [ "$ready" -ne 1 ]; then
     exit 75
 fi
 
-echo "gdn_runner: server ready after $((SECONDS - start_ts))s"
+SERVER_READY_SECONDS=$((SECONDS - start_ts))
+echo "gdn_runner: server ready after ${SERVER_READY_SECONDS}s"
 
 # --- client dispatch ---------------------------------------------
 
 CLIENT_LOG="$RAW_DIR/client_${ARM}_p${PROMPT_LEN}_b${BATCH_SIZE}.log"
+CLIENT_START_TS=$(date -u +%s)
 
 python3 "$HERE/gdn_client.py" \
     --server "http://$SERVER_BIND:$SERVER_PORT" \
@@ -346,5 +357,112 @@ python3 "$HERE/gdn_client.py" \
     --fixtures-dir "$FIXTURES_DIR" \
     --output "$RAW_DIR/records_${ARM}_p${PROMPT_LEN}_b${BATCH_SIZE}.jsonl" \
     2>&1 | tee "$CLIENT_LOG"
+CLIENT_EXIT=${PIPESTATUS[0]}
+CLIENT_END_TS=$(date -u +%s)
+
+echo "gdn_runner: client exit code $CLIENT_EXIT"
+
+# --- explicit teardown ------------------------------------------
+# EXIT trap still fires as a safety net for abnormal paths; this
+# explicit teardown lets us do the post-teardown GPU check and
+# write metadata.json BEFORE the script exits.
+echo "gdn_runner: explicit teardown for PGID $SERVER_PGID"
+kill -TERM -"$SERVER_PGID" 2>/dev/null || true
+# Wait up to 30 s for graceful shutdown; then SIGKILL.
+for _ in $(seq 1 15); do
+    if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+        break
+    fi
+    sleep 2
+done
+kill -KILL -"$SERVER_PGID" 2>/dev/null || true
+# Drain any straggler workers (they may take a moment to release GPU memory).
+sleep 3
+
+# --- post-teardown GPU idleness check (blocking on non-clean) --
+
+# Re-fetch UUID for the target GPU (paranoid — same value should stand).
+post_uuid="$(nvidia-smi --id="$GPU_ID" --query-gpu=uuid --format=csv,noheader 2>/dev/null | head -1)"
+post_mem_mib="$(nvidia-smi --id="$GPU_ID" --query-gpu=memory.used --format=csv,noheader,nounits 2>/dev/null | head -1)"
+post_util_pct="$(nvidia-smi --id="$GPU_ID" --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | head -1)"
+
+# Count live foreign PIDs on the target UUID (stale /proc entries filtered).
+post_foreign=""
+while read -r line; do
+    pid=$(echo "$line" | awk -F', ' '{print $1}')
+    uuid=$(echo "$line" | awk -F', ' '{print $2}')
+    if [ "$uuid" = "$post_uuid" ] && [ -e "/proc/$pid" ]; then
+        post_foreign="$post_foreign $pid"
+    fi
+done < <(nvidia-smi --query-compute-apps=pid,gpu_uuid --format=csv,noheader 2>/dev/null)
+
+GPU_POST_STATE_LINE=""
+GPU_CLEAN=1
+if [ -z "$post_foreign" ] && [ "${post_mem_mib:-999}" -le 500 ] && [ "${post_util_pct:-100}" -le 5 ]; then
+    GPU_POST_STATE_LINE="GPU_RETURNED_CLEAN"
+else
+    GPU_POST_STATE_LINE="GPU_STILL_HOLDS_${post_mem_mib}_MIB util_${post_util_pct}_pct foreign_pids:${post_foreign:-none}"
+    GPU_CLEAN=0
+fi
+echo "$GPU_POST_STATE_LINE" > "$RESULTS_DIR/gpu_post.txt"
+echo "gdn_runner: post-teardown $GPU_POST_STATE_LINE"
+
+# --- metadata.json (R1: runner-written) -------------------------
+
+# Read fixture SHA-256 from the pinned manifest so metadata carries
+# provenance without requiring the operator to hand-compose it.
+FIXTURE_SHA="$(python3 -c "import json,sys; print(json.load(open('${FIXTURES_DIR}/manifest.json'))['sha256'])" 2>/dev/null || echo unknown)"
+END_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+python3 - <<PY > "$RESULTS_DIR/metadata.json"
+import json, sys
+payload = {
+    "attempt_id": "$ATTEMPT_ID",
+    "arm": "$ARM",
+    "arm_flags": [$(printf '"%s",' "${ARM_FLAGS[@]}")],
+    "prompt_len_tokens_target": int("$PROMPT_LEN"),
+    "batch_size": int("$BATCH_SIZE"),
+    "n_warmup": int("$N_WARMUP"),
+    "n_timed": int("$N_TIMED"),
+    "new_tokens": int("$NEW_TOKENS"),
+    "gpu_id": "$GPU_ID",
+    "gpu_uuid": "$target_uuid",
+    "gpu_pre_memory_mib": "$(cat "$RESULTS_DIR/gpu_pre.txt" 2>/dev/null | head -1 | awk '{print $1}' || echo unknown)",
+    "gpu_post_line": "$GPU_POST_STATE_LINE",
+    "gpu_returned_clean": bool($GPU_CLEAN),
+    "gpu_allowlist_at_run": "$GPU_ALLOWLIST",
+    "frozen_sglang": "$FROZEN_SGLANG",
+    "frozen_sglang_sha": "$FROZEN_SGLANG_SHA",
+    "model_id": "$MODEL_ID",
+    "model_revision": "$MODEL_REVISION",
+    "fixture_sha256": "$FIXTURE_SHA",
+    "server_bind": "$SERVER_BIND",
+    "server_port": "$SERVER_PORT",
+    "server_ready_seconds": int("$SERVER_READY_SECONDS"),
+    "client_wallclock_seconds": int("$CLIENT_END_TS") - int("$CLIENT_START_TS"),
+    "client_exit_code": int("$CLIENT_EXIT"),
+    "libcuda_preload": "$LIBCUDA_PRELOAD",
+    "instrumentation": "gdn_baseline_noop",
+    "written_by": "gdn_runner.sh",
+    "end_utc": "$END_UTC",
+    "context_blob_path": "$CONTEXT_BLOB",
+}
+json.dump(payload, sys.stdout, indent=2, sort_keys=True)
+sys.stdout.write("\n")
+PY
+
+echo "gdn_runner: metadata.json written to $RESULTS_DIR/metadata.json"
+
+# --- final exit -------------------------------------------------
+
+if [ "$CLIENT_EXIT" -ne 0 ]; then
+    echo "gdn_runner: cell FAILED (arm=$ARM prompt=$PROMPT_LEN batch=$BATCH_SIZE client_exit=$CLIENT_EXIT)" >&2
+    exit "$CLIENT_EXIT"
+fi
+
+if [ "$GPU_CLEAN" -ne 1 ]; then
+    echo "gdn_runner: cell completed but GPU not returned clean — exiting 77" >&2
+    exit 77
+fi
 
 echo "gdn_runner: cell complete (arm=$ARM prompt=$PROMPT_LEN batch=$BATCH_SIZE)"
