@@ -1,5 +1,20 @@
 # Qwen3.5-4B — BCG DeepStack Investigation
 
+> **Sub-track closed 2026-08-03 with verdict `NOT_APPLICABLE_QWEN35`.**
+> Every publicly released `Qwen/Qwen3.5-*` checkpoint ships
+> `vision_config.deepstack_visual_indexes = []`, so the code path
+> under test is not exercised on any shipped Qwen3.5 configuration,
+> and the harness will not fabricate the input by editing the
+> checkpoint (see `hypothesis.md` §5 and Amendment 5). Attempts 01,
+> 02, 03 are preserved verbatim. Attempt 03's live-fire
+> `FAIL_BCG_DEEPSTACK` on `Qwen/Qwen3-VL-8B-Instruct` under a
+> profiler-owned test-only BCG-allowlist monkey-patch remains valid
+> as an exhibit of the **latent regression on a different model** —
+> it is not the closing verdict for Qwen3.5. Investigation continues
+> on a distinct Qwen3.5 code path under
+> `debug/qwen35-4b-gdn-prefill-bcg` (see `plan.md` §8 and
+> `gdn/README.md`).
+
 > **Investigation, not a confirmed bug.** This directory tracks a
 > source-level suspicion on current upstream SGLang. Nothing here
 > asserts a runtime failure until runtime evidence supports it.

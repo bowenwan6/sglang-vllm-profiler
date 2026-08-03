@@ -159,6 +159,21 @@ issue" rule; the decision is deferred to a follow-up branch that
 can present both the source-level argument and the live-fire
 evidence from this attempt.
 
+### 4.2 Sub-track closure framing (2026-08-03)
+
+The Qwen3.5 DeepStack sub-track closes with verdict
+`NOT_APPLICABLE_QWEN35` (see
+[`hypothesis.md`](hypothesis.md) §5 and Amendment 5, and
+[`plan.md`](../../plan.md) §7.8). The Attempt 03 `FAIL_BCG_DEEPSTACK`
+result documented in §4.1 is preserved verbatim and remains valid as
+an exhibit of the **latent regression on a different model**
+(`Qwen/Qwen3-VL-8B-Instruct` under a profiler-owned test-only BCG-
+allowlist monkey-patch). It is **not** the closing verdict for
+Qwen3.5. Explicit rule (recorded here so it is not re-litigated):
+future tests on Qwen3.5 must not modify the checkpoint or fabricate
+DeepStack inputs to force the branch to fire; any DeepStack test
+must use a model whose shipped config populates it.
+
 ## 5. What this document is not
 
 - Not a fix. `plan.md` §7 still says "no fix in this pass."

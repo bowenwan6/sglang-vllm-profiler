@@ -487,6 +487,12 @@ eager fallback is never "bug closed" or full PASS.**
   attributed.
 - **`INFRA_FAILURE`** — Environment / GPU / preflight failure;
   neutral outcome, does not count for or against any hypothesis.
+- **`NOT_APPLICABLE_QWEN35`** (closure verdict, added 2026-08-03) —
+  The primary target does not exercise the code path under test on
+  any shipped release, and the harness will not fabricate the input
+  by editing the checkpoint. See
+  [`experiments/qwen35_4b/hypothesis.md`](experiments/qwen35_4b/hypothesis.md)
+  §5 and Amendment 5 for the full criteria and preservation rules.
 
 Predeclared **diagnostic ablation**: on top of `eager_normal` and
 `bcg_normal`, the runner also collects `eager_zero_deepstack`
@@ -705,3 +711,50 @@ its own PCG investigation on
 - Using any GPU outside the authorised allowlist `{0, 1, 7}` (see
   `experiments/qwen35_4b/validation_plan.md` Amendment 1 and
   Amendment 2).
+
+### 7.8 Sub-track closure (2026-08-03) — verdict `NOT_APPLICABLE_QWEN35`
+
+The Qwen3.5-4B DeepStack sub-track closes with verdict
+**`NOT_APPLICABLE_QWEN35`** (see
+[`experiments/qwen35_4b/hypothesis.md`](experiments/qwen35_4b/hypothesis.md)
+§5 and Amendment 5). The Qwen3.5 target does not exercise the code
+path under test on any shipped release, and the harness will not
+fabricate the input by editing the checkpoint. Attempts 01, 02, 03
+are preserved verbatim; Attempt 03's `FAIL_BCG_DEEPSTACK` on
+Qwen3-VL under a profiler-owned test-only monkey-patch stands as an
+exhibit of the latent regression on a different model, **not** as the
+closing verdict for Qwen3.5. Investigation continues on a distinct
+Qwen3.5 code path — see §8.
+
+## 8. Sub-track — Qwen3.5-4B GDN prefill-BCG investigation (pivot, active)
+
+Active branch: `debug/qwen35-4b-gdn-prefill-bcg` (cut from
+`debug/qwen35-4b-bcg-deepstack` at close-out commit).
+Investigation anchor: `experiments/qwen35_4b/gdn/README.md`.
+
+**Target and constraints (from operator brief 2026-08-03):**
+
+- Model: `Qwen/Qwen3.5-4B`, BF16, single GPU, TP=1.
+- No MTP, no quantization, no MoE, no custom model patches.
+- 4-arm matrix: `{eager prefill + eager decode}`,
+  `{prefill BCG only}`, `{full decode CUDA Graph only}`,
+  `{both enabled}`.
+- Sweep: prompt length ∈ `{128, 512, 2048, 8192}` ×
+  batch size ∈ `{1, 4, 16, 32}`.
+- Tool: Nsight Systems (`nsys profile`); measure kernel counts,
+  CPU launch gaps, graph breaks, TTFT, prefill throughput per arm.
+- GDN focus areas: input projections, fused split/reshape, linear-
+  attention call, gated norm, output projection. **Do not assume**
+  recurrent-state handling is faulty; first identify a repeated
+  graph break or measurable launch-overhead bottleneck.
+- **Correctness gates (blocking before any perf claim):**
+  eager-vs-BCG token/logprob equivalence; request-order isolation;
+  chunked-prefill equivalence; graph-bucket equivalence.
+- **Rule:** do not modify upstream SGLang source until the baseline
+  profile identifies one specific BCG limitation.
+- GPU allowlist unchanged (`{0, 1, 7}`) and idle-verification rules
+  from `experiments/qwen35_4b/validation_plan.md` Amendments 1 and 2
+  continue to apply.
+- Preservation invariants unchanged: read-only `/data/sglang-fork`
+  at `986c89e69`; frozen SGLang checkout unchanged; §4 evidence
+  read-only.

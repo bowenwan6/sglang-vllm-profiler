@@ -220,12 +220,58 @@ exact strings.
   provenance, GPU-0 shared-tenancy makes the measurement unreliable,
   server fails to bring up, the runner aborts on a foreign-PID
   guard, or provenance-preflight fails on a hard pin.
+- **`NOT_APPLICABLE_QWEN35`** — The chosen target model does not
+  exercise the code path under test on any shipped release, and the
+  harness will not fabricate the input by editing the checkpoint (see
+  Amendment 5 below). Specifically: every publicly released
+  `Qwen/Qwen3.5-*` checkpoint ships
+  `vision_config.deepstack_visual_indexes = []`, so
+  `input_deepstack_embeds` is empty and the `Qwen3_5ForCausalLM.forward`
+  `add_` branch is trivially skipped by its `numel() > 0` guard. No
+  input-side or checkpoint-side mutation on the primary target is
+  permitted to force the branch to fire. This closes the Qwen3.5
+  DeepStack question — the source-level suspicion is a **latent
+  regression** (see `latent_bug_analysis.md`) rather than an
+  active-on-Qwen3.5 bug. Attempt 03's live-fire
+  `FAIL_BCG_DEEPSTACK` result on `Qwen/Qwen3-VL-8B-Instruct` under a
+  profiler-owned test-only BCG-allowlist monkey-patch remains valid as
+  an exhibit of the latent regression on a different model; it is
+  **not** the closing verdict for Qwen3.5.
 
 **An eager fallback (`FEATURE_GAP_EAGER_FALLBACK`) is never labelled
 "bug closed" or "full PASS".** It is a real outcome the validation
 plan is designed to distinguish and it must be reported as such. Any
 post-hoc rewrite of these tiers requires an explicit "Amendment N"
 block in this file.
+
+### Amendment 5 (2026-08-03) — closure of the DeepStack sub-track
+
+The DeepStack sub-track on `Qwen/Qwen3.5-4B` closes with verdict
+**`NOT_APPLICABLE_QWEN35`**. Rationale and rules:
+
+- **Rationale.** Attempt 02 (`harness_gpu1_20260801T062833Z`) proved
+  that no publicly released `Qwen/Qwen3.5-*` checkpoint populates
+  `input_deepstack_embeds` on the primary target; Attempt 03
+  (`attempt_gpu1_20260801T115524Z`) recorded a live-fire
+  `FAIL_BCG_DEEPSTACK` on `Qwen/Qwen3-VL-8B-Instruct` **only** under a
+  profiler-owned test-only BCG-allowlist monkey-patch. Neither result
+  demonstrates that Qwen3.5 itself exhibits a BCG DeepStack failure on
+  any shipped configuration.
+- **Rule (do not fabricate).** The harness must not modify the
+  Qwen3.5 checkpoint to force synthetic DeepStack inputs (e.g.,
+  overriding `vision_config.deepstack_visual_indexes`, injecting a
+  fabricated tensor into the request, hand-editing the served
+  `config.json`). Any future test that requires DeepStack must use a
+  model whose shipped config populates it.
+- **Preservation.** Attempts 01, 02, 03 and all supporting
+  documentation (`source_audit.md`, `latent_bug_analysis.md`, the
+  Qwen3-VL retarget scaffolding under `scripts/`) are preserved
+  verbatim as historical evidence and as the source-level basis for
+  the latent-regression claim.
+- **Upstream filing.** Deferred out of this sub-track; the
+  `latent_bug_analysis.md` §4.1 framings ("register DeepStack slot"
+  vs "numel guard + eager fallback") remain valid inputs for a
+  separate branch that chooses to file.
 
 ## 6. Predeclared diagnostic ablation
 
