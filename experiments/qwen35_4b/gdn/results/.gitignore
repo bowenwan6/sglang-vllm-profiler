@@ -1,0 +1,6 @@
+# Per gdn/validation_plan.md §9: raw/ under any attempt directory is
+# gitignored — it holds heavyweight per-attempt outputs (SGLang server
+# stderr/stdout, .nsys-rep captures) that should not enter git. Small
+# evidence (client records JSONL, correctness gate CSVs, summary /
+# verdict files) belongs at the attempt root and IS committed.
+*/raw/
