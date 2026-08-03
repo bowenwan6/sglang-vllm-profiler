@@ -138,17 +138,122 @@ def test_preflight_dry_run_reports_skipped() -> None:
         sys.stdout = real_stdout
     payload = json.loads(buf.getvalue())
     statuses = {r["check"]: r["status"] for r in payload["results"]}
-    if statuses.get("hf_model_metadata") != "SKIPPED_DRY_RUN":
-        _fail(
-            "preflight_dry_run_reports_skipped",
-            f"expected SKIPPED_DRY_RUN for hf_model_metadata, got {statuses}",
-        )
-    if statuses.get("gdn_config_fields") != "SKIPPED_DRY_RUN":
-        _fail(
-            "preflight_dry_run_reports_skipped",
-            f"expected SKIPPED_DRY_RUN for gdn_config_fields, got {statuses}",
-        )
+    for chk in ("hf_model_metadata", "gdn_config_fields", "frozen_sglang_head", "sglang_module_file"):
+        if statuses.get(chk) != "SKIPPED_DRY_RUN":
+            _fail(
+                "preflight_dry_run_reports_skipped",
+                f"expected SKIPPED_DRY_RUN for {chk}, got {statuses.get(chk)}",
+            )
     _ok("preflight_dry_run_reports_skipped")
+
+
+def test_preflight_required_fields_include_full_attention_interval() -> None:
+    if "full_attention_interval" not in gpreflight.REQUIRED_GDN_CONFIG_FIELDS:
+        _fail(
+            "preflight_required_fields_include_full_attention_interval",
+            f"missing from {gpreflight.REQUIRED_GDN_CONFIG_FIELDS}",
+        )
+    _ok("preflight_required_fields_include_full_attention_interval")
+
+
+def test_preflight_libcuda_preload_detects_mismatch() -> None:
+    saved = os.environ.get("LD_PRELOAD")
+    try:
+        os.environ["LD_PRELOAD"] = "/definitely/wrong/libcuda.so.1"
+        res = gpreflight.libcuda_preload()
+        if res["status"] != "MISMATCH":
+            _fail(
+                "preflight_libcuda_preload_detects_mismatch",
+                f"expected MISMATCH, got {res}",
+            )
+    finally:
+        if saved is None:
+            os.environ.pop("LD_PRELOAD", None)
+        else:
+            os.environ["LD_PRELOAD"] = saved
+    _ok("preflight_libcuda_preload_detects_mismatch")
+
+
+def test_preflight_libcuda_preload_matches_pinned() -> None:
+    saved = os.environ.get("LD_PRELOAD")
+    try:
+        os.environ["LD_PRELOAD"] = gpreflight.PINNED_LIBCUDA_PRELOAD
+        res = gpreflight.libcuda_preload()
+        if res["status"] != "OK":
+            _fail(
+                "preflight_libcuda_preload_matches_pinned",
+                f"expected OK, got {res}",
+            )
+    finally:
+        if saved is None:
+            os.environ.pop("LD_PRELOAD", None)
+        else:
+            os.environ["LD_PRELOAD"] = saved
+    _ok("preflight_libcuda_preload_matches_pinned")
+
+
+def test_preflight_libcuda_preload_missing_is_missing() -> None:
+    saved = os.environ.get("LD_PRELOAD")
+    try:
+        os.environ.pop("LD_PRELOAD", None)
+        res = gpreflight.libcuda_preload()
+        if res["status"] != "MISSING":
+            _fail(
+                "preflight_libcuda_preload_missing_is_missing",
+                f"expected MISSING, got {res}",
+            )
+    finally:
+        if saved is not None:
+            os.environ["LD_PRELOAD"] = saved
+    _ok("preflight_libcuda_preload_missing_is_missing")
+
+
+def test_preflight_lib_versions_returns_ok() -> None:
+    # Best-effort: modules may be present or absent, but structure must hold.
+    res = gpreflight.lib_versions()
+    if res["status"] != "OK":
+        _fail("preflight_lib_versions_returns_ok", f"got {res}")
+    for mod in ("torch", "sgl_kernel", "flashinfer"):
+        if mod not in res["versions"]:
+            _fail("preflight_lib_versions_returns_ok", f"missing {mod} in versions")
+    _ok("preflight_lib_versions_returns_ok")
+
+
+def test_preflight_nsys_version_is_present() -> None:
+    # nsys is installed on this host per the audit.
+    res = gpreflight.nsys_version()
+    if res["status"] not in ("OK", "MISSING"):
+        _fail("preflight_nsys_version_is_present", f"got {res}")
+    _ok("preflight_nsys_version_is_present", res["status"])
+
+
+def test_preflight_frozen_sglang_head_dry_run() -> None:
+    res = gpreflight.frozen_sglang_head(dry_run=True)
+    if res["status"] != "SKIPPED_DRY_RUN":
+        _fail("preflight_frozen_sglang_head_dry_run", f"got {res}")
+    if res.get("pinned_sha") != gpreflight.PINNED_FROZEN_SGLANG_SHA:
+        _fail(
+            "preflight_frozen_sglang_head_dry_run",
+            "pinned_sha absent or wrong",
+        )
+    _ok("preflight_frozen_sglang_head_dry_run")
+
+
+def test_preflight_frozen_sglang_head_live() -> None:
+    """When the frozen checkout is present, it must match the pin."""
+    res = gpreflight.frozen_sglang_head(dry_run=False)
+    if res["status"] == "MISSING":
+        # If the frozen checkout isn't on this host, skip gracefully.
+        _ok("preflight_frozen_sglang_head_live", "no frozen checkout on host — skipped")
+        return
+    if res["status"] != "OK":
+        _fail("preflight_frozen_sglang_head_live", f"got {res}")
+    if res.get("got_sha") != gpreflight.PINNED_FROZEN_SGLANG_SHA:
+        _fail(
+            "preflight_frozen_sglang_head_live",
+            f"HEAD {res.get('got_sha')} != pin {gpreflight.PINNED_FROZEN_SGLANG_SHA}",
+        )
+    _ok("preflight_frozen_sglang_head_live", res["got_sha"][:12])
 
 
 def test_preflight_env_flags_recorded() -> None:
@@ -829,6 +934,14 @@ TESTS = (
     test_generator_print_matches_file,
     test_preflight_dry_run_returns_zero,
     test_preflight_dry_run_reports_skipped,
+    test_preflight_required_fields_include_full_attention_interval,
+    test_preflight_libcuda_preload_detects_mismatch,
+    test_preflight_libcuda_preload_matches_pinned,
+    test_preflight_libcuda_preload_missing_is_missing,
+    test_preflight_lib_versions_returns_ok,
+    test_preflight_nsys_version_is_present,
+    test_preflight_frozen_sglang_head_dry_run,
+    test_preflight_frozen_sglang_head_live,
     test_preflight_env_flags_recorded,
     test_materialise_stretch_and_truncate,
     test_client_dry_run_probe,

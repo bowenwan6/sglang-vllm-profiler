@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 import urllib.request
 from pathlib import Path
@@ -53,9 +54,17 @@ REQUIRED_GDN_CONFIG_FIELDS = (
     "linear_key_head_dim",
     "linear_value_head_dim",
     "linear_conv_kernel_dim",
+    "full_attention_interval",
     "rms_norm_eps",
     "hidden_act",
 )
+
+# Hard pins that provenance.md §1 requires the runner to verify.
+PINNED_FROZEN_SGLANG_SHA = "58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8"
+PINNED_LIBCUDA_PRELOAD = "/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05"
+
+# Env-var name for overriding the frozen SGLang checkout path.
+FROZEN_SGLANG_ENV = "QWEN35_FROZEN_SGLANG_PATH"
 
 # HF layer_types values that count as "linear-attention / GDN".
 LINEAR_ATTENTION_TYPES = {"linear_attention"}
@@ -201,15 +210,22 @@ def env_gdn_flags() -> dict:
     }
 
 
+def _resolve_frozen_sglang() -> str | None:
+    """Pick the frozen SGLang checkout path from env or known scratchpad."""
+    for base in (
+        os.environ.get(FROZEN_SGLANG_ENV),
+        "/tmp/claude-0/-data-sglang-vllm-profiler/1617f0f1-bb43-4914-afad-2284642acd9f/scratchpad/sglang_checkout/sglang",
+    ):
+        if base and Path(base).exists():
+            return base
+    return None
+
+
 def frozen_checkout_present() -> dict:
-    """Best-effort locate the frozen SGLang checkout without importing torch."""
-    # We do not want to shell out to git here; just record whether an
-    # expected checkout path exists under a set of scratchpad prefixes
-    # that the DeepStack sub-track uses. The main runner (runner.sh)
-    # does the authoritative check.
+    """Locate the frozen SGLang checkout without importing torch."""
     candidates = []
     for base in (
-        os.environ.get("QWEN35_FROZEN_SGLANG_PATH"),
+        os.environ.get(FROZEN_SGLANG_ENV),
         "/tmp/claude-0/-data-sglang-vllm-profiler/1617f0f1-bb43-4914-afad-2284642acd9f/scratchpad/sglang_checkout/sglang",
     ):
         if base and Path(base).exists():
@@ -221,12 +237,154 @@ def frozen_checkout_present() -> dict:
     }
 
 
+def frozen_sglang_head(dry_run: bool) -> dict:
+    """Verify the frozen SGLang checkout HEAD equals the pin."""
+    label = "frozen_sglang_head"
+    if dry_run:
+        return {
+            "check": label,
+            "status": "SKIPPED_DRY_RUN",
+            "pinned_sha": PINNED_FROZEN_SGLANG_SHA,
+        }
+    frozen = _resolve_frozen_sglang()
+    if frozen is None:
+        return {"check": label, "status": "MISSING", "pinned_sha": PINNED_FROZEN_SGLANG_SHA}
+    try:
+        proc = subprocess.run(
+            ["git", "-C", frozen, "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10.0,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {"check": label, "status": "ERROR_GIT", "error": repr(exc)}
+    if proc.returncode != 0:
+        return {"check": label, "status": "ERROR_GIT", "stderr": proc.stderr.strip()}
+    got_sha = proc.stdout.strip()
+    ok = got_sha == PINNED_FROZEN_SGLANG_SHA
+    return {
+        "check": label,
+        "status": "OK" if ok else "MISMATCH",
+        "got_sha": got_sha,
+        "pinned_sha": PINNED_FROZEN_SGLANG_SHA,
+        "checkout_path": frozen,
+    }
+
+
+def sglang_module_file(dry_run: bool) -> dict:
+    """Confirm `import sglang` resolves inside the frozen checkout."""
+    label = "sglang_module_file"
+    if dry_run:
+        return {"check": label, "status": "SKIPPED_DRY_RUN"}
+    frozen = _resolve_frozen_sglang()
+    if frozen is None:
+        return {"check": label, "status": "MISSING"}
+    frozen_python = str(Path(frozen) / "python")
+    # Ask a fresh Python subprocess so the current interpreter's already-
+    # imported sglang doesn't mask a bad PYTHONPATH.
+    try:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import sglang, sys; sys.stdout.write(sglang.__file__)",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30.0,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {"check": label, "status": "ERROR_IMPORT", "error": repr(exc)}
+    if proc.returncode != 0:
+        return {"check": label, "status": "ERROR_IMPORT", "stderr": proc.stderr.strip()}
+    resolved = proc.stdout.strip()
+    inside = resolved.startswith(frozen_python + os.sep) or resolved.startswith(
+        frozen_python + "/"
+    )
+    return {
+        "check": label,
+        "status": "OK" if inside else "OUTSIDE_FROZEN",
+        "resolved_path": resolved,
+        "frozen_python": frozen_python,
+    }
+
+
+def libcuda_preload() -> dict:
+    """Warn if LD_PRELOAD doesn't target the pinned libcuda."""
+    label = "libcuda_preload"
+    got = os.environ.get("LD_PRELOAD", "")
+    if not got:
+        return {
+            "check": label,
+            "status": "MISSING",
+            "expected": PINNED_LIBCUDA_PRELOAD,
+        }
+    # LD_PRELOAD may hold multiple paths (colon-delimited).
+    parts = [p for p in got.split(":") if p]
+    matched = any(p == PINNED_LIBCUDA_PRELOAD for p in parts)
+    return {
+        "check": label,
+        "status": "OK" if matched else "MISMATCH",
+        "got": got,
+        "expected": PINNED_LIBCUDA_PRELOAD,
+    }
+
+
+def lib_versions() -> dict:
+    """Record torch / sgl_kernel / flashinfer versions (informational)."""
+    label = "lib_versions"
+    versions = {}
+    for mod in ("torch", "sgl_kernel", "flashinfer"):
+        try:
+            proc = subprocess.run(
+                [sys.executable, "-c", f"import {mod}; print({mod}.__version__)"],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=20.0,
+            )
+            if proc.returncode == 0:
+                versions[mod] = proc.stdout.strip()
+            else:
+                versions[mod] = "IMPORT_ERROR"
+        except Exception as exc:  # noqa: BLE001
+            versions[mod] = f"ERROR:{exc!r}"
+    return {"check": label, "status": "OK", "versions": versions}
+
+
+def nsys_version() -> dict:
+    """Record nsys binary version (informational)."""
+    label = "nsys_version"
+    try:
+        proc = subprocess.run(
+            ["nsys", "--version"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10.0,
+        )
+    except FileNotFoundError:
+        return {"check": label, "status": "MISSING", "note": "nsys not on PATH"}
+    except Exception as exc:  # noqa: BLE001
+        return {"check": label, "status": "ERROR", "error": repr(exc)}
+    if proc.returncode != 0:
+        return {"check": label, "status": "ERROR", "stderr": proc.stderr.strip()}
+    return {"check": label, "status": "OK", "version": proc.stdout.strip()}
+
+
 def run(dry_run: bool, strict: bool, want_json: bool) -> int:
     results = [
         load_model_metadata(dry_run),
         load_gdn_config(dry_run),
         env_gdn_flags(),
         frozen_checkout_present(),
+        frozen_sglang_head(dry_run),
+        sglang_module_file(dry_run),
+        libcuda_preload(),
+        lib_versions(),
+        nsys_version(),
     ]
     payload = {"preflight": "gdn", "results": results, "strict": strict}
     if want_json:
@@ -238,7 +396,13 @@ def run(dry_run: bool, strict: bool, want_json: bool) -> int:
     hard_bad = [
         r
         for r in results
-        if r["status"] in {"MISMATCH", "MISSING_FIELDS", "NOT_HYBRID", "ERROR_FETCH"}
+        if r["status"] in {
+            "MISMATCH",
+            "MISSING_FIELDS",
+            "NOT_HYBRID",
+            "ERROR_FETCH",
+            "OUTSIDE_FROZEN",
+        }
     ]
     if hard_bad:
         return 1
