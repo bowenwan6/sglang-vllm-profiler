@@ -149,4 +149,36 @@ if ! command -v "$NSYS_BIN" >/dev/null 2>&1; then
     exit 74
 fi
 
-exec "${NSYS_CMD[@]}" -- "$RUNNER" "${RUNNER_ARGS[@]}"
+"${NSYS_CMD[@]}" -- "$RUNNER" "${RUNNER_ARGS[@]}"
+NSYS_EXIT=$?
+echo "nsys_capture: nsys exit code $NSYS_EXIT"
+
+# --- post-capture: run the extractor so gdn_verdict has CSV input --
+
+HERE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NSYS_REP="${NSYS_OUT}.nsys-rep"
+CSV_DIR="$results_dir/nsys"
+CSV_OUT="$CSV_DIR/${arm}_p${prompt_len}_b${batch_size}.csv"
+RECORDS_JSONL="$results_dir/records_${arm}_p${prompt_len}_b${batch_size}.jsonl"
+
+mkdir -p "$CSV_DIR"
+
+if [ -f "$NSYS_REP" ]; then
+    extractor_args=(
+        --nsys-rep "$NSYS_REP"
+        --arm "$arm"
+        --prompt-len "$prompt_len"
+        --batch "$batch_size"
+        --output-csv "$CSV_OUT"
+    )
+    if [ -f "$RECORDS_JSONL" ]; then
+        extractor_args+=( --records "$RECORDS_JSONL" )
+    fi
+    echo "nsys_capture: extracting metrics to $CSV_OUT"
+    python3 "$HERE_DIR/extract_nsys_metrics.py" "${extractor_args[@]}" || \
+        echo "nsys_capture: WARN extractor exit code $? (continuing)"
+else
+    echo "nsys_capture: WARN no .nsys-rep at $NSYS_REP; skipping extraction"
+fi
+
+exit "$NSYS_EXIT"

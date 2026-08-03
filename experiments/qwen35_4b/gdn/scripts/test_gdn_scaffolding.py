@@ -12,6 +12,7 @@ runner is invoked against a real server.
 
 from __future__ import annotations
 
+import csv
 import hashlib
 import io
 import json
@@ -1273,6 +1274,211 @@ def test_verdict_labels_are_exact_strings() -> None:
     _ok("verdict_labels_are_exact_strings")
 
 
+import extract_nsys_metrics as gextract  # noqa: E402
+
+
+def test_extract_dry_run_emits_header_and_row() -> None:
+    """Dry-run produces the CSV header + one placeholder row without
+    needing nsys installed."""
+    out = Path("/tmp/gdn_extract_dry.csv")
+    if out.exists():
+        out.unlink()
+    rc = gextract.extract(
+        nsys_rep=Path("/nonexistent"),
+        arm="A0",
+        prompt_len=128,
+        batch=1,
+        records=None,
+        output_csv=out,
+        dry_run=True,
+    )
+    if rc != 0:
+        _fail("extract_dry_run_emits_header_and_row", f"rc={rc}")
+    if not out.exists():
+        _fail("extract_dry_run_emits_header_and_row", "no output file")
+    with out.open() as fh:
+        rdr = csv.DictReader(fh)
+        rows = list(rdr)
+        if rdr.fieldnames is None or tuple(rdr.fieldnames) != gextract.COLUMNS:
+            _fail(
+                "extract_dry_run_emits_header_and_row",
+                f"columns={rdr.fieldnames}",
+            )
+    if not rows:
+        _fail("extract_dry_run_emits_header_and_row", "no rows")
+    if rows[0].get("extractor_status") != "dry_run":
+        _fail(
+            "extract_dry_run_emits_header_and_row",
+            f"status={rows[0].get('extractor_status')!r}",
+        )
+    _ok("extract_dry_run_emits_header_and_row")
+
+
+def test_extract_missing_nsys_rep_reports_missing() -> None:
+    """A missing .nsys-rep must not crash — it emits a row with
+    extractor_status=MISSING_NSYS_REP so the verdict runner can
+    still process the sweep."""
+    out = Path("/tmp/gdn_extract_missing.csv")
+    if out.exists():
+        out.unlink()
+    rc = gextract.extract(
+        nsys_rep=Path("/nonexistent/foo.nsys-rep"),
+        arm="A1",
+        prompt_len=128,
+        batch=1,
+        records=None,
+        output_csv=out,
+        dry_run=False,
+    )
+    if rc != 0:
+        _fail("extract_missing_nsys_rep_reports_missing", f"rc={rc}")
+    with out.open() as fh:
+        row = next(csv.DictReader(fh))
+    if row["extractor_status"] != "MISSING_NSYS_REP":
+        _fail(
+            "extract_missing_nsys_rep_reports_missing",
+            f"status={row['extractor_status']!r}",
+        )
+    if "nsys_rep not found" not in row["extractor_warnings"]:
+        _fail(
+            "extract_missing_nsys_rep_reports_missing",
+            f"warnings={row['extractor_warnings']!r}",
+        )
+    _ok("extract_missing_nsys_rep_reports_missing")
+
+
+def test_extract_columns_match_validation_plan_section_5() -> None:
+    """The column set must match validation_plan.md §5 exactly.
+
+    Regression guard: any downstream change to gdn_verdict.py's CSV
+    reader will break if this drifts.
+    """
+    expected = (
+        "arm",
+        "prompt_len",
+        "batch",
+        "request_id",
+        "kernel_count_total",
+        "kernel_count_gdn",
+        "kernel_count_attn",
+        "kernel_count_other",
+        "cudagraphlaunch_count",
+        "cudalaunchkernel_count",
+        "ttft_ms",
+        "prefill_throughput_toks_per_s",
+        "p50_launch_gap_us",
+        "p95_launch_gap_us",
+        "p99_launch_gap_us",
+        "graph_breaks",
+        "attribution",
+        "nsys_source",
+        "extractor_status",
+        "extractor_warnings",
+    )
+    if gextract.COLUMNS != expected:
+        _fail("extract_columns_match_validation_plan_section_5", str(gextract.COLUMNS))
+    _ok("extract_columns_match_validation_plan_section_5")
+
+
+def test_extract_parses_kernel_and_api_csv_sections() -> None:
+    """Unit-level parse of the nsys stats CSV shapes."""
+    kern_raw = """\
+# Generated header
+**cuda_gpu_kern_sum**
+Time (%),Total Time (ns),Instances,Avg (ns),Min (ns),Max (ns),StdDev (ns),Name
+50.0,1000,100,10,5,20,3,gemm_kernel
+50.0,1000,80,12,6,22,4,softmax_kernel
+"""
+    api_raw = """\
+Time (%),Total Time (ns),Instances,Avg (ns),Min (ns),Max (ns),StdDev (ns),Name
+20.0,500,40,12,5,20,3,cudaLaunchKernel
+5.0,150,3,50,40,60,5,cudaGraphLaunch
+"""
+    kern_rows = gextract._parse_csv_section(kern_raw)
+    api_rows = gextract._parse_csv_section(api_raw)
+    kc = gextract._kernel_counts(kern_rows)
+    if kc["kernel_count_total"] != 180:
+        _fail("extract_parses_kernel_and_api_csv_sections", f"total={kc}")
+    launch, graph = gextract._api_counts(api_rows)
+    if launch != 40 or graph != 3:
+        _fail(
+            "extract_parses_kernel_and_api_csv_sections",
+            f"launch={launch} graph={graph}",
+        )
+    _ok("extract_parses_kernel_and_api_csv_sections")
+
+
+def test_extract_launch_gap_quantiles() -> None:
+    """Launch-gap computation from cuda_api_trace timestamps."""
+    trace_rows = [
+        {"Start (ns)": "1000", "Name": "cudaLaunchKernel"},
+        {"Start (ns)": "2000", "Name": "cudaLaunchKernel"},
+        {"Start (ns)": "4000", "Name": "cudaLaunchKernel"},
+        {"Start (ns)": "8000", "Name": "cudaLaunchKernel"},
+        {"Start (ns)": "16000", "Name": "cudaLaunchKernel"},
+    ]
+    gaps = gextract._launch_gaps_us(trace_rows)
+    # Sorted starts → gaps [1000, 2000, 4000, 8000] ns → [1.0, 2.0, 4.0, 8.0] us
+    if gaps != [1.0, 2.0, 4.0, 8.0]:
+        _fail("extract_launch_gap_quantiles", f"gaps={gaps}")
+    if gextract._quantile(gaps, 0.5) not in (2.0, 4.0):
+        _fail("extract_launch_gap_quantiles", f"p50={gextract._quantile(gaps, 0.5)}")
+    if gextract._quantile(gaps, 0.95) != 8.0:
+        _fail("extract_launch_gap_quantiles", f"p95={gextract._quantile(gaps, 0.95)}")
+    _ok("extract_launch_gap_quantiles")
+
+
+def test_extract_client_metadata_aggregates_e2e() -> None:
+    """Client records → ttft_ms (coarse from e2e) + throughput."""
+    tmp = Path("/tmp/gdn_extract_records.jsonl")
+    tmp.write_text(
+        "\n".join(
+            json.dumps(r)
+            for r in [
+                {"e2e_ms": 100.0, "prompt_actual_token_count": 128},
+                {"e2e_ms": 120.0, "prompt_actual_token_count": 128},
+            ]
+        )
+        + "\n"
+    )
+    meta = gextract._client_metadata(tmp)
+    if meta.get("e2e_ms_mean") != 110.0:
+        _fail("extract_client_metadata_aggregates_e2e", str(meta))
+    if meta.get("prompt_actual_token_count_mean") != 128.0:
+        _fail("extract_client_metadata_aggregates_e2e", str(meta))
+    _ok("extract_client_metadata_aggregates_e2e")
+
+
+def test_extract_dry_run_cli() -> None:
+    """End-to-end CLI dry-run — no nsys required."""
+    out = Path("/tmp/gdn_extract_cli.csv")
+    if out.exists():
+        out.unlink()
+    rc = subprocess.run(
+        [
+            sys.executable,
+            str(HERE / "extract_nsys_metrics.py"),
+            "--dry-run",
+            "--arm",
+            "A0",
+            "--prompt-len",
+            "128",
+            "--batch",
+            "1",
+            "--output-csv",
+            str(out),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if rc.returncode != 0:
+        _fail("extract_dry_run_cli", f"rc={rc.returncode} stderr={rc.stderr}")
+    if not out.exists():
+        _fail("extract_dry_run_cli", "no output csv")
+    _ok("extract_dry_run_cli")
+
+
 def test_nsys_capture_requires_separator() -> None:
     script = HERE / "nsys_capture.sh"
     rc = subprocess.run(
@@ -1430,6 +1636,13 @@ TESTS = (
     test_verdict_h_a_triggers_on_A1,
     test_verdict_dry_run_command_ok,
     test_verdict_labels_are_exact_strings,
+    test_extract_dry_run_emits_header_and_row,
+    test_extract_missing_nsys_rep_reports_missing,
+    test_extract_columns_match_validation_plan_section_5,
+    test_extract_parses_kernel_and_api_csv_sections,
+    test_extract_launch_gap_quantiles,
+    test_extract_client_metadata_aggregates_e2e,
+    test_extract_dry_run_cli,
     test_nsys_capture_requires_separator,
     test_nsys_capture_dry_run_prints_plan,
     test_nsys_capture_rejects_gpu_outside_allowlist,
