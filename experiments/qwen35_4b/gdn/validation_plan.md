@@ -14,17 +14,20 @@ model patches.
 **Frozen SGLang checkout:** `58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8`,
 verified via `sglang.__file__` inside the checkout.
 
-**Four arms** (from `plan.md` §8):
+**Four arms** (from `plan.md` §8). Canonical flags from frozen
+SGLang at `58974ca1` (`server_args.py:1784-1792`):
 
 | Arm id | Prefill | Decode | SGLang flags |
 |---|---|---|---|
-| `A0` `eager_eager` | eager | eager | `--disable-cuda-graph --disable-breakable-cuda-graph` |
-| `A1` `bcg_eager` | BCG | eager decode | `--disable-cuda-graph` (BCG on by default when supported) |
-| `A2` `eager_dcg` | eager | full-decode CG | `--disable-breakable-cuda-graph` |
-| `A3` `bcg_dcg` | BCG | full-decode CG | (defaults) |
+| `A0` `eager_eager` | eager | eager | `--cuda-graph-backend-prefill=disabled --cuda-graph-backend-decode=disabled` |
+| `A1` `bcg_eager` | BCG | eager decode | `--cuda-graph-backend-prefill=breakable --cuda-graph-backend-decode=disabled` |
+| `A2` `eager_dcg` | eager | full-decode CG | `--cuda-graph-backend-prefill=disabled --cuda-graph-backend-decode=full` |
+| `A3` `bcg_dcg` | BCG | full-decode CG | `--cuda-graph-backend-prefill=breakable --cuda-graph-backend-decode=full` |
 
-Exact flag names must match the frozen SGLang CLI — resolved by the
-runner's `--dry-run` printout before any GPU work.
+Backend enum values: `full`, `breakable`, `tc_piecewise`, `disabled`
+(`model_executor/cuda_graph_config.py:38-45`). Every arm sets both
+selectors explicitly so the run intent is unambiguous even if
+allowlist-driven defaults change.
 
 **Sweep** (per arm): prompt length ∈ `{128, 512, 2048, 8192}` ×
 batch size ∈ `{1, 4, 16, 32}` → 16 cells × 4 arms = **64 cells**.

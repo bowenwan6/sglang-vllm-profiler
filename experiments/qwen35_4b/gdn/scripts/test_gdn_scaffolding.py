@@ -367,13 +367,16 @@ def test_runner_dry_run_context_blob_valid_json() -> None:
             "runner_dry_run_context_blob_valid_json",
             f"arm={payload.get('arm')!r}, expected A1",
         )
-    if not any(
-        flag == "--disable-cuda-graph" for flag in payload.get("arm_flags", [])
-    ):
+    flags = payload.get("arm_flags", [])
+    expected_flags = {
+        "--cuda-graph-backend-prefill=breakable",
+        "--cuda-graph-backend-decode=disabled",
+    }
+    missing = expected_flags - set(flags)
+    if missing:
         _fail(
             "runner_dry_run_context_blob_valid_json",
-            f"A1 arm_flags should include --disable-cuda-graph; got "
-            f"{payload.get('arm_flags')!r}",
+            f"A1 arm_flags missing {missing}; got {flags!r}",
         )
     _ok("runner_dry_run_context_blob_valid_json", ctx_path)
 

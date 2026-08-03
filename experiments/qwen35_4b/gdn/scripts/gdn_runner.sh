@@ -18,16 +18,20 @@
 #
 # Never uses pkill, killall, fuser -k, or nvidia-smi --gpu-reset.
 #
-# The per-arm flag deltas that this script threads to SGLang:
-#   A0 eager_eager: --disable-cuda-graph --disable-cuda-graph-padding
-#                   --disable-breakable-cuda-graph
-#   A1 bcg_eager:   --disable-cuda-graph --disable-cuda-graph-padding
-#   A2 eager_dcg:   --disable-breakable-cuda-graph
-#   A3 bcg_dcg:     (defaults)
+# The per-arm flag deltas that this script threads to SGLang. Uses the
+# canonical --cuda-graph-backend-{prefill,decode}=<mode> pair
+# (server_args.py:1784-1792 at frozen SHA 58974ca1); backend enum:
+# {full, breakable, tc_piecewise, disabled} — see
+# model_executor/cuda_graph_config.py:38-45.
 #
-# The exact SGLang flag names are resolved from the frozen checkout at
-# preflight time; if any deviate on the pinned SHA, the runner
-# hard-fails so we never silently mis-configure an arm.
+#   A0 eager_eager: --cuda-graph-backend-prefill=disabled
+#                   --cuda-graph-backend-decode=disabled
+#   A1 bcg_eager:   --cuda-graph-backend-prefill=breakable
+#                   --cuda-graph-backend-decode=disabled
+#   A2 eager_dcg:   --cuda-graph-backend-prefill=disabled
+#                   --cuda-graph-backend-decode=full
+#   A3 bcg_dcg:     --cuda-graph-backend-prefill=breakable
+#                   --cuda-graph-backend-decode=full
 
 set -euo pipefail
 
@@ -150,26 +154,28 @@ fi
 
 # --- arm-to-flag mapping ----------------------------------------------
 
-# Defaults; each arm may extend.
+# Canonical prefill/decode backend selectors (frozen SGLang 58974ca1).
 ARM_FLAGS=()
 case "$ARM" in
     A0|eager_eager)
         ARM="A0"
-        ARM_FLAGS+=(--disable-cuda-graph)
-        ARM_FLAGS+=(--disable-cuda-graph-padding)
-        ARM_FLAGS+=(--disable-breakable-cuda-graph)
+        ARM_FLAGS+=(--cuda-graph-backend-prefill=disabled)
+        ARM_FLAGS+=(--cuda-graph-backend-decode=disabled)
         ;;
     A1|bcg_eager)
         ARM="A1"
-        ARM_FLAGS+=(--disable-cuda-graph)
-        ARM_FLAGS+=(--disable-cuda-graph-padding)
+        ARM_FLAGS+=(--cuda-graph-backend-prefill=breakable)
+        ARM_FLAGS+=(--cuda-graph-backend-decode=disabled)
         ;;
     A2|eager_dcg)
         ARM="A2"
-        ARM_FLAGS+=(--disable-breakable-cuda-graph)
+        ARM_FLAGS+=(--cuda-graph-backend-prefill=disabled)
+        ARM_FLAGS+=(--cuda-graph-backend-decode=full)
         ;;
     A3|bcg_dcg)
         ARM="A3"
+        ARM_FLAGS+=(--cuda-graph-backend-prefill=breakable)
+        ARM_FLAGS+=(--cuda-graph-backend-decode=full)
         ;;
     "")
         # dry-run only path validated below
