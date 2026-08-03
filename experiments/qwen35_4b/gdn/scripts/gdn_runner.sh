@@ -291,6 +291,7 @@ SGLANG_FORWARDED=(
     --host "$SERVER_BIND"
     --port "$SERVER_PORT"
     --tp 1
+    --device cuda
     --mem-fraction-static 0.7
     "${ARM_FLAGS[@]}"
 )
