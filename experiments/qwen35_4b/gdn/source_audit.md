@@ -31,10 +31,26 @@ def get_layer(idx: int, prefix: str):
     ...
 ```
 
-The per-layer type list is `config.layers_block_type` on the HF
-config. On `Qwen/Qwen3.5-4B @ 851bf6e8`, this list determines the
-attention/GDN interleaving pattern; the actual list is verified at
-run time (see `provenance.md` §2).
+The per-layer type list is `config.layers_block_type` inside SGLang;
+the field lives at `text_config.layer_types` on the HF `config.json`,
+and SGLang normalises the value strings (HF `"full_attention"` →
+SGLang `"attention"`; HF `"linear_attention"` → SGLang
+`"linear_attention"`). Preflight (`scripts/gdn_preflight.py`) reads
+the HF field name directly against `text_config`.
+
+Observed topology on `Qwen/Qwen3.5-4B @ 851bf6e8` (from HF config,
+verified 2026-08-03):
+
+- `text_config.num_hidden_layers` = 32.
+- `text_config.layer_types` = list of 32 entries; `full_attention_interval
+  = 4` in the config, so every 4th layer is `"full_attention"` (8 layers)
+  and the other 24 are `"linear_attention"` — a 3:1 GDN:attention ratio.
+- `text_config.hidden_size` = 2560, `linear_num_key_heads` = 16,
+  `linear_num_value_heads` = 32, so `heads_ratio = 2` → the fused
+  `fused_qkvzba_split_reshape_cat_contiguous` path (op 3.4) is hit,
+  not the Python fallback (3.5).
+- `text_config.linear_key_head_dim` = 128, `linear_value_head_dim` = 128,
+  `linear_conv_kernel_dim` = 4.
 
 ## 2. GDN forward path
 

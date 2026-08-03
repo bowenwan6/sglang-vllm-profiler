@@ -41,28 +41,41 @@ The runner's preflight loads the served config and records each
 of the following. Any missing or degenerate value hard-fails the
 sweep with `INFRA_FAILURE`.
 
-| Field | What it controls |
+All fields listed below live at `config.text_config.<field>` on the
+HF `config.json` (Qwen3.5 nests its language-model config there).
+SGLang exposes them at `config.<field>` after normalising the layer-
+type strings (HF `"full_attention"` → SGLang `"attention"`).
+
+| HF field (under `text_config`) | What it controls |
 |---|---|
-| `config.num_hidden_layers` | Total decoder layer count. |
-| `config.layers_block_type` | Per-layer type (`"attention"` / `"linear_attention"`). Must contain **both** for the target to be hybrid; the count of each is recorded. |
-| `config.linear_num_key_heads` | GDN key head count. |
-| `config.linear_num_value_heads` | GDN value head count; determines whether the fused split path is hit. |
-| `config.linear_key_head_dim` | GDN key head dim. |
-| `config.linear_value_head_dim` | GDN value head dim. |
-| `config.linear_conv_kernel_dim` | GDN 1D conv kernel size. |
-| `config.output_gate_type` | Feeds `RMSNormGated`. |
-| `config.rms_norm_eps` | Norm epsilon. |
-| `config.hidden_act` | Activation used inside `RadixLinearAttention`. |
+| `num_hidden_layers` | Total decoder layer count. |
+| `layer_types` | Per-layer type (`"linear_attention"` / `"full_attention"`). Must contain **both** for the target to be hybrid; the count of each is recorded. SGLang internally renames this to `layers_block_type` with `"full_attention"` → `"attention"`. |
+| `linear_num_key_heads` | GDN key head count. |
+| `linear_num_value_heads` | GDN value head count; determines whether the fused split path is hit. |
+| `linear_key_head_dim` | GDN key head dim. |
+| `linear_value_head_dim` | GDN value head dim. |
+| `linear_conv_kernel_dim` | GDN 1D conv kernel size. |
+| `full_attention_interval` | Stride between full-attention layers in the hybrid stack (Qwen3.5-4B ships with `4`). |
+| `rms_norm_eps` | Norm epsilon. |
+| `hidden_act` | Activation used inside `RadixLinearAttention`. |
 
 Derived and recorded:
 
-- `n_attention_layers` / `n_linear_layers` counts from
-  `layers_block_type`.
+- `n_full_attention_layers` / `n_linear_attention_layers` counts
+  from `text_config.layer_types` using the HF value strings.
 - `heads_ratio = linear_num_value_heads / linear_num_key_heads`; if
   `∈ {1, 2, 4}` the fused
   `fused_qkvzba_split_reshape_cat_contiguous` path is hit,
   otherwise the Python fallback (see `source_audit.md` §3 items
   3.4 vs 3.5).
+
+**Observed on `Qwen/Qwen3.5-4B @ 851bf6e8` (verified 2026-08-03):**
+`num_hidden_layers = 32`, `full_attention_interval = 4` →
+`n_full_attention = 8`, `n_linear_attention = 24` (3:1 GDN:attention);
+`linear_num_key_heads = 16`, `linear_num_value_heads = 32` →
+`heads_ratio = 2` (**fused path is hit**); `linear_key_head_dim =
+linear_value_head_dim = 128`; `linear_conv_kernel_dim = 4`;
+`hidden_size = 2560`.
 
 ## 4. Env vars and process context
 

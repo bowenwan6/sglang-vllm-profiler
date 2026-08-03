@@ -40,9 +40,14 @@ PINNED_MODEL_ARCH = ["Qwen3_5ForConditionalGeneration"]
 PINNED_MODEL_TYPE = "qwen3_5"
 PINNED_LM_CLASS = "Qwen3_5ForCausalLM"  # non-MoE
 
+# Fields under config.text_config on the HF config.json for Qwen3.5.
+# SGLang internally exposes `config.layers_block_type` translated from
+# HF's `text_config.layer_types` (HF values: {"linear_attention",
+# "full_attention"} → SGLang values: {"linear_attention", "attention"}).
+# See source_audit.md §1 for the translation.
 REQUIRED_GDN_CONFIG_FIELDS = (
     "num_hidden_layers",
-    "layers_block_type",
+    "layer_types",
     "linear_num_key_heads",
     "linear_num_value_heads",
     "linear_key_head_dim",
@@ -51,6 +56,11 @@ REQUIRED_GDN_CONFIG_FIELDS = (
     "rms_norm_eps",
     "hidden_act",
 )
+
+# HF layer_types values that count as "linear-attention / GDN".
+LINEAR_ATTENTION_TYPES = {"linear_attention"}
+# HF layer_types values that count as standard attention.
+FULL_ATTENTION_TYPES = {"full_attention", "attention"}
 
 # Ratios for which the fused
 # fused_qkvzba_split_reshape_cat_contiguous path is hit (see
@@ -127,18 +137,24 @@ def load_gdn_config(dry_run: bool) -> dict:
         cfg = json.loads(text)
     except json.JSONDecodeError as e:
         return {"check": label, "status": "ERROR_JSON", "error": str(e)}
-    observed = {k: cfg.get(k, "<MISSING>") for k in REQUIRED_GDN_CONFIG_FIELDS}
+
+    # Qwen3.5 nests the language-model config under text_config; the
+    # GDN fields all live there. If text_config is missing we still
+    # attempt the top-level lookup as a fallback so future config
+    # shapes are not silently misread.
+    text_cfg = cfg.get("text_config") if isinstance(cfg.get("text_config"), dict) else cfg
+    observed = {k: text_cfg.get(k, "<MISSING>") for k in REQUIRED_GDN_CONFIG_FIELDS}
 
     missing = [k for k, v in observed.items() if v == "<MISSING>"]
 
-    # Hybrid check: layers_block_type must contain both attention and
-    # linear_attention.
-    lbt = observed.get("layers_block_type")
+    # Hybrid check: layer_types (HF field) must contain both a linear-
+    # attention entry and a full-attention / standard-attention entry.
+    lbt = observed.get("layer_types")
     n_attn = n_linear = None
     hybrid_ok = False
     if isinstance(lbt, list) and lbt:
-        n_attn = sum(1 for t in lbt if t == "attention")
-        n_linear = sum(1 for t in lbt if t == "linear_attention")
+        n_attn = sum(1 for t in lbt if t in FULL_ATTENTION_TYPES)
+        n_linear = sum(1 for t in lbt if t in LINEAR_ATTENTION_TYPES)
         hybrid_ok = n_attn > 0 and n_linear > 0
 
     # Fused-path check.
@@ -160,12 +176,13 @@ def load_gdn_config(dry_run: bool) -> dict:
         "check": label,
         "status": status,
         "observed": observed,
-        "n_attention_layers": n_attn,
-        "n_linear_layers": n_linear,
+        "n_full_attention_layers": n_attn,
+        "n_linear_attention_layers": n_linear,
         "heads_ratio": heads_ratio,
         "fused_split_path": fused_path,
         "missing_fields": missing,
         "hybrid_ok": hybrid_ok,
+        "config_source": "text_config" if isinstance(cfg.get("text_config"), dict) else "top_level",
     }
 
 
