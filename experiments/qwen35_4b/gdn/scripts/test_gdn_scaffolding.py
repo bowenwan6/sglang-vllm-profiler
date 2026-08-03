@@ -294,6 +294,201 @@ def test_materialise_stretch_and_truncate() -> None:
 import gdn_client  # noqa: E402
 
 
+def test_client_extract_selected_logprobs_from_val_key() -> None:
+    meta = {"output_token_logprobs_val": [-0.1, -0.2, -0.3]}
+    got = gdn_client._extract_selected_logprobs(meta)
+    if got != [-0.1, -0.2, -0.3]:
+        _fail("client_extract_selected_logprobs_from_val_key", str(got))
+    _ok("client_extract_selected_logprobs_from_val_key")
+
+
+def test_client_extract_selected_logprobs_from_tuple_form() -> None:
+    meta = {"output_token_logprobs": [[-0.1, 42], [-0.2, 43]]}
+    got = gdn_client._extract_selected_logprobs(meta)
+    if got != [-0.1, -0.2]:
+        _fail("client_extract_selected_logprobs_from_tuple_form", str(got))
+    _ok("client_extract_selected_logprobs_from_tuple_form")
+
+
+def test_client_extract_selected_logprobs_missing() -> None:
+    got = gdn_client._extract_selected_logprobs({})
+    if got is not None:
+        _fail("client_extract_selected_logprobs_missing", str(got))
+    _ok("client_extract_selected_logprobs_missing")
+
+
+def test_client_extract_top_logprobs() -> None:
+    payload = [[[-0.1, 1, "a"], [-0.2, 2, "b"]], [[-0.05, 3, "c"]]]
+    got = gdn_client._extract_top_logprobs({"output_top_logprobs_val": payload})
+    if got != payload:
+        _fail("client_extract_top_logprobs", str(got))
+    _ok("client_extract_top_logprobs")
+
+
+def test_client_issue_batch_hard_fails_on_partial_response() -> None:
+    saved = gdn_client.http_post_json
+    try:
+        # Mock: return only 1 entry when we sent 3 prompts.
+        gdn_client.http_post_json = lambda url, payload, timeout=None: (
+            200,
+            [{"text": "only-one", "output_ids": [1, 2], "meta_info": {}}],
+            None,
+        )
+        try:
+            gdn_client.issue_batch("http://x", ["p1", "p2", "p3"], 4, ["a", "b", "c"])
+        except RuntimeError as exc:
+            if "partial batch" not in str(exc):
+                _fail(
+                    "client_issue_batch_hard_fails_on_partial_response",
+                    f"wrong exc: {exc}",
+                )
+        else:
+            _fail(
+                "client_issue_batch_hard_fails_on_partial_response",
+                "expected RuntimeError, none raised",
+            )
+    finally:
+        gdn_client.http_post_json = saved
+    _ok("client_issue_batch_hard_fails_on_partial_response")
+
+
+def test_client_issue_batch_extracts_all_fields() -> None:
+    saved = gdn_client.http_post_json
+    try:
+        canned = [
+            {
+                "text": "hello world",
+                "output_ids": [10, 20, 30],
+                "meta_info": {
+                    "output_token_logprobs_val": [-0.1, -0.2, -0.3],
+                    "output_top_logprobs_val": [[[-0.5, 99, None]], [[-0.6, 100, None]], [[-0.7, 101, None]]],
+                    "completion_tokens": 3,
+                    "finish_reason": {"type": "length", "length": 3},
+                    "prompt_tokens": 5,
+                },
+            }
+        ]
+        gdn_client.http_post_json = lambda url, payload, timeout=None: (
+            200,
+            canned,
+            None,
+        )
+        results = gdn_client.issue_batch("http://x", ["hi"], 3, ["r0"])
+        if len(results) != 1:
+            _fail("client_issue_batch_extracts_all_fields", "wrong result count")
+        r = results[0]
+        for key in (
+            "output_ids",
+            "output_logprobs",
+            "output_top_logprobs",
+            "output_len_tokens",
+            "finish_reason",
+            "raw_meta_info",
+            "e2e_ms",
+        ):
+            if key not in r:
+                _fail("client_issue_batch_extracts_all_fields", f"missing key {key}")
+        if r["output_ids"] != [10, 20, 30]:
+            _fail("client_issue_batch_extracts_all_fields", f"output_ids={r['output_ids']}")
+        if r["output_logprobs"] != [-0.1, -0.2, -0.3]:
+            _fail("client_issue_batch_extracts_all_fields", f"logprobs={r['output_logprobs']}")
+        if r["output_len_tokens"] != 3:
+            _fail("client_issue_batch_extracts_all_fields", f"len={r['output_len_tokens']}")
+        if r["finish_reason"] != {"type": "length", "length": 3}:
+            _fail("client_issue_batch_extracts_all_fields", f"finish={r['finish_reason']}")
+    finally:
+        gdn_client.http_post_json = saved
+    _ok("client_issue_batch_extracts_all_fields")
+
+
+def test_client_request_body_sets_return_logprob_and_top_k() -> None:
+    captured: dict = {}
+    saved = gdn_client.http_post_json
+
+    def mock_post(url, payload, timeout=None):
+        captured["url"] = url
+        captured["payload"] = payload
+        return (
+            200,
+            [{"text": "", "output_ids": [], "meta_info": {}}],
+            None,
+        )
+
+    try:
+        gdn_client.http_post_json = mock_post
+        gdn_client.issue_batch("http://x", ["hi"], 4, ["r0"])
+    finally:
+        gdn_client.http_post_json = saved
+    body = captured.get("payload") or {}
+    if body.get("return_logprob") is not True:
+        _fail(
+            "client_request_body_sets_return_logprob_and_top_k",
+            f"return_logprob={body.get('return_logprob')!r}",
+        )
+    if body.get("top_logprobs_num") != 1:
+        _fail(
+            "client_request_body_sets_return_logprob_and_top_k",
+            f"top_logprobs_num={body.get('top_logprobs_num')!r}",
+        )
+    _ok("client_request_body_sets_return_logprob_and_top_k")
+
+
+def test_client_probe_tokenizer_returns_counts() -> None:
+    saved = gdn_client.http_post_json
+    try:
+        gdn_client.http_post_json = lambda url, payload, timeout=None: (
+            200,
+            {"tokens": [[1, 2], [3, 4, 5]], "count": [2, 3], "max_model_len": 100},
+            None,
+        )
+        counts, source = gdn_client.probe_tokenizer("http://x", ["hi", "hello"])
+    finally:
+        gdn_client.http_post_json = saved
+    if source != "server_tokenize":
+        _fail("client_probe_tokenizer_returns_counts", f"source={source}")
+    if counts != [2, 3]:
+        _fail("client_probe_tokenizer_returns_counts", f"counts={counts}")
+    _ok("client_probe_tokenizer_returns_counts")
+
+
+def test_client_probe_tokenizer_returns_single_count() -> None:
+    saved = gdn_client.http_post_json
+    try:
+        gdn_client.http_post_json = lambda url, payload, timeout=None: (
+            200,
+            {"tokens": [1, 2, 3], "count": 3, "max_model_len": 100},
+            None,
+        )
+        counts, source = gdn_client.probe_tokenizer("http://x", ["hi"])
+    finally:
+        gdn_client.http_post_json = saved
+    if source != "server_tokenize" or counts != [3]:
+        _fail(
+            "client_probe_tokenizer_returns_single_count",
+            f"source={source} counts={counts}",
+        )
+    _ok("client_probe_tokenizer_returns_single_count")
+
+
+def test_client_probe_tokenizer_falls_back_on_error() -> None:
+    saved = gdn_client.http_post_json
+    try:
+        gdn_client.http_post_json = lambda url, payload, timeout=None: (
+            500,
+            None,
+            "server bug",
+        )
+        counts, source = gdn_client.probe_tokenizer("http://x", ["hi"])
+    finally:
+        gdn_client.http_post_json = saved
+    if source != "fallback_char_heuristic" or counts is not None:
+        _fail(
+            "client_probe_tokenizer_falls_back_on_error",
+            f"source={source} counts={counts}",
+        )
+    _ok("client_probe_tokenizer_falls_back_on_error")
+
+
 def test_client_dry_run_probe() -> None:
     fixtures_dir = REPO / "experiments/qwen35_4b/gdn/fixtures"
     script = HERE / "gdn_client.py"
@@ -944,6 +1139,16 @@ TESTS = (
     test_preflight_frozen_sglang_head_live,
     test_preflight_env_flags_recorded,
     test_materialise_stretch_and_truncate,
+    test_client_extract_selected_logprobs_from_val_key,
+    test_client_extract_selected_logprobs_from_tuple_form,
+    test_client_extract_selected_logprobs_missing,
+    test_client_extract_top_logprobs,
+    test_client_issue_batch_hard_fails_on_partial_response,
+    test_client_issue_batch_extracts_all_fields,
+    test_client_request_body_sets_return_logprob_and_top_k,
+    test_client_probe_tokenizer_returns_counts,
+    test_client_probe_tokenizer_returns_single_count,
+    test_client_probe_tokenizer_falls_back_on_error,
     test_client_dry_run_probe,
     test_client_materialise_matches_generator,
     test_runner_dry_run_shell_exec,

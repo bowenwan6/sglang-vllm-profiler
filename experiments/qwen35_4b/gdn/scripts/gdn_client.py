@@ -26,18 +26,25 @@ Output JSONL schema (one record per timed request):
     {
         "arm": str,
         "prompt_len_target_tokens": int,
+        "prompt_len_target_chars": int,   # chars materialised
+        "prompt_actual_token_count": int|None,  # from /tokenize probe
+        "tokenizer_source": str,          # "server_tokenize" | "fallback_char_heuristic"
         "batch_size": int,
         "new_tokens": int,
         "request_id": str,
         "server": str,
-        "prompt_source_id": str,        # golden-prompt id used
-        "prompt_len_target_chars": int, # chars sent to the server
-        "prompt_bytes_sha256": str,     # sha256 of the sent bytes
-        "output_text": str,             # server-returned completion
-        "output_len_tokens": int|None,  # server-reported completion tokens
-        "ttft_ms": float,               # sample only under stream mode
-        "e2e_ms": float,                # request submit -> response received
-        "timestamp": str,               # UTC ISO-8601
+        "prompt_source_id": str,
+        "prompt_bytes_sha256": str,
+        "output_text": str,
+        "output_ids": List[int]|None,     # per-token ids returned by server
+        "output_logprobs": List[float]|None,  # per-token selected-token logprob
+        "output_top_logprobs": List[List[[int,float,str|None]]]|None,  # top-K alt
+        "output_len_tokens": int|None,
+        "finish_reason": Dict|None,
+        "raw_meta_info": Dict,            # unmodified server meta_info for audit
+        "ttft_ms": float|None,
+        "e2e_ms": float,
+        "timestamp": str,
         "status_code": int,
         "server_error": str|None
     }
@@ -46,7 +53,6 @@ Output JSONL schema (one record per timed request):
 from __future__ import annotations
 
 import argparse
-import contextlib
 import hashlib
 import itertools
 import json
@@ -133,6 +139,10 @@ def issue_batch(
     directly obtainable without streaming, so this returns the batch
     e2e latency divided across requests as the primary latency signal
     (finer-grained TTFT lives in the nsys capture).
+
+    With `return_logprob=True` and `top_logprobs_num=1`, the server returns
+    per-token selected-token logprobs plus the top-1 alternate — enough
+    for Gate 1's tolerance check.
     """
     submit_ts = time.perf_counter()
     body = {
@@ -142,7 +152,8 @@ def issue_batch(
             "top_p": 1.0,
             "max_new_tokens": new_tokens,
         },
-        "return_logprob": False,
+        "return_logprob": True,
+        "top_logprobs_num": 1,
         "stream": False,
         "rid": request_ids if len(request_ids) > 1 else request_ids[0],
     }
@@ -150,21 +161,29 @@ def issue_batch(
     recv_ts = time.perf_counter()
     e2e_ms = (recv_ts - submit_ts) * 1000.0
 
-    per_request = []
+    per_request: list[dict] = []
     if status == 200 and data is not None:
-        if isinstance(data, list):
-            entries = data
-        else:
-            entries = [data]
-        for i, entry in enumerate(entries):
+        entries = data if isinstance(data, list) else [data]
+        # Hard-fail on partial-batch response — the previous silent
+        # `zip()` truncation was audit bug B12.
+        if len(entries) != len(prompts):
+            raise RuntimeError(
+                f"gdn_client: partial batch response — sent {len(prompts)} prompts, "
+                f"got {len(entries)} entries"
+            )
+        for entry in entries:
+            meta = entry.get("meta_info", {}) or {}
             per_request.append(
                 {
                     "status_code": status,
                     "server_error": None,
                     "output_text": entry.get("text", ""),
-                    "output_len_tokens": entry.get("meta_info", {}).get(
-                        "completion_tokens"
-                    ),
+                    "output_ids": entry.get("output_ids"),
+                    "output_logprobs": _extract_selected_logprobs(meta),
+                    "output_top_logprobs": _extract_top_logprobs(meta),
+                    "output_len_tokens": meta.get("completion_tokens"),
+                    "finish_reason": meta.get("finish_reason"),
+                    "raw_meta_info": meta,
                     "e2e_ms": e2e_ms,
                     "ttft_ms": None,  # non-stream mode; nsys covers TTFT
                 }
@@ -176,12 +195,82 @@ def issue_batch(
                     "status_code": status,
                     "server_error": err or "unknown",
                     "output_text": "",
+                    "output_ids": None,
+                    "output_logprobs": None,
+                    "output_top_logprobs": None,
                     "output_len_tokens": None,
+                    "finish_reason": None,
+                    "raw_meta_info": {},
                     "e2e_ms": e2e_ms,
                     "ttft_ms": None,
                 }
             )
     return per_request
+
+
+def _extract_selected_logprobs(meta: dict) -> list[float] | None:
+    """Pull per-token selected-token logprob from meta_info.
+
+    SGLang shape: meta_info["output_token_logprobs_val"] is a list of
+    logprob floats (one per output token). Some builds use a nested
+    (logprob, token_id) tuple under a different key; check both.
+    """
+    val = meta.get("output_token_logprobs_val")
+    if isinstance(val, list):
+        # If entries are numbers, return as-is; if tuples, keep only logprob.
+        return [
+            (v[0] if isinstance(v, (list, tuple)) and v else v)
+            for v in val
+        ]
+    # Fallback: some older SGLang builds expose meta_info["output_token_logprobs"]
+    val = meta.get("output_token_logprobs")
+    if isinstance(val, list):
+        return [
+            (v[0] if isinstance(v, (list, tuple)) and v else v)
+            for v in val
+        ]
+    return None
+
+
+def _extract_top_logprobs(meta: dict) -> list | None:
+    """Pull top-K alternate-token info from meta_info."""
+    val = meta.get("output_top_logprobs_val")
+    if isinstance(val, list):
+        return val
+    val = meta.get("output_top_logprobs")
+    if isinstance(val, list):
+        return val
+    return None
+
+
+def probe_tokenizer(
+    server: str, prompts: list[str], model: str = "default"
+) -> tuple[list[int] | None, str]:
+    """Ask the server for exact prompt token counts via /tokenize.
+
+    Returns (per_prompt_counts, source) where source is either
+    "server_tokenize" (success) or "fallback_char_heuristic" (any failure).
+    """
+    if not prompts:
+        return [], "server_tokenize"
+    body = {
+        "model": model,
+        "prompt": prompts if len(prompts) > 1 else prompts[0],
+        "add_special_tokens": True,
+    }
+    status, data, err = http_post_json(f"{server}/tokenize", body, timeout=30.0)
+    if status == 200 and isinstance(data, dict):
+        count = data.get("count")
+        if isinstance(count, int) and len(prompts) == 1:
+            return [count], "server_tokenize"
+        if isinstance(count, list) and len(count) == len(prompts):
+            return list(count), "server_tokenize"
+    print(
+        f"gdn_client: WARN /tokenize probe failed (status={status}, err={err!r}); "
+        f"falling back to char heuristic",
+        file=sys.stderr,
+    )
+    return None, "fallback_char_heuristic"
 
 
 def run(
@@ -226,6 +315,23 @@ def run(
         print(json.dumps(dry_run_probe, indent=2, sort_keys=True))
         return 0
 
+    # /tokenize probe: get exact token counts for each *unique*
+    # materialised prompt. All rounds use the same materialisation of a
+    # given seed_id, so probing per unique seed_id is sufficient.
+    unique_seeds: dict[str, str] = {}
+    for s in fixture:
+        unique_seeds[s["id"]] = materialise_prompt(s["text"], prompts_target_chars)
+    seed_ids_ordered = list(unique_seeds.keys())
+    unique_prompts = [unique_seeds[sid] for sid in seed_ids_ordered]
+    token_counts, tokenizer_source = probe_tokenizer(server, unique_prompts)
+    prompt_actual_tokens: dict[str, int | None] = {}
+    if token_counts is None:
+        for sid in seed_ids_ordered:
+            prompt_actual_tokens[sid] = None
+    else:
+        for sid, count in zip(seed_ids_ordered, token_counts):
+            prompt_actual_tokens[sid] = count
+
     records: list[dict] = []
     round_iter = iter(seeds)
     for round_idx in range(all_rounds):
@@ -245,6 +351,8 @@ def run(
                     "arm": arm,
                     "prompt_len_target_tokens": prompt_len_tokens,
                     "prompt_len_target_chars": prompts_target_chars,
+                    "prompt_actual_token_count": prompt_actual_tokens.get(seed["id"]),
+                    "tokenizer_source": tokenizer_source,
                     "batch_size": batch_size,
                     "new_tokens": new_tokens,
                     "request_id": req_id,
@@ -256,12 +364,15 @@ def run(
                 }
             )
 
-    with contextlib.suppress(OSError):
-        output.write_text("\n".join(json.dumps(r, sort_keys=True) for r in records) + "\n")
+    # Hard-fail on any I/O error — silent suppression was audit bug B12.
+    output.write_text(
+        "\n".join(json.dumps(r, sort_keys=True) for r in records) + "\n"
+    )
 
     n_failed = sum(1 for r in records if r["status_code"] != 200)
     print(
-        f"gdn_client: {len(records)} timed records ({n_failed} failed) written to {output}"
+        f"gdn_client: {len(records)} timed records ({n_failed} failed) "
+        f"written to {output}; tokenizer_source={tokenizer_source}"
     )
     return 0 if n_failed == 0 else 76
 
