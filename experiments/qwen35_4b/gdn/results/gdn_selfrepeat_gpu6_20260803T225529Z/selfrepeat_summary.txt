@@ -1,0 +1,7 @@
+arm,rep,rc,server_ready_seconds,client_wallclock_seconds,client_exit_code,gpu_returned_clean
+A1,rep1,0,43,30,0,True
+A1,rep2,0,51,31,0,True
+A2,rep1,0,35,5,0,True
+A2,rep2,0,38,5,0,True
+A3,rep1,0,57,5,0,True
+A3,rep2,0,47,5,0,True
