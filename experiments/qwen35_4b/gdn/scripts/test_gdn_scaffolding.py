@@ -1410,7 +1410,14 @@ def test_extract_columns_match_validation_plan_section_5() -> None:
 
 
 def test_extract_parses_kernel_and_api_csv_sections() -> None:
-    """Unit-level parse of the nsys stats CSV shapes."""
+    """Unit-level parse of the nsys stats CSV shapes.
+
+    Covers both the older ``Instances``/``Count`` column names and the
+    newer nsys 2026.x cuda_api_sum column ``Num Calls``. Kernel-launch
+    APIs summed across cudaLaunchKernel + cudaLaunchKernelExC +
+    cuLaunchKernelEx to reflect torch/cuda 13 emitting multiple
+    launch APIs in the same run.
+    """
     kern_raw = """\
 # Generated header
 **cuda_gpu_kern_sum**
@@ -1418,10 +1425,13 @@ Time (%),Total Time (ns),Instances,Avg (ns),Min (ns),Max (ns),StdDev (ns),Name
 50.0,1000,100,10,5,20,3,gemm_kernel
 50.0,1000,80,12,6,22,4,softmax_kernel
 """
+    # nsys 2026.x header uses "Num Calls" not "Instances" for cuda_api_sum.
     api_raw = """\
-Time (%),Total Time (ns),Instances,Avg (ns),Min (ns),Max (ns),StdDev (ns),Name
-20.0,500,40,12,5,20,3,cudaLaunchKernel
-5.0,150,3,50,40,60,5,cudaGraphLaunch
+Time (%),Total Time (ns),Num Calls,Avg (ns),Med (ns),Min (ns),Max (ns),StdDev (ns),Name
+14.3,1316291719,238500,5519.0,5338.0,1562,4218503,9460.2,cudaLaunchKernelExC
+8.0,736402678,104566,7042.5,5156.0,2918,23910012,112772.5,cudaLaunchKernel
+0.1,9732301,363,26810.7,23903.0,18058,55591,6567.9,cudaGraphLaunch
+0.0,442001689,1000,5000.0,5000.0,2000,10000,500.0,cuLaunchKernelEx
 """
     kern_rows = gextract._parse_csv_section(kern_raw)
     api_rows = gextract._parse_csv_section(api_raw)
@@ -1429,12 +1439,37 @@ Time (%),Total Time (ns),Instances,Avg (ns),Min (ns),Max (ns),StdDev (ns),Name
     if kc["kernel_count_total"] != 180:
         _fail("extract_parses_kernel_and_api_csv_sections", f"total={kc}")
     launch, graph = gextract._api_counts(api_rows)
-    if launch != 40 or graph != 3:
+    # 238500 + 104566 + 1000 = 344066 (sum of all launch APIs).
+    if launch != 344066:
         _fail(
             "extract_parses_kernel_and_api_csv_sections",
-            f"launch={launch} graph={graph}",
+            f"launch_sum expected 344066, got {launch}",
+        )
+    if graph != 363:
+        _fail(
+            "extract_parses_kernel_and_api_csv_sections",
+            f"cudaGraphLaunch expected 363, got {graph}",
         )
     _ok("extract_parses_kernel_and_api_csv_sections")
+
+
+def test_extract_row_count_handles_column_variants() -> None:
+    if gextract._row_count({"Num Calls": "1234"}) != 1234:
+        _fail("extract_row_count_handles_column_variants", "Num Calls")
+    if gextract._row_count({"Instances": "500"}) != 500:
+        _fail("extract_row_count_handles_column_variants", "Instances")
+    if gextract._row_count({"Count": "42"}) != 42:
+        _fail("extract_row_count_handles_column_variants", "Count")
+    if gextract._row_count({"Other": "999"}) is not None:
+        _fail("extract_row_count_handles_column_variants", "Other should be None")
+    _ok("extract_row_count_handles_column_variants")
+
+
+def test_extract_launch_names_include_all_variants() -> None:
+    for name in ("cudaLaunchKernel", "cudaLaunchKernelExC", "cuLaunchKernelEx", "cuLaunchKernel"):
+        if name not in gextract._LAUNCH_API_NAMES:
+            _fail("extract_launch_names_include_all_variants", f"missing {name}")
+    _ok("extract_launch_names_include_all_variants")
 
 
 def test_extract_launch_gap_quantiles() -> None:
@@ -1670,6 +1705,8 @@ TESTS = (
     test_extract_missing_nsys_rep_reports_missing,
     test_extract_columns_match_validation_plan_section_5,
     test_extract_parses_kernel_and_api_csv_sections,
+    test_extract_row_count_handles_column_variants,
+    test_extract_launch_names_include_all_variants,
     test_extract_launch_gap_quantiles,
     test_extract_client_metadata_aggregates_e2e,
     test_extract_dry_run_cli,

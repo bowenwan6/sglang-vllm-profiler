@@ -1,0 +1,125 @@
+{
+  "preflight": "gdn",
+  "results": [
+    {
+      "check": "hf_model_metadata",
+      "got_arch": [
+        "Qwen3_5ForConditionalGeneration"
+      ],
+      "got_sha": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+      "got_type": "qwen3_5",
+      "pinned_arch": [
+        "Qwen3_5ForConditionalGeneration"
+      ],
+      "pinned_sha": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+      "pinned_type": "qwen3_5",
+      "status": "OK"
+    },
+    {
+      "check": "gdn_config_fields",
+      "config_source": "text_config",
+      "fused_split_path": true,
+      "heads_ratio": 2,
+      "hybrid_ok": true,
+      "missing_fields": [],
+      "n_full_attention_layers": 8,
+      "n_linear_attention_layers": 24,
+      "observed": {
+        "full_attention_interval": 4,
+        "hidden_act": "silu",
+        "layer_types": [
+          "linear_attention",
+          "linear_attention",
+          "linear_attention",
+          "full_attention",
+          "linear_attention",
+          "linear_attention",
+          "linear_attention",
+          "full_attention",
+          "linear_attention",
+          "linear_attention",
+          "linear_attention",
+          "full_attention",
+          "linear_attention",
+          "linear_attention",
+          "linear_attention",
+          "full_attention",
+          "linear_attention",
+          "linear_attention",
+          "linear_attention",
+          "full_attention",
+          "linear_attention",
+          "linear_attention",
+          "linear_attention",
+          "full_attention",
+          "linear_attention",
+          "linear_attention",
+          "linear_attention",
+          "full_attention",
+          "linear_attention",
+          "linear_attention",
+          "linear_attention",
+          "full_attention"
+        ],
+        "linear_conv_kernel_dim": 4,
+        "linear_key_head_dim": 128,
+        "linear_num_key_heads": 16,
+        "linear_num_value_heads": 32,
+        "linear_value_head_dim": 128,
+        "num_hidden_layers": 32,
+        "rms_norm_eps": 1e-06
+      },
+      "status": "OK"
+    },
+    {
+      "CUDA_VISIBLE_DEVICES": "6",
+      "LD_PRELOAD": "/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05:/opt/nvidia/nsight-systems-cli/2026.3.1/target-linux-x64/libnvperf_target.so:/opt/nvidia/nsight-systems-cli/2026.3.1/target-linux-x64/libnvperf_host.so:/opt/nvidia/nsight-systems-cli/2026.3.1/target-linux-x64/libToolsInjectionProxy64.so:/opt/nvidia/nsight-systems-cli/2026.3.1/target-linux-x64/libLinuxKeyboardInterceptorProxy.so",
+      "SGLANG_GDN_QKVZ_BA_ALT_STREAM": null,
+      "SGLANG_KERNEL_API_LOGDEST": null,
+      "SGLANG_KERNEL_API_LOGLEVEL": null,
+      "check": "gdn_env_flags",
+      "status": "OK"
+    },
+    {
+      "candidates": [
+        "/tmp/claude-0/-data-sglang-vllm-profiler/1617f0f1-bb43-4914-afad-2284642acd9f/scratchpad/sglang_checkout/sglang"
+      ],
+      "check": "frozen_checkout_present",
+      "status": "OK"
+    },
+    {
+      "check": "frozen_sglang_head",
+      "checkout_path": "/tmp/claude-0/-data-sglang-vllm-profiler/1617f0f1-bb43-4914-afad-2284642acd9f/scratchpad/sglang_checkout/sglang",
+      "got_sha": "58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8",
+      "pinned_sha": "58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8",
+      "status": "OK"
+    },
+    {
+      "check": "sglang_module_file",
+      "frozen_python": "/tmp/claude-0/-data-sglang-vllm-profiler/1617f0f1-bb43-4914-afad-2284642acd9f/scratchpad/sglang_checkout/sglang/python",
+      "resolved_path": "/tmp/claude-0/-data-sglang-vllm-profiler/1617f0f1-bb43-4914-afad-2284642acd9f/scratchpad/sglang_checkout/sglang/python/sglang/__init__.py",
+      "status": "OK"
+    },
+    {
+      "check": "libcuda_preload",
+      "expected": "/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05",
+      "got": "/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05:/opt/nvidia/nsight-systems-cli/2026.3.1/target-linux-x64/libnvperf_target.so:/opt/nvidia/nsight-systems-cli/2026.3.1/target-linux-x64/libnvperf_host.so:/opt/nvidia/nsight-systems-cli/2026.3.1/target-linux-x64/libToolsInjectionProxy64.so:/opt/nvidia/nsight-systems-cli/2026.3.1/target-linux-x64/libLinuxKeyboardInterceptorProxy.so",
+      "status": "OK"
+    },
+    {
+      "check": "lib_versions",
+      "status": "OK",
+      "versions": {
+        "flashinfer": "0.6.12",
+        "sgl_kernel": "0.4.5",
+        "torch": "2.11.0+cu130"
+      }
+    },
+    {
+      "check": "nsys_version",
+      "status": "OK",
+      "version": "NVIDIA Nsight Systems version 2026.3.1.157-263138048394v0"
+    }
+  ],
+  "strict": true
+}

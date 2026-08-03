@@ -149,16 +149,20 @@ def _to_float(v) -> float | None:
         return None
 
 
-def _kernel_counts(kern_rows: list[dict]) -> dict:
-    """Total kernel invocations from cuda_gpu_kern_sum.
+def _row_count(row: dict) -> int | None:
+    """Extract a count from a nsys stats CSV row across column-name
+    variants: ``Num Calls`` (nsys 2026.x cuda_api_sum),
+    ``Instances`` (cuda_gpu_kern_sum), ``Count`` (older builds)."""
+    return _to_int(
+        row.get("Num Calls") or row.get("Instances") or row.get("Count")
+    )
 
-    Column names on modern nsys builds: ``Instances`` (int),
-    ``Name`` (string). We tolerate both ``Instances`` and ``Count`` for
-    robustness across nsys versions.
-    """
+
+def _kernel_counts(kern_rows: list[dict]) -> dict:
+    """Total kernel invocations from cuda_gpu_kern_sum."""
     total = 0
     for row in kern_rows:
-        n = _to_int(row.get("Instances") or row.get("Count"))
+        n = _row_count(row)
         if n is not None:
             total += n
     return {
@@ -169,28 +173,44 @@ def _kernel_counts(kern_rows: list[dict]) -> dict:
     }
 
 
+# CUDA API names that constitute a kernel launch from the host side.
+# nsys 2026.x with recent torch/cuda emits multiple variants, and any
+# subset can appear per run. Summed together they give the true
+# "host launched N kernels" count.
+_LAUNCH_API_NAMES = frozenset(
+    (
+        "cudaLaunchKernel",
+        "cudaLaunchKernelExC",
+        "cuLaunchKernelEx",
+        "cuLaunchKernel",
+        "cudaLaunchCooperativeKernel",
+    )
+)
+
+
 def _api_counts(api_rows: list[dict]) -> tuple[int, int]:
-    """Return (cudaLaunchKernel_count, cudaGraphLaunch_count) from
-    cuda_api_sum. Rows have a ``Name`` column and an ``Instances`` /
-    ``Count`` column."""
+    """Return (kernel-launch-family count, cudaGraphLaunch count) from
+    cuda_api_sum. Kernel launches are summed across all known launch
+    API names (nsys 2026.x on torch/cuda 13 uses cudaLaunchKernel,
+    cudaLaunchKernelExC, and cuLaunchKernelEx in the same run)."""
     launch_kernel = 0
     graph_launch = 0
     for row in api_rows:
         name = (row.get("Name") or "").strip()
-        n = _to_int(row.get("Instances") or row.get("Count")) or 0
-        if name == "cudaLaunchKernel":
-            launch_kernel = n
+        n = _row_count(row) or 0
+        if name in _LAUNCH_API_NAMES:
+            launch_kernel += n
         elif name == "cudaGraphLaunch":
             graph_launch = n
     return launch_kernel, graph_launch
 
 
 def _launch_gaps_us(api_trace_rows: list[dict]) -> list[float]:
-    """Extract per-call `cudaLaunchKernel` inter-arrival gaps in
-    microseconds, using the ``Start (ns)`` column of ``cuda_api_trace``.
+    """Extract per-call kernel-launch inter-arrival gaps in microseconds,
+    using the ``Start (ns)`` column of ``cuda_api_trace``.
 
-    Some nsys versions use ``Start`` (ns) or ``Start (secs)``; we try
-    both. Missing columns → empty list.
+    All launch APIs in _LAUNCH_API_NAMES are treated as kernel launches
+    for gap computation. Missing columns → empty list.
     """
     start_col = None
     if api_trace_rows:
@@ -202,7 +222,7 @@ def _launch_gaps_us(api_trace_rows: list[dict]) -> list[float]:
         return []
     starts_ns: list[float] = []
     for row in api_trace_rows:
-        if (row.get("Name") or "").strip() != "cudaLaunchKernel":
+        if (row.get("Name") or "").strip() not in _LAUNCH_API_NAMES:
             continue
         s = _to_float(row.get(start_col))
         if s is not None:
