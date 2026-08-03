@@ -1,0 +1,5 @@
+arm,rep,rc,server_ready_seconds,client_wallclock_seconds,client_exit_code,gpu_returned_clean,csv_path
+A0,rep1,0,41,39,0,True,/data/sglang-vllm-profiler/experiments/qwen35_4b/gdn/results/gdn_stage2_gpu6_20260803T232119Z/A0_rep1/nsys/A0_p128_b1.csv
+A0,rep2,0,50,38,0,True,/data/sglang-vllm-profiler/experiments/qwen35_4b/gdn/results/gdn_stage2_gpu6_20260803T232119Z/A0_rep2/nsys/A0_p128_b1.csv
+A1,rep1,0,49,39,0,True,/data/sglang-vllm-profiler/experiments/qwen35_4b/gdn/results/gdn_stage2_gpu6_20260803T232119Z/A1_rep1/nsys/A1_p128_b1.csv
+A1,rep2,0,48,39,0,True,/data/sglang-vllm-profiler/experiments/qwen35_4b/gdn/results/gdn_stage2_gpu6_20260803T232119Z/A1_rep2/nsys/A1_p128_b1.csv
