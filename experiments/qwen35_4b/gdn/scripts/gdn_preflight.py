@@ -312,7 +312,14 @@ def sglang_module_file(dry_run: bool) -> dict:
 
 
 def libcuda_preload() -> dict:
-    """Warn if LD_PRELOAD doesn't target the pinned libcuda."""
+    """Warn if LD_PRELOAD doesn't target the pinned libcuda.
+
+    Special case: under `nsys profile`, nsys replaces LD_PRELOAD with
+    its own instrumentation stack (libnvperf_target.so, libnvperf_host.so,
+    libToolsInjectionProxy64.so). That's expected — nsys owns the CUDA
+    interception in profiled runs. In that case the check returns OK
+    with a `nsys_injected: True` marker so provenance stays auditable.
+    """
     label = "libcuda_preload"
     got = os.environ.get("LD_PRELOAD", "")
     if not got:
@@ -324,9 +331,34 @@ def libcuda_preload() -> dict:
     # LD_PRELOAD may hold multiple paths (colon-delimited).
     parts = [p for p in got.split(":") if p]
     matched = any(p == PINNED_LIBCUDA_PRELOAD for p in parts)
+    if matched:
+        return {
+            "check": label,
+            "status": "OK",
+            "got": got,
+            "expected": PINNED_LIBCUDA_PRELOAD,
+        }
+    # nsys-injected LD_PRELOAD is acceptable — nsys owns CUDA
+    # interception during profiling. Match any of its known lib
+    # basenames.
+    nsys_markers = (
+        "libnvperf_target.so",
+        "libnvperf_host.so",
+        "libToolsInjectionProxy64.so",
+    )
+    nsys_injected = any(any(m in p for m in nsys_markers) for p in parts)
+    if nsys_injected:
+        return {
+            "check": label,
+            "status": "OK",
+            "got": got,
+            "expected": PINNED_LIBCUDA_PRELOAD,
+            "nsys_injected": True,
+            "note": "nsys profile overrides LD_PRELOAD; accepted under profiling.",
+        }
     return {
         "check": label,
-        "status": "OK" if matched else "MISMATCH",
+        "status": "MISMATCH",
         "got": got,
         "expected": PINNED_LIBCUDA_PRELOAD,
     }

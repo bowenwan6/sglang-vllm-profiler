@@ -193,6 +193,35 @@ def test_preflight_libcuda_preload_matches_pinned() -> None:
     _ok("preflight_libcuda_preload_matches_pinned")
 
 
+def test_preflight_libcuda_preload_accepts_nsys_injected() -> None:
+    """Under nsys profile, LD_PRELOAD is replaced with nsys instrumentation
+    libs. Preflight must accept this as OK (nsys owns CUDA interception)."""
+    saved = os.environ.get("LD_PRELOAD")
+    try:
+        os.environ["LD_PRELOAD"] = (
+            "/opt/nvidia/nsight-systems-cli/2026.3.1/target-linux-x64/libnvperf_target.so:"
+            "/opt/nvidia/nsight-systems-cli/2026.3.1/target-linux-x64/libnvperf_host.so:"
+            "/opt/nvidia/nsight-systems-cli/2026.3.1/target-linux-x64/libToolsInjectionProxy64.so"
+        )
+        res = gpreflight.libcuda_preload()
+        if res["status"] != "OK":
+            _fail(
+                "preflight_libcuda_preload_accepts_nsys_injected",
+                f"expected OK under nsys LD_PRELOAD; got {res}",
+            )
+        if not res.get("nsys_injected"):
+            _fail(
+                "preflight_libcuda_preload_accepts_nsys_injected",
+                f"expected nsys_injected marker; got {res}",
+            )
+    finally:
+        if saved is None:
+            os.environ.pop("LD_PRELOAD", None)
+        else:
+            os.environ["LD_PRELOAD"] = saved
+    _ok("preflight_libcuda_preload_accepts_nsys_injected")
+
+
 def test_preflight_libcuda_preload_missing_is_missing() -> None:
     saved = os.environ.get("LD_PRELOAD")
     try:
@@ -1587,6 +1616,7 @@ TESTS = (
     test_preflight_required_fields_include_full_attention_interval,
     test_preflight_libcuda_preload_detects_mismatch,
     test_preflight_libcuda_preload_matches_pinned,
+    test_preflight_libcuda_preload_accepts_nsys_injected,
     test_preflight_libcuda_preload_missing_is_missing,
     test_preflight_lib_versions_returns_ok,
     test_preflight_nsys_version_is_present,

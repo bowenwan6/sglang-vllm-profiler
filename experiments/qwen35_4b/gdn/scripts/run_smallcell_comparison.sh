@@ -107,6 +107,13 @@ run_one() {
     fi
     nvidia-smi --id="$GPU_ID" --query-gpu=memory.used,utilization.gpu --format=csv,noheader,nounits > "$results_dir/gpu_pre.txt"
 
+    # Rotate the server port per run so a stale port from the previous
+    # run's tail-cleanup can't collide with this run's bind. Uses a
+    # deterministic offset in the 30100–30199 range; sequential runs
+    # get distinct ports.
+    server_port=$((30100 + RUN_COUNTER))
+    RUN_COUNTER=$((RUN_COUNTER + 1))
+
     set +e
     if [ "$mode" = "unprof" ]; then
         bash "$HERE/gdn_runner.sh" \
@@ -116,6 +123,7 @@ run_one() {
             --results-dir "$results_dir" \
             --frozen-sglang "$FROZEN_SGLANG" \
             --fixtures-dir "$FIXTURES_DIR" \
+            --server-port "$server_port" \
             --prompt-len "$PROMPT_LEN" \
             --batch-size "$BATCH_SIZE" \
             --new-tokens "$NEW_TOKENS" \
@@ -130,6 +138,7 @@ run_one() {
             --results-dir "$results_dir" \
             --frozen-sglang "$FROZEN_SGLANG" \
             --fixtures-dir "$FIXTURES_DIR" \
+            --server-port "$server_port" \
             --prompt-len "$PROMPT_LEN" \
             --batch-size "$BATCH_SIZE" \
             --new-tokens "$NEW_TOKENS" \
@@ -153,6 +162,8 @@ run_one() {
 }
 
 # --- 6 runs sequentially -----------------------------------------
+
+RUN_COUNTER=0
 
 for arm in A1 A2 A3; do
     run_one "$arm" "unprof"
