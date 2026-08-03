@@ -231,7 +231,15 @@ fi
 # the runner setting them — bug B4 in audit.md.
 export PYTHONPATH="$FROZEN_SGLANG/python:${PYTHONPATH:-}"
 export PYTHONPATH="$DS_SCRIPTS/bootstrap:$PYTHONPATH"
-export LD_PRELOAD="${LD_PRELOAD:-$LIBCUDA_PRELOAD}"
+# Prepend host libcuda so it takes precedence over the CUDA-compat
+# stub in /usr/local/cuda-13.0/compat/. Previously used
+# `${LD_PRELOAD:-$LIBCUDA_PRELOAD}` which is `:-` fallback semantics:
+# if LD_PRELOAD is already set (e.g. because nsys prepended its own
+# instrumentation libs), our libcuda pin got skipped entirely, and
+# torch's `cudaGetDeviceCount()` failed with Error 803 "unsupported
+# display driver / cuda driver combination" because the compat lib
+# was loaded instead of the host driver.
+export LD_PRELOAD="${LIBCUDA_PRELOAD}${LD_PRELOAD:+:$LD_PRELOAD}"
 export CUDA_VISIBLE_DEVICES="$GPU_ID"
 export QWEN35_GDN_RUN_MODE="$ARM"
 
