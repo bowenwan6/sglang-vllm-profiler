@@ -1,0 +1,6 @@
+{
+  "n_records": 16,
+  "n_seeds": 8,
+  "path": "experiments/qwen35_4b/gdn/fixtures/gdn_prompts.jsonl",
+  "sha256": "8a660d94982a3965f1f97a8a0ad3998f22bdbc486c80329d20814f0ad8ba035f"
+}
