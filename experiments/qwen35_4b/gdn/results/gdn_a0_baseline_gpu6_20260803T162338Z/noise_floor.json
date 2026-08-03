@@ -1,0 +1,34 @@
+{
+  "p128_b1": {
+    "max_abs_logprob_diff": 0.0,
+    "n_id_mismatches": 0,
+    "n_pairs_compared": 8,
+    "n_prompts_compared": 8,
+    "overall": "PASS",
+    "proposed_tolerance": 0.05
+  },
+  "p128_b4": {
+    "max_abs_logprob_diff": 1.7965881825275574,
+    "n_id_mismatches": 8,
+    "n_pairs_compared": 64,
+    "n_prompts_compared": 16,
+    "overall": "FAIL",
+    "proposed_tolerance": 5.389764547582672
+  },
+  "p512_b1": {
+    "max_abs_logprob_diff": 0.0,
+    "n_id_mismatches": 0,
+    "n_pairs_compared": 8,
+    "n_prompts_compared": 8,
+    "overall": "PASS",
+    "proposed_tolerance": 0.05
+  },
+  "p512_b4": {
+    "max_abs_logprob_diff": 2.007426267489791,
+    "n_id_mismatches": 12,
+    "n_pairs_compared": 64,
+    "n_prompts_compared": 16,
+    "overall": "FAIL",
+    "proposed_tolerance": 6.022278802469373
+  }
+}

@@ -3,4 +3,8 @@
 # stderr/stdout, .nsys-rep captures) that should not enter git. Small
 # evidence (client records JSONL, correctness gate CSVs, summary /
 # verdict files) belongs at the attempt root and IS committed.
-*/raw/
+#
+# Recursive glob — matches raw/ at any depth under this directory,
+# so multi-cell attempts (e.g. gdn_a0_baseline_.../cell/raw/) are
+# covered as well as single-cell attempts (attempt_.../raw/).
+**/raw/
