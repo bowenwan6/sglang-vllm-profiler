@@ -394,6 +394,355 @@ def test_gdn_instrumentation_install_is_noop() -> None:
     _ok("gdn_instrumentation_install_is_noop")
 
 
+import gdn_correctness as gc  # noqa: E402
+import gdn_verdict as gv  # noqa: E402
+
+
+def test_correctness_gate1_pass_on_identical_arms() -> None:
+    labelled = {
+        "A0": [
+            {
+                "prompt_source_id": "p0",
+                "output_ids": [1, 2, 3],
+                "output_logprobs": [-0.1, -0.2, -0.3],
+            }
+        ],
+        "A1": [
+            {
+                "prompt_source_id": "p0",
+                "output_ids": [1, 2, 3],
+                "output_logprobs": [-0.1, -0.2, -0.3],
+            }
+        ],
+    }
+    v = gc.gate_verdict(1, labelled, tolerance=0.05)
+    if v["overall"] != "PASS":
+        _fail("correctness_gate1_pass_on_identical_arms", json.dumps(v))
+    _ok("correctness_gate1_pass_on_identical_arms")
+
+
+def test_correctness_gate1_fail_on_token_divergence() -> None:
+    labelled = {
+        "A0": [
+            {
+                "prompt_source_id": "p0",
+                "output_ids": [1, 2, 3],
+                "output_logprobs": [-0.1, -0.2, -0.3],
+            }
+        ],
+        "A1": [
+            {
+                "prompt_source_id": "p0",
+                "output_ids": [1, 2, 4],  # last token differs
+                "output_logprobs": [-0.1, -0.2, -0.9],
+            }
+        ],
+    }
+    v = gc.gate_verdict(1, labelled, tolerance=0.05)
+    if v["overall"] != "FAIL":
+        _fail("correctness_gate1_fail_on_token_divergence", json.dumps(v))
+    _ok("correctness_gate1_fail_on_token_divergence")
+
+
+def test_correctness_gate1_fail_on_logprob_over_tolerance() -> None:
+    labelled = {
+        "A0": [
+            {
+                "prompt_source_id": "p0",
+                "output_ids": [1, 2, 3],
+                "output_logprobs": [-0.1, -0.2, -0.3],
+            }
+        ],
+        "A1": [
+            {
+                "prompt_source_id": "p0",
+                "output_ids": [1, 2, 3],  # tokens equal
+                "output_logprobs": [-0.1, -0.2, -0.9],  # delta 0.6 > 0.05
+            }
+        ],
+    }
+    v = gc.gate_verdict(1, labelled, tolerance=0.05)
+    if v["overall"] != "FAIL":
+        _fail(
+            "correctness_gate1_fail_on_logprob_over_tolerance", json.dumps(v)
+        )
+    _ok("correctness_gate1_fail_on_logprob_over_tolerance")
+
+
+def test_correctness_gate1_requires_A0_reference() -> None:
+    labelled = {
+        "A1": [{"prompt_source_id": "p0", "output_ids": [1]}],
+        "A2": [{"prompt_source_id": "p0", "output_ids": [1]}],
+    }
+    v = gc.gate_verdict(1, labelled, tolerance=0.05)
+    if v["overall"] != "FAIL":
+        _fail("correctness_gate1_requires_A0_reference", json.dumps(v))
+    if "requires an 'A0' arm" not in v.get("reason", ""):
+        _fail(
+            "correctness_gate1_requires_A0_reference",
+            f"expected missing-A0 reason; got {v.get('reason')!r}",
+        )
+    _ok("correctness_gate1_requires_A0_reference")
+
+
+def test_correctness_gate2_pairwise_isolation() -> None:
+    labelled = {
+        "alone": [{"prompt_source_id": "p0", "output_ids": [1, 2, 3]}],
+        "batched": [{"prompt_source_id": "p0", "output_ids": [1, 2, 3]}],
+    }
+    v = gc.gate_verdict(2, labelled, tolerance=0.05)
+    if v["overall"] != "PASS":
+        _fail("correctness_gate2_pairwise_isolation", json.dumps(v))
+    _ok("correctness_gate2_pairwise_isolation")
+
+
+def test_correctness_gate3_pairwise_chunking() -> None:
+    labelled = {
+        "small_chunk": [{"prompt_source_id": "p0", "output_ids": [4, 5]}],
+        "single_chunk": [{"prompt_source_id": "p0", "output_ids": [4, 5]}],
+    }
+    v = gc.gate_verdict(3, labelled, tolerance=0.05)
+    if v["overall"] != "PASS":
+        _fail("correctness_gate3_pairwise_chunking", json.dumps(v))
+    _ok("correctness_gate3_pairwise_chunking")
+
+
+def test_correctness_dry_run_command_ok() -> None:
+    script = HERE / "gdn_correctness.py"
+    rc = subprocess.run(
+        [sys.executable, str(script), "--gate", "1", "--dry-run"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if rc.returncode != 0:
+        _fail("correctness_dry_run_command_ok", rc.stderr.strip() or rc.stdout.strip())
+    payload = json.loads(rc.stdout)
+    if payload.get("overall") != "PASS":
+        _fail("correctness_dry_run_command_ok", json.dumps(payload))
+    _ok("correctness_dry_run_command_ok")
+
+
+def test_verdict_all_gates_pass_no_perf_gap_is_ambiguous() -> None:
+    # Without perf findings, the verdict should be AMBIGUOUS (perf side
+    # has no signal to declare either way).
+    gate_summary = {
+        "per_gate": {i: {"overall": "PASS"} for i in (1, 2, 3, 4)},
+        "all_pass": True,
+    }
+    perf_summary = {
+        "findings": [],
+        "any_H_A": False,
+        "any_H_B": False,
+        "any_H_C": False,
+        "any_bcg_gap": False,
+    }
+    v = gv.decide(gate_summary, perf_summary, infra_failure=False)
+    if v != "AMBIGUOUS":
+        _fail("verdict_all_gates_pass_no_perf_gap_is_ambiguous", v)
+    _ok("verdict_all_gates_pass_no_perf_gap_is_ambiguous")
+
+
+def test_verdict_gate_failure_wins_over_perf() -> None:
+    gate_summary = {
+        "per_gate": {1: {"overall": "PASS"}, 2: {"overall": "FAIL"}, 3: {"overall": "PASS"}, 4: {"overall": "PASS"}},
+        "all_pass": False,
+    }
+    perf_summary = {
+        "findings": [{"any": "thing"}],
+        "any_H_A": True,
+        "any_H_B": False,
+        "any_H_C": False,
+        "any_bcg_gap": True,
+    }
+    v = gv.decide(gate_summary, perf_summary, infra_failure=False)
+    if v != "FAIL_BCG_GDN_CORRECTNESS":
+        _fail("verdict_gate_failure_wins_over_perf", v)
+    _ok("verdict_gate_failure_wins_over_perf")
+
+
+def test_verdict_notable_gap_when_gates_pass_and_h_a() -> None:
+    gate_summary = {
+        "per_gate": {i: {"overall": "PASS"} for i in (1, 2, 3, 4)},
+        "all_pass": True,
+    }
+    perf_summary = {
+        "findings": [{"any": "thing"}],
+        "any_H_A": True,
+        "any_H_B": False,
+        "any_H_C": False,
+        "any_bcg_gap": True,
+    }
+    v = gv.decide(gate_summary, perf_summary, infra_failure=False)
+    if v != "PASS_BCG_GDN_NOTABLE_GAP":
+        _fail("verdict_notable_gap_when_gates_pass_and_h_a", v)
+    _ok("verdict_notable_gap_when_gates_pass_and_h_a")
+
+
+def test_verdict_no_gap_when_gates_pass_findings_no_hypothesis() -> None:
+    gate_summary = {
+        "per_gate": {i: {"overall": "PASS"} for i in (1, 2, 3, 4)},
+        "all_pass": True,
+    }
+    perf_summary = {
+        "findings": [{"any": "thing"}],
+        "any_H_A": False,
+        "any_H_B": False,
+        "any_H_C": False,
+        "any_bcg_gap": False,
+    }
+    v = gv.decide(gate_summary, perf_summary, infra_failure=False)
+    if v != "PASS_BCG_GDN_NO_GAP":
+        _fail("verdict_no_gap_when_gates_pass_findings_no_hypothesis", v)
+    _ok("verdict_no_gap_when_gates_pass_findings_no_hypothesis")
+
+
+def test_verdict_infra_failure_wins_over_everything() -> None:
+    gate_summary = {
+        "per_gate": {i: {"overall": "PASS"} for i in (1, 2, 3, 4)},
+        "all_pass": True,
+    }
+    perf_summary = {
+        "findings": [],
+        "any_H_A": True,
+        "any_H_B": True,
+        "any_H_C": True,
+        "any_bcg_gap": True,
+    }
+    v = gv.decide(gate_summary, perf_summary, infra_failure=True)
+    if v != "INFRA_FAILURE":
+        _fail("verdict_infra_failure_wins_over_everything", v)
+    _ok("verdict_infra_failure_wins_over_everything")
+
+
+def test_verdict_dry_run_command_ok() -> None:
+    script = HERE / "gdn_verdict.py"
+    rc = subprocess.run(
+        [sys.executable, str(script), "--dry-run"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if rc.returncode != 0:
+        _fail("verdict_dry_run_command_ok", rc.stderr.strip() or rc.stdout.strip())
+    payload = json.loads(rc.stdout)
+    if payload.get("verdict") not in gv.VERDICT_LABELS:
+        _fail("verdict_dry_run_command_ok", f"unknown label {payload.get('verdict')}")
+    _ok("verdict_dry_run_command_ok", payload["verdict"])
+
+
+def test_verdict_labels_are_exact_strings() -> None:
+    expected = {
+        "PASS_BCG_GDN_NOTABLE_GAP",
+        "PASS_BCG_GDN_NO_GAP",
+        "FAIL_BCG_GDN_CORRECTNESS",
+        "AMBIGUOUS",
+        "INFRA_FAILURE",
+    }
+    if set(gv.VERDICT_LABELS) != expected:
+        _fail(
+            "verdict_labels_are_exact_strings",
+            f"got {set(gv.VERDICT_LABELS)}, expected {expected}",
+        )
+    _ok("verdict_labels_are_exact_strings")
+
+
+def test_nsys_capture_requires_separator() -> None:
+    script = HERE / "nsys_capture.sh"
+    rc = subprocess.run(
+        ["bash", str(script), "--gpu-id", "0"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if rc.returncode != 64:
+        _fail(
+            "nsys_capture_requires_separator",
+            f"expected exit 64, got {rc.returncode}",
+        )
+    if "requires '--'" not in rc.stderr:
+        _fail(
+            "nsys_capture_requires_separator",
+            f"expected `--` FATAL; got {rc.stderr!r}",
+        )
+    _ok("nsys_capture_requires_separator")
+
+
+def test_nsys_capture_dry_run_prints_plan() -> None:
+    script = HERE / "nsys_capture.sh"
+    rc = subprocess.run(
+        [
+            "bash",
+            str(script),
+            "--dry-run",
+            "--",
+            "--dry-run",
+            "--gpu-id",
+            "1",
+            "--arm",
+            "A1",
+            "--prompt-len",
+            "128",
+            "--batch-size",
+            "4",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if rc.returncode != 0:
+        _fail(
+            "nsys_capture_dry_run_prints_plan",
+            rc.stderr.strip() or rc.stdout.strip(),
+        )
+    if "would exec:" not in rc.stdout:
+        _fail(
+            "nsys_capture_dry_run_prints_plan",
+            f"expected `would exec:` banner; got {rc.stdout!r}",
+        )
+    if "output stem would be" not in rc.stdout:
+        _fail(
+            "nsys_capture_dry_run_prints_plan",
+            f"expected output-stem line; got {rc.stdout!r}",
+        )
+    _ok("nsys_capture_dry_run_prints_plan")
+
+
+def test_nsys_capture_rejects_gpu_outside_allowlist() -> None:
+    script = HERE / "nsys_capture.sh"
+    rc = subprocess.run(
+        [
+            "bash",
+            str(script),
+            "--",
+            "--gpu-id",
+            "3",
+            "--arm",
+            "A1",
+            "--prompt-len",
+            "128",
+            "--batch-size",
+            "4",
+            "--results-dir",
+            "/tmp/nowhere",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if rc.returncode != 64:
+        _fail(
+            "nsys_capture_rejects_gpu_outside_allowlist",
+            f"expected exit 64, got {rc.returncode}. stderr={rc.stderr!r}",
+        )
+    if "not in allowlist" not in rc.stderr:
+        _fail(
+            "nsys_capture_rejects_gpu_outside_allowlist",
+            f"expected allowlist FATAL; got {rc.stderr!r}",
+        )
+    _ok("nsys_capture_rejects_gpu_outside_allowlist")
+
+
 TESTS = (
     test_fixture_regeneration_bit_identical,
     test_fixture_matches_manifest,
@@ -412,6 +761,23 @@ TESTS = (
     test_runner_rejects_gpu_outside_allowlist,
     test_runner_dry_run_context_blob_valid_json,
     test_gdn_instrumentation_install_is_noop,
+    test_correctness_gate1_pass_on_identical_arms,
+    test_correctness_gate1_fail_on_token_divergence,
+    test_correctness_gate1_fail_on_logprob_over_tolerance,
+    test_correctness_gate1_requires_A0_reference,
+    test_correctness_gate2_pairwise_isolation,
+    test_correctness_gate3_pairwise_chunking,
+    test_correctness_dry_run_command_ok,
+    test_verdict_all_gates_pass_no_perf_gap_is_ambiguous,
+    test_verdict_gate_failure_wins_over_perf,
+    test_verdict_notable_gap_when_gates_pass_and_h_a,
+    test_verdict_no_gap_when_gates_pass_findings_no_hypothesis,
+    test_verdict_infra_failure_wins_over_everything,
+    test_verdict_dry_run_command_ok,
+    test_verdict_labels_are_exact_strings,
+    test_nsys_capture_requires_separator,
+    test_nsys_capture_dry_run_prints_plan,
+    test_nsys_capture_rejects_gpu_outside_allowlist,
 )
 
 
