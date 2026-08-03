@@ -132,6 +132,7 @@ def issue_batch(
     prompts: list[str],
     new_tokens: int,
     request_ids: list[str],
+    top_logprobs_num: int = 5,
 ) -> list[dict]:
     """Send `len(prompts)` requests concurrently by batching the HTTP body.
 
@@ -140,9 +141,11 @@ def issue_batch(
     e2e latency divided across requests as the primary latency signal
     (finer-grained TTFT lives in the nsys capture).
 
-    With `return_logprob=True` and `top_logprobs_num=1`, the server returns
-    per-token selected-token logprobs plus the top-1 alternate — enough
-    for Gate 1's tolerance check.
+    With `return_logprob=True` and `top_logprobs_num` (default 5), the
+    server returns per-token selected-token logprobs plus the top-K
+    alternates — enough for Gate 1 tolerance checks and for
+    top-1/top-2 margin analysis at greedy divergence positions
+    (Stage-1 correctness attribution per operator brief 2026-08-03).
     """
     submit_ts = time.perf_counter()
     body = {
@@ -153,7 +156,7 @@ def issue_batch(
             "max_new_tokens": new_tokens,
         },
         "return_logprob": True,
-        "top_logprobs_num": 1,
+        "top_logprobs_num": int(top_logprobs_num),
         "stream": False,
         "rid": request_ids if len(request_ids) > 1 else request_ids[0],
     }
@@ -284,6 +287,7 @@ def run(
     fixtures_dir: Path,
     output: Path,
     dry_run: bool,
+    top_logprobs_num: int = 5,
 ) -> int:
     prompts_target_chars = approx_chars_for_tokens(prompt_len_tokens)
     fixture = load_fixture(fixtures_dir)
@@ -341,7 +345,10 @@ def run(
             f"{arm}_p{prompt_len_tokens}_b{batch_size}_r{round_idx}_i{i}"
             for i in range(batch_size)
         ]
-        results = issue_batch(server, prompts, new_tokens, request_ids)
+        results = issue_batch(
+            server, prompts, new_tokens, request_ids,
+            top_logprobs_num=top_logprobs_num,
+        )
         if round_idx < n_warmup:
             # Discard warmup.
             continue
@@ -386,6 +393,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--new-tokens", type=int, default=128)
     p.add_argument("--n-warmup", type=int, default=2)
     p.add_argument("--n-timed", type=int, default=8)
+    p.add_argument("--top-logprobs-num", type=int, default=5,
+                   help="Server-side top-K logprobs per token (default 5).")
     p.add_argument("--fixtures-dir", type=Path, required=True)
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--dry-run", action="store_true")
@@ -402,6 +411,7 @@ def main(argv: list[str] | None = None) -> int:
         fixtures_dir=args.fixtures_dir,
         output=args.output,
         dry_run=args.dry_run,
+        top_logprobs_num=args.top_logprobs_num,
     )
 
 

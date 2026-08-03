@@ -455,12 +455,39 @@ def test_client_request_body_sets_return_logprob_and_top_k() -> None:
             "client_request_body_sets_return_logprob_and_top_k",
             f"return_logprob={body.get('return_logprob')!r}",
         )
-    if body.get("top_logprobs_num") != 1:
+    if body.get("top_logprobs_num") != 5:
         _fail(
             "client_request_body_sets_return_logprob_and_top_k",
             f"top_logprobs_num={body.get('top_logprobs_num')!r}",
         )
     _ok("client_request_body_sets_return_logprob_and_top_k")
+
+
+def test_client_top_logprobs_num_can_be_overridden() -> None:
+    """Stage-1 T7 CLI knob: `--top-logprobs-num` threads to the request body."""
+    captured: dict = {}
+    saved = gdn_client.http_post_json
+
+    def mock_post(url, payload, timeout=None):
+        captured["payload"] = payload
+        return (
+            200,
+            [{"text": "", "output_ids": [], "meta_info": {}}],
+            None,
+        )
+
+    try:
+        gdn_client.http_post_json = mock_post
+        gdn_client.issue_batch("http://x", ["hi"], 4, ["r0"], top_logprobs_num=3)
+    finally:
+        gdn_client.http_post_json = saved
+    body = captured.get("payload") or {}
+    if body.get("top_logprobs_num") != 3:
+        _fail(
+            "client_top_logprobs_num_can_be_overridden",
+            f"got {body.get('top_logprobs_num')!r}",
+        )
+    _ok("client_top_logprobs_num_can_be_overridden")
 
 
 def test_client_probe_tokenizer_returns_counts() -> None:
@@ -1666,6 +1693,7 @@ TESTS = (
     test_client_issue_batch_hard_fails_on_partial_response,
     test_client_issue_batch_extracts_all_fields,
     test_client_request_body_sets_return_logprob_and_top_k,
+    test_client_top_logprobs_num_can_be_overridden,
     test_client_probe_tokenizer_returns_counts,
     test_client_probe_tokenizer_returns_single_count,
     test_client_probe_tokenizer_falls_back_on_error,
