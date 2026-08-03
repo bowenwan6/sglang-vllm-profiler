@@ -1404,7 +1404,9 @@ def test_extract_missing_nsys_rep_reports_missing() -> None:
 
 
 def test_extract_columns_match_validation_plan_section_5() -> None:
-    """The column set must match validation_plan.md §5 exactly.
+    """The column set must match validation_plan.md §5 plus Stage-2
+    additions (window, n_requests_in_window, kernels_per_request,
+    graph_launches_per_request).
 
     Regression guard: any downstream change to gdn_verdict.py's CSV
     reader will break if this drifts.
@@ -1430,6 +1432,11 @@ def test_extract_columns_match_validation_plan_section_5() -> None:
         "nsys_source",
         "extractor_status",
         "extractor_warnings",
+        # Stage-2.
+        "window",
+        "n_requests_in_window",
+        "kernels_per_request",
+        "graph_launches_per_request",
     )
     if gextract.COLUMNS != expected:
         _fail("extract_columns_match_validation_plan_section_5", str(gextract.COLUMNS))
@@ -1538,6 +1545,96 @@ def test_extract_client_metadata_aggregates_e2e() -> None:
     if meta.get("prompt_actual_token_count_mean") != 128.0:
         _fail("extract_client_metadata_aggregates_e2e", str(meta))
     _ok("extract_client_metadata_aggregates_e2e")
+
+
+def test_extract_windowed_emits_three_rows() -> None:
+    """When --capture-cutoff-seconds is set, extract() emits three
+    rows (window=all, capture, steady_state). Stage-2 T11."""
+    saved_run = gextract._run_nsys_stats
+
+    def mock_run(nsys_rep, reports, filter_time=None):
+        # Return fake CSV with different counts per window so we can
+        # verify the split.
+        if filter_time is None:
+            n_kern = 1000
+            n_launch = 900
+            n_graph = 300
+        elif filter_time.startswith("0s/"):
+            n_kern = 600
+            n_launch = 500
+            n_graph = 100
+        else:
+            n_kern = 400
+            n_launch = 400
+            n_graph = 200
+        out = {}
+        out["cuda_gpu_kern_sum"] = (
+            "Time (%),Total Time (ns),Instances,Name\n"
+            f"100.0,10000,{n_kern},kernel\n"
+        )
+        out["cuda_api_sum"] = (
+            "Time (%),Total Time (ns),Num Calls,Name\n"
+            f"50.0,10000,{n_launch},cudaLaunchKernel\n"
+            f"10.0,1000,{n_graph},cudaGraphLaunch\n"
+        )
+        out["cuda_api_trace"] = ""
+        return out
+
+    tmp = Path("/tmp/gdn_extract_windowed.csv")
+    if tmp.exists():
+        tmp.unlink()
+    fake_rep = Path("/tmp/gdn_fake.nsys-rep")
+    fake_rep.write_text("stub")
+
+    try:
+        gextract._run_nsys_stats = mock_run
+        rc = gextract.extract(
+            nsys_rep=fake_rep,
+            arm="A1",
+            prompt_len=128,
+            batch=1,
+            records=None,
+            output_csv=tmp,
+            dry_run=False,
+            capture_cutoff_seconds=40.0,
+            n_warmup=2,
+            n_timed=8,
+        )
+    finally:
+        gextract._run_nsys_stats = saved_run
+
+    if rc != 0:
+        _fail("extract_windowed_emits_three_rows", f"rc={rc}")
+
+    with tmp.open() as fh:
+        rows = list(csv.DictReader(fh))
+    if len(rows) != 3:
+        _fail("extract_windowed_emits_three_rows", f"got {len(rows)} rows")
+    windows = [r["window"] for r in rows]
+    if windows != ["all", "capture", "steady_state"]:
+        _fail("extract_windowed_emits_three_rows", f"windows={windows}")
+
+    all_row = rows[0]
+    steady_row = rows[2]
+    # steady_state kernels_per_request = 400 / (2+8) = 40.0
+    if abs(float(steady_row["kernels_per_request"]) - 40.0) > 1e-6:
+        _fail(
+            "extract_windowed_emits_three_rows",
+            f"steady kernels_per_request={steady_row['kernels_per_request']!r}",
+        )
+    # steady_state graph_launches_per_request = 200 / 10 = 20.0
+    if abs(float(steady_row["graph_launches_per_request"]) - 20.0) > 1e-6:
+        _fail(
+            "extract_windowed_emits_three_rows",
+            f"steady graph_launches_per_request={steady_row['graph_launches_per_request']!r}",
+        )
+    # all row also has per-request division (10 total requests)
+    if abs(float(all_row["kernels_per_request"]) - 100.0) > 1e-6:
+        _fail(
+            "extract_windowed_emits_three_rows",
+            f"all kernels_per_request={all_row['kernels_per_request']!r}",
+        )
+    _ok("extract_windowed_emits_three_rows")
 
 
 def test_extract_dry_run_cli() -> None:
@@ -1737,6 +1834,7 @@ TESTS = (
     test_extract_launch_names_include_all_variants,
     test_extract_launch_gap_quantiles,
     test_extract_client_metadata_aggregates_e2e,
+    test_extract_windowed_emits_three_rows,
     test_extract_dry_run_cli,
     test_nsys_capture_requires_separator,
     test_nsys_capture_dry_run_prints_plan,

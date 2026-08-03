@@ -56,7 +56,8 @@ import sys
 from pathlib import Path
 
 # Column order (also the CSV header). Kept identical to
-# validation_plan.md §5 so downstream tooling doesn't have to re-map.
+# validation_plan.md §5 so downstream tooling doesn't have to re-map,
+# with Stage-2 additions at the end (window + per-request columns).
 COLUMNS = (
     "arm",
     "prompt_len",
@@ -78,28 +79,45 @@ COLUMNS = (
     "nsys_source",
     "extractor_status",
     "extractor_warnings",
+    # Stage-2 additions.
+    "window",  # "all" | "capture" | "steady_state"
+    "n_requests_in_window",  # for per-request divisions
+    "kernels_per_request",  # kernel_count_total / n_requests_in_window (None for capture window)
+    "graph_launches_per_request",  # cudagraphlaunch_count / n_requests
 )
 
 _UNKNOWN = "coarse_unknown"
 
 
-def _run_nsys_stats(nsys_rep: Path, reports: list[str]) -> dict[str, str]:
+def _run_nsys_stats(
+    nsys_rep: Path,
+    reports: list[str],
+    filter_time: str | None = None,
+) -> dict[str, str]:
     """Run `nsys stats --report <reports> --format csv` and return raw CSV
-    text per report name."""
+    text per report name.
+
+    If `filter_time` is provided (as `<start>/<end>` with seconds), it is
+    forwarded to nsys stats via `--filter-time` — restricts reported
+    events to those overlapping the window.
+    """
     if shutil.which("nsys") is None:
         raise RuntimeError("nsys binary not on PATH")
     out: dict[str, str] = {}
     for report in reports:
+        cmd = [
+            "nsys",
+            "stats",
+            "--format",
+            "csv",
+            "--report",
+            report,
+        ]
+        if filter_time:
+            cmd += ["--filter-time", filter_time]
+        cmd.append(str(nsys_rep))
         proc = subprocess.run(
-            [
-                "nsys",
-                "stats",
-                "--format",
-                "csv",
-                "--report",
-                report,
-                str(nsys_rep),
-            ],
+            cmd,
             capture_output=True,
             text=True,
             check=False,
@@ -274,6 +292,85 @@ def _client_metadata(records_path: Path | None) -> dict:
     }
 
 
+def _extract_single_window(
+    nsys_rep: Path,
+    arm: str,
+    prompt_len: int,
+    batch: int,
+    window_label: str,
+    n_requests_in_window: int | None,
+    filter_time: str | None,
+    warnings: list[str],
+) -> dict[str, object]:
+    """Extract one window's metrics from an nsys-rep. `filter_time` is
+    forwarded to nsys stats (`--filter-time <start>/<end>`)."""
+    row: dict[str, object] = {c: "" for c in COLUMNS}
+    row.update(
+        {
+            "arm": arm,
+            "prompt_len": prompt_len,
+            "batch": batch,
+            "request_id": f"aggregate_{window_label}",
+            "attribution": "coarse",
+            "extractor_status": "unknown",
+            "extractor_warnings": "",
+            "nsys_source": str(nsys_rep),
+            "window": window_label,
+            "n_requests_in_window": n_requests_in_window if n_requests_in_window else "",
+            "kernels_per_request": "",
+            "graph_launches_per_request": "",
+        }
+    )
+
+    try:
+        reports = _run_nsys_stats(
+            nsys_rep,
+            ["cuda_gpu_kern_sum", "cuda_api_sum", "cuda_api_trace"],
+            filter_time=filter_time,
+        )
+    except RuntimeError as exc:
+        warnings.append(f"{window_label}: {exc!s}")
+        row["extractor_status"] = "NSYS_MISSING"
+        reports = {}
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(f"{window_label}: nsys stats failed: {exc!r}")
+        row["extractor_status"] = "NSYS_STATS_FAILED"
+        reports = {}
+
+    kern_rows = _parse_csv_section(reports.get("cuda_gpu_kern_sum", ""))
+    api_rows = _parse_csv_section(reports.get("cuda_api_sum", ""))
+    api_trace_rows = _parse_csv_section(reports.get("cuda_api_trace", ""))
+    row.update(_kernel_counts(kern_rows))
+    if api_rows:
+        launch_kernel, graph_launch = _api_counts(api_rows)
+    else:
+        launch_kernel, graph_launch = 0, 0
+        warnings.append(f"{window_label}: cuda_api_sum empty or unparsable")
+    row["cudalaunchkernel_count"] = launch_kernel
+    row["cudagraphlaunch_count"] = graph_launch
+    row["graph_breaks"] = launch_kernel if graph_launch > 0 else _UNKNOWN
+
+    gaps = _launch_gaps_us(api_trace_rows)
+    row["p50_launch_gap_us"] = _quantile(gaps, 0.50) if gaps else _UNKNOWN
+    row["p95_launch_gap_us"] = _quantile(gaps, 0.95) if gaps else _UNKNOWN
+    row["p99_launch_gap_us"] = _quantile(gaps, 0.99) if gaps else _UNKNOWN
+
+    # Per-request division (only meaningful for the steady-state window).
+    if n_requests_in_window and n_requests_in_window > 0:
+        row["kernels_per_request"] = (
+            int(row["kernel_count_total"]) / n_requests_in_window
+        )
+        row["graph_launches_per_request"] = (
+            int(row["cudagraphlaunch_count"]) / n_requests_in_window
+        )
+
+    if not warnings and reports:
+        row["extractor_status"] = "OK"
+    elif reports and row["extractor_status"] == "unknown":
+        row["extractor_status"] = "OK"
+    return row
+
+
 def extract(
     nsys_rep: Path,
     arm: str,
@@ -282,102 +379,129 @@ def extract(
     records: Path | None,
     output_csv: Path,
     dry_run: bool,
+    capture_cutoff_seconds: float | None = None,
+    n_warmup: int = 0,
+    n_timed: int = 0,
 ) -> int:
-    row: dict[str, object] = {c: "" for c in COLUMNS}
-    row.update(
-        {
-            "arm": arm,
-            "prompt_len": prompt_len,
-            "batch": batch,
-            "request_id": "aggregate",
-            "attribution": "coarse",
-            "extractor_status": "dry_run" if dry_run else "unknown",
-            "extractor_warnings": "",
-            "nsys_source": str(nsys_rep) if nsys_rep else "",
-        }
-    )
+    """Extract per-cell metrics from an nsys-rep.
 
+    Without `capture_cutoff_seconds`, one aggregate row is emitted
+    (window="all"). With it, three rows are emitted:
+      - window="all"          — total trace
+      - window="capture"      — [0, cutoff] (server bring-up + graph capture)
+      - window="steady_state" — [cutoff, end] (client warmup + timed requests)
+    The steady_state row includes per-request divisions if n_warmup and
+    n_timed sum > 0.
+    """
     warnings: list[str] = []
 
-    if not dry_run:
-        if not nsys_rep.is_file():
-            warnings.append(f"nsys_rep not found: {nsys_rep}")
-            row["extractor_status"] = "MISSING_NSYS_REP"
-        else:
-            try:
-                reports = _run_nsys_stats(
-                    nsys_rep,
-                    ["cuda_gpu_kern_sum", "cuda_api_sum", "cuda_api_trace"],
-                )
-            except RuntimeError as exc:
-                warnings.append(str(exc))
-                row["extractor_status"] = "NSYS_MISSING"
-                reports = {}
-            except Exception as exc:  # noqa: BLE001
-                warnings.append(f"nsys stats failed: {exc!r}")
-                row["extractor_status"] = "NSYS_STATS_FAILED"
-                reports = {}
+    if dry_run:
+        row: dict[str, object] = {c: "" for c in COLUMNS}
+        row.update(
+            {
+                "arm": arm,
+                "prompt_len": prompt_len,
+                "batch": batch,
+                "request_id": "aggregate",
+                "attribution": "coarse",
+                "extractor_status": "dry_run",
+                "nsys_source": str(nsys_rep) if nsys_rep else "",
+                "window": "all",
+            }
+        )
+        output_csv.parent.mkdir(parents=True, exist_ok=True)
+        with output_csv.open("w", newline="") as fh:
+            writer = csv.DictWriter(fh, fieldnames=list(COLUMNS))
+            writer.writeheader()
+            writer.writerow({k: row.get(k, "") for k in COLUMNS})
+        return 0
 
-            kern_rows = _parse_csv_section(reports.get("cuda_gpu_kern_sum", ""))
-            api_rows = _parse_csv_section(reports.get("cuda_api_sum", ""))
-            api_trace_rows = _parse_csv_section(reports.get("cuda_api_trace", ""))
+    if not nsys_rep.is_file():
+        row = {c: "" for c in COLUMNS}
+        row.update(
+            {
+                "arm": arm,
+                "prompt_len": prompt_len,
+                "batch": batch,
+                "request_id": "aggregate",
+                "attribution": "coarse",
+                "extractor_status": "MISSING_NSYS_REP",
+                "extractor_warnings": f"nsys_rep not found: {nsys_rep}",
+                "nsys_source": str(nsys_rep),
+                "window": "all",
+            }
+        )
+        output_csv.parent.mkdir(parents=True, exist_ok=True)
+        with output_csv.open("w", newline="") as fh:
+            writer = csv.DictWriter(fh, fieldnames=list(COLUMNS))
+            writer.writeheader()
+            writer.writerow({k: row.get(k, "") for k in COLUMNS})
+        return 0
 
-            if not kern_rows:
-                warnings.append("cuda_gpu_kern_sum empty or unparsable")
-            row.update(_kernel_counts(kern_rows))
+    all_rows: list[dict] = []
+    # Always emit the "all" window.
+    total_requests = n_warmup + n_timed
+    all_rows.append(
+        _extract_single_window(
+            nsys_rep, arm, prompt_len, batch,
+            window_label="all",
+            n_requests_in_window=total_requests if total_requests else None,
+            filter_time=None,
+            warnings=warnings,
+        )
+    )
 
-            if not api_rows:
-                warnings.append("cuda_api_sum empty or unparsable")
-                launch_kernel, graph_launch = 0, 0
-            else:
-                launch_kernel, graph_launch = _api_counts(api_rows)
-            row["cudalaunchkernel_count"] = launch_kernel
-            row["cudagraphlaunch_count"] = graph_launch
+    if capture_cutoff_seconds is not None and capture_cutoff_seconds > 0:
+        cutoff = float(capture_cutoff_seconds)
+        # Capture window: [0, cutoff]
+        all_rows.append(
+            _extract_single_window(
+                nsys_rep, arm, prompt_len, batch,
+                window_label="capture",
+                n_requests_in_window=None,
+                filter_time=f"0s/{cutoff}s",
+                warnings=warnings,
+            )
+        )
+        # Steady-state window: [cutoff, end]. Per-request division uses
+        # n_warmup + n_timed as the request count in this window.
+        all_rows.append(
+            _extract_single_window(
+                nsys_rep, arm, prompt_len, batch,
+                window_label="steady_state",
+                n_requests_in_window=total_requests if total_requests else None,
+                filter_time=f"{cutoff}s/",
+                warnings=warnings,
+            )
+        )
 
-            # graph_breaks = cudaLaunchKernel launches NOT enclosed by a
-            # cudaGraphLaunch. Without a per-launch timeline of graph
-            # enter/exit events we approximate: on BCG-enabled arms,
-            # every cudaLaunchKernel outside a captured graph is a
-            # break candidate. Precise attribution needs NVTX +
-            # cudaGraph API trace correlation; without that we record
-            # the total cudaLaunchKernel count and mark the field
-            # advisory-only.
-            row["graph_breaks"] = launch_kernel if graph_launch > 0 else _UNKNOWN
-
-            gaps = _launch_gaps_us(api_trace_rows)
-            row["p50_launch_gap_us"] = _quantile(gaps, 0.50) if gaps else _UNKNOWN
-            row["p95_launch_gap_us"] = _quantile(gaps, 0.95) if gaps else _UNKNOWN
-            row["p99_launch_gap_us"] = _quantile(gaps, 0.99) if gaps else _UNKNOWN
-
-            if not warnings and reports:
-                row["extractor_status"] = "OK"
-
-    # Client-side metadata (optional).
+    # Client-side metadata attached to the "all" row.
     meta = _client_metadata(records) if records else {}
     if meta.get("e2e_ms_mean") is not None:
-        row["ttft_ms"] = meta["e2e_ms_mean"]  # coarse — real TTFT needs streaming
-        # Throughput: prompt tokens / e2e. Coarse because e2e includes
-        # decode; real prefill throughput needs nsys-side breakout.
+        all_rows[0]["ttft_ms"] = meta["e2e_ms_mean"]
         pt = meta.get("prompt_actual_token_count_mean")
         if pt and meta["e2e_ms_mean"] > 0:
-            row["prefill_throughput_toks_per_s"] = (
+            all_rows[0]["prefill_throughput_toks_per_s"] = (
                 pt * 1000.0 / meta["e2e_ms_mean"]
             )
 
-    row["extractor_warnings"] = "; ".join(warnings)
+    for r in all_rows:
+        r["extractor_warnings"] = "; ".join(warnings)
 
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     with output_csv.open("w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=list(COLUMNS))
         writer.writeheader()
-        writer.writerow({k: row.get(k, "") for k in COLUMNS})
+        for r in all_rows:
+            writer.writerow({k: r.get(k, "") for k in COLUMNS})
 
-    if not dry_run and row["extractor_status"] not in ("OK", "dry_run"):
-        print(
-            f"extract_nsys_metrics: WARN status={row['extractor_status']} "
-            f"warnings={row['extractor_warnings']}",
-            file=sys.stderr,
-        )
+    for r in all_rows:
+        if r["extractor_status"] not in ("OK", "dry_run"):
+            print(
+                f"extract_nsys_metrics: WARN window={r['window']} "
+                f"status={r['extractor_status']} warnings={r['extractor_warnings']}",
+                file=sys.stderr,
+            )
     return 0
 
 
@@ -390,6 +514,22 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--records", type=Path, default=None)
     p.add_argument("--output-csv", type=Path, required=True)
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument(
+        "--capture-cutoff-seconds",
+        type=float,
+        default=None,
+        help=(
+            "If given, emit three rows: window=all/capture/steady_state. "
+            "The cutoff (seconds from trace start) separates server "
+            "bring-up + graph capture (before) from client request "
+            "serving (after). Typically set to metadata.json's "
+            "server_ready_seconds."
+        ),
+    )
+    p.add_argument("--n-warmup", type=int, default=0,
+                   help="Client warmup requests (for per-request divisions).")
+    p.add_argument("--n-timed", type=int, default=0,
+                   help="Client timed requests (for per-request divisions).")
     args = p.parse_args(argv)
 
     if not args.dry_run and args.nsys_rep is None:
@@ -404,6 +544,9 @@ def main(argv: list[str] | None = None) -> int:
         records=args.records,
         output_csv=args.output_csv,
         dry_run=args.dry_run,
+        capture_cutoff_seconds=args.capture_cutoff_seconds,
+        n_warmup=args.n_warmup,
+        n_timed=args.n_timed,
     )
 
 
