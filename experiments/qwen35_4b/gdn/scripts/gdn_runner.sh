@@ -52,7 +52,7 @@ N_WARMUP="2"
 N_TIMED="8"
 LIBCUDA_PRELOAD="${LIBCUDA_PRELOAD:-/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05}"
 LAUNCH_WAIT_SECONDS="${LAUNCH_WAIT_SECONDS:-600}"
-GPU_ALLOWLIST="${GDN_GPU_ALLOWLIST:-0,1,7}"
+GPU_ALLOWLIST="${GDN_GPU_ALLOWLIST:-0,1,2,3,4,5,6,7}"
 
 show_usage() {
     cat >&2 <<'EOF'
@@ -69,7 +69,11 @@ usage: gdn_runner.sh --gpu-id <id> --arm <A0|A1|A2|A3> \
              A3 bcg_dcg      = BCG prefill, full-decode CG
 --dry-run    exercise argument parsing / preflight / cleanup wiring; no CUDA
 
-GPU allowlist: {0, 1, 7} (override with GDN_GPU_ALLOWLIST env var).
+GPU allowlist: {0..7} — any GPU 0-7 provided it is unoccupied and idle
+              (compute processes = 0, memory <= 500 MiB, util <= 5%).
+              Extended from {0,1,7} on 2026-08-03 per operator authorisation
+              (see gdn/validation_plan.md Amendment 1). Override with
+              GDN_GPU_ALLOWLIST env var.
 Preservation invariants: /data/sglang-fork read-only; frozen SGLang
 source unchanged.
 EOF

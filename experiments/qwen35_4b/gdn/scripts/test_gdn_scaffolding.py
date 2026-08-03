@@ -305,8 +305,9 @@ def test_runner_rejects_missing_gpu_id() -> None:
 
 def test_runner_rejects_gpu_outside_allowlist() -> None:
     runner = HERE / "gdn_runner.sh"
+    # 99 is outside the {0..7} allowlist (Amendment 1 default).
     rc = subprocess.run(
-        ["bash", str(runner), "--gpu-id", "3"],
+        ["bash", str(runner), "--gpu-id", "99"],
         capture_output=True,
         text=True,
         check=False,
@@ -716,7 +717,7 @@ def test_nsys_capture_rejects_gpu_outside_allowlist() -> None:
             str(script),
             "--",
             "--gpu-id",
-            "3",
+            "99",
             "--arm",
             "A1",
             "--prompt-len",

@@ -253,10 +253,36 @@ Restated from `README.md` § "Rules" for the plan reader:
   profile identifies one specific BCG limitation.
 - No checkpoint mutation; use shipped `Qwen/Qwen3.5-4B`.
 - No perf claim without a passing correctness gate.
-- GPU allowlist `{0, 1, 7}` and idle-verification rules from
-  `../validation_plan.md` Amendments 1-2 apply unchanged.
+- GPU allowlist `{0..7}` per Amendment 1 below; idle-verification
+  rules from `../validation_plan.md` Amendments 1-2 apply unchanged.
 - Preservation invariants unchanged: read-only
   `/data/sglang-fork`; frozen SGLang source untouched; §4
   evidence read-only; DeepStack Attempts 01/02/03 preserved.
 - No assumption that recurrent-state handling is faulty until
   the baseline profile points there.
+
+## 11. Amendments
+
+### Amendment 1 (2026-08-03) — GPU allowlist widened to {0..7}
+
+The GPU allowlist for the GDN sub-track is extended from `{0, 1, 7}`
+(inherited from the DeepStack sub-track's Amendments 1-2) to
+`{0, 1, 2, 3, 4, 5, 6, 7}` per operator authorisation.
+
+**Constraint:** the idle-verification rules from
+`../validation_plan.md` Amendments 1-2 continue to apply on every
+attempt. A GPU qualifies for use if and only if:
+
+- compute processes on that GPU (by UUID) = 0,
+- memory used ≤ 500 MiB,
+- GPU utilization ≤ 5 %.
+
+The runner (`scripts/gdn_runner.sh`) enforces both the allowlist and
+the foreign-PID guard on every launch. The allowlist default is
+widened in `scripts/gdn_runner.sh` and `scripts/nsys_capture.sh`; the
+`GDN_GPU_ALLOWLIST` env var may narrow it further for a specific
+attempt.
+
+**Preservation rule:** never signal foreign PIDs on any GPU (0-7),
+never wildcard `nvidia-smi` queries, never use `--gpu-reset`,
+`pkill`, `killall`, or `fuser -k`. PGID-scoped cleanup only.

@@ -98,7 +98,7 @@ if [ -z "$gpu_id" ]; then
     echo "FATAL: --gpu-id not present in runner args" >&2
     exit 64
 fi
-case ",${GDN_GPU_ALLOWLIST:-0,1,7}," in
+case ",${GDN_GPU_ALLOWLIST:-0,1,2,3,4,5,6,7}," in
     *,"$gpu_id",*) : ;;
     *)
         echo "FATAL: --gpu-id=$gpu_id not in allowlist" >&2

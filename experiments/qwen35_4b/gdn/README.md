@@ -194,8 +194,9 @@ overall verdict.
 - **No perf claim without a passing correctness gate.** Every cell
   must clear all four correctness gates before its `nsys` metrics
   are admissible.
-- **GPU allowlist `{0, 1, 7}`** and idle-verification rules from
-  `../validation_plan.md` Amendments 1-2 continue to apply.
+- **GPU allowlist `{0..7}`** per `validation_plan.md` Amendment 1
+  (2026-08-03); idle-verification rules from `../validation_plan.md`
+  Amendments 1-2 continue to apply on every attempt.
 - **Preservation invariants unchanged.** Read-only
   `/data/sglang-fork` at `986c89e69`; frozen SGLang source
   untouched; §4 evidence read-only; the DeepStack sub-track's

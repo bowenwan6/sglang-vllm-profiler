@@ -179,3 +179,7 @@ Recorded here so they are not re-litigated:
   targeted deep-dive on any specific GDN op is triggered only by
   a repeated graph break or a measurable launch-overhead
   bottleneck in the baseline profile.
+- **GPU allowlist `{0..7}`** per `validation_plan.md` Amendment 1
+  (2026-08-03); a GPU qualifies only when compute processes = 0,
+  memory ≤ 500 MiB, and utilisation ≤ 5 %. Never signal foreign
+  PIDs.
