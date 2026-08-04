@@ -1,0 +1,100 @@
+diff --git a/python/sglang/srt/model_executor/cuda_graph_buffer_registry.py b/python/sglang/srt/model_executor/cuda_graph_buffer_registry.py
+index 000000000..000000001 100644
+--- a/python/sglang/srt/model_executor/cuda_graph_buffer_registry.py
++++ b/python/sglang/srt/model_executor/cuda_graph_buffer_registry.py
+@@ -790,6 +790,7 @@ def build_prefill_registry(
+     is_multimodal: bool = False,
+     hidden_size: int = 0,
+     embed_dtype: Optional[torch.dtype] = None,
++    num_deepstack_embeddings: int = 0,
+     enable_mamba_track: bool = False,
+     enable_num_token_non_padded: bool = False,
+     require_gathered_buffer: bool = False,
+@@ -866,6 +867,20 @@ def build_prefill_registry(
+                     copy_from_fb=False,
+                 )
+             )
++            if num_deepstack_embeddings > 0:
++                # Symmetric with input_embeds: the DeepStack contribution
++                # is a per-token tensor of shape
++                # (num_tokens, hidden_size * num_deepstack_embeddings)
++                # that the LM reads via layer_kwargs and add_s into the
++                # residual stream at target layer indices. Registering a
++                # stable slot lets replay_layer_forward copy the live
++                # tensor in before backend.replay(), mirroring the
++                # existing input_embeds handling.
++                deepstack_shape = lambda _bs2, mt: (
++                    mt, hidden_size * num_deepstack_embeddings
++                )
++                slots.append(GraphSlot(
++                    "input_deepstack_embeds",
++                    deepstack_shape,
++                    embed_dtype,
++                    axis="tokens",
++                    padding_policy=PaddingPolicy.ZERO,
++                    copy_from_fb=False,
++                ))
+     if enable_mamba_track:
+         slots.append(GraphSlot("mamba_track_indices", _bs, torch.int64, axis="bs"))
+         slots.append(GraphSlot("mamba_track_mask", _bs, torch.bool, axis="bs"))
+
+diff --git a/python/sglang/srt/model_executor/runner/prefill_cuda_graph_runner.py b/python/sglang/srt/model_executor/runner/prefill_cuda_graph_runner.py
+index 000000002..000000003 100644
+--- a/python/sglang/srt/model_executor/runner/prefill_cuda_graph_runner.py
++++ b/python/sglang/srt/model_executor/runner/prefill_cuda_graph_runner.py
+@@ -314,6 +314,10 @@ class PrefillCudaGraphRunner:
+             is_multimodal=self.is_multimodal,
+             hidden_size=self.model_runner.model_config.hidden_size,
+             embed_dtype=self.model_runner.dtype,
++            num_deepstack_embeddings=getattr(
++                self.model_runner.model, "num_deepstack_embeddings", 0
++            ),
+             enable_mamba_track=self.mamba_track_enabled,
+             enable_num_token_non_padded=enable_num_token_non_padded(),
+             require_gathered_buffer=require_gathered_buffer(model_runner.server_args),
+@@ -659,11 +663,21 @@ class PrefillCudaGraphRunner:
+         with self._prefill_forward_context(forward_batch):
+             if self._uses_eager_prefill_tail():
+                 # BCG / Full: capture the transformer body only.
+                 positions = self._get_layer_model_positions(forward_batch)
+-                return self.layer_model.forward(
+-                    forward_batch.input_ids,
+-                    positions,
+-                    forward_batch,
+-                    forward_batch.input_embeds,
+-                )
++                # If the model exposes an input_deepstack_embeds kwarg (Qwen3-VL
++                # family), pass the registered slot buffer at capture time so
++                # the DeepStack add_ branch is traced into the graph rather
++                # than left cold. The slot exists only when the buffer registry
++                # was built with num_deepstack_embeddings > 0.
++                deepstack_slot = None
++                if self.buffer_registry.has_slot("input_deepstack_embeds"):
++                    deepstack_slot = self.buffer_registry.get_slot(
++                        "input_deepstack_embeds"
++                    ).slice_for(1, num_tokens)
++                kwargs = {"input_embeds": forward_batch.input_embeds}
++                if deepstack_slot is not None:
++                    kwargs["input_deepstack_embeds"] = deepstack_slot
++                return self.layer_model.forward(
++                    forward_batch.input_ids, positions, forward_batch, **kwargs,
++                )
+             # tc_piecewise: compile/capture the outer model.forward path.
+             return self.model_runner.model.forward(
+                 forward_batch.input_ids,
+@@ -1616,6 +1631,18 @@ class PrefillCudaGraphRunner:
+                     self.buffer_registry.get_slot("input_embeds").slice_for(
+                         1, static_num_tokens
+                     )[: ie.shape[0]].copy_(ie)
++            # Mirror the input_embeds copy for input_deepstack_embeds. The
++            # numel() > 0 guard makes this a no-op for callers that hand in
++            # an empty tensor (Qwen3.5-style empty DeepStack configs) even
++            # though the slot allocation gate above already skips those.
++            if self.buffer_registry.has_slot("input_deepstack_embeds"):
++                de = layer_kwargs.get("input_deepstack_embeds")
++                if de is not None and de.numel() > 0:
++                    self.buffer_registry.get_slot(
++                        "input_deepstack_embeds"
++                    ).slice_for(1, static_num_tokens)[: de.shape[0]].copy_(de)
+             hs = self.backend.replay(shape_key, static_forward_batch, **kwargs)
+             return _slice_output_rows(hs, raw_num_tokens) if full_path else hs
