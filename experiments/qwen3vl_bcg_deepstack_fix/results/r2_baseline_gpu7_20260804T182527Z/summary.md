@@ -1,0 +1,1 @@
+Qwen3.5-4B BCG DeepStack attempt r2_baseline_gpu7_20260804T182527Z: verdict FAIL_BCG_DEEPSTACK. bcg_normal diverges from eager_normal, matches bcg_zero, and bcg_zero matches eager_zero. Strong zero-DeepStack signature under BCG. FAIL_BCG_DEEPSTACK.
