@@ -1192,6 +1192,71 @@ the L2Norm sub-track record, and the GDN Stages 1-4 record).
 Planning anchor:
 [`experiments/qwen3vl_bcg_deepstack_fix/plan.md`](experiments/qwen3vl_bcg_deepstack_fix/plan.md).
 
+### 10.0 R1 upstream audit — DONE (2026-08-04, CPU-only)
+
+Full write-up at
+[`experiments/qwen3vl_bcg_deepstack_fix/r1_upstream_audit.md`](experiments/qwen3vl_bcg_deepstack_fix/r1_upstream_audit.md).
+Fetched upstream `sgl-project/sglang` HEAD
+`e76d0acdc923d992bbda20d4b2bc51db9ac314a7` (2026-08-04 17:17Z) via a
+shallow clone under `<scratchpad>/upstream_main/` — no source
+touched, no writes to `/data/sglang-fork` or the pinned scratchpad
+checkout. Answers to the five questions the operator asked:
+
+1. **Qwen3-VL eligible for BCG on current main?** NO. Allowlist
+   `model_config.py:1839-1842` unchanged from the pinned SHA; still
+   only `Qwen3_5ForConditionalGeneration` and its MoE variant. The
+   `input_deepstack_embeds`-under-BCG failure remains **latent**
+   unless monkey-patched (identical to the pinned SHA state).
+2. **Non-empty DeepStack reaches LM entry?** YES when routed.
+   `general_mm_embed_routine` synthesis path
+   (`mm_utils.py:1122-1245`) unchanged from the pinned SHA;
+   Attempt 03's `nonzero_frac ≈ 0.98` at the LM entry remains
+   representative.
+3. **Stable BCG replay slot?** NO. `cuda_graph_buffer_registry.py`
+   registers `input_embeds` (plus `mrope_positions` and
+   `num_token_non_padded`) for multimodal but no
+   `input_deepstack_embeds` slot anywhere.
+4. **Where omitted?** Three co-omissions on current main:
+   - slot registration (`buffer_registry.py:867-877`);
+   - capture-pass `_run_forward`
+     (`prefill_cuda_graph_runner.py:660-668` — passes 4 positional
+     args, no `input_deepstack_embeds` kwarg → captured graph has
+     the DeepStack `add_` branch cold);
+   - replay-pass `replay_layer_forward`
+     (`prefill_cuda_graph_runner.py:1610-1628` — reads
+     `layer_kwargs["input_embeds"]` and copies into the slot, but
+     ignores `layer_kwargs["input_deepstack_embeds"]`).
+5. **Can `input_embeds` design generalize safely?** YES, cleanly.
+   The three-site register-slot-and-copy pattern already landed for
+   `input_embeds` maps directly onto `input_deepstack_embeds`
+   with a `num_deepstack_embeddings > 0` gate so Qwen3.5-style
+   empty configurations see zero allocation and zero copy overhead.
+
+**Substantive change to the working hypothesis since the pinned-SHA
+plan.** The prior text described `replay_layer_forward` as
+"drop `**layer_kwargs`, forward outer `**kwargs`", which was true
+of the fork snapshot at `986c89e69c…`. On current main this
+`input_embeds`-half is fixed (slot registered + kwarg read + copy
+performed at replay). The **DeepStack half is unfixed** and now
+reads as a symmetric absence — the fix delta is a three-site
+mirror of a landed pattern, which is smaller and better-framed
+for upstream review than the pinned-SHA plan assumed.
+
+**Harness compatibility on current main.** All class-name and
+import-path dependencies verified stable: `Qwen3LLMModel` still at
+`qwen3_vl.py:1106` (was `:1104` on the fork); the monkey-patch
+symbol path `sglang.srt.configs.model_config.multimodal_breakable_cuda_graph_supported_model_archs`
+still importable; `general_mm_embed_routine` still writes
+`other_info["input_deepstack_embeds"]`. CPU harness self-test
+(`test_instrumentation.py`) passed 2026-08-04. No harness script
+edits required to point at a current-main clone.
+
+**Consequence for the R2-R8 ladder.** R3 (upstream-current
+reproduction) is downgraded from "conditional on R1" to "optional
+confirmation" because R1 answered the upstream-current source-level
+question definitively. R4-R8 stay as-is. R2 still gates on the
+shared driver blocker.
+
 ### 10.1 Prior evidence status
 
 **Valid, preserved verbatim.**

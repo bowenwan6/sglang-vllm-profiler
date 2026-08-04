@@ -1,8 +1,24 @@
 # Qwen3-VL BCG DeepStack — reproduction and fix plan
 
-**Status.** Planning document only. No code changes, no upstream source
-modifications, no substantial GPU experiments authorised at this
-stage. Awaiting review.
+> **REVISED after R1 upstream audit (2026-08-04).** Original plan
+> reasoned against the pinned SGLang SHA `58974ca16c…` and the fork
+> HEAD `986c89e69c…`. Current upstream `main`
+> (`e76d0acdc923d992bbda20d4b2bc51db9ac314a7`, 2026-08-04 17:17Z) has
+> partially fixed the sibling `input_embeds` half of the bug via a
+> three-site register-slot-and-copy pattern; the DeepStack half is
+> unchanged (all three sites still omit `input_deepstack_embeds`).
+> Full audit at
+> [`r1_upstream_audit.md`](./r1_upstream_audit.md). The revised plan
+> below is stricter than the original: the fix delta is now a
+> symmetric mirror of a landed pattern, and R3 (upstream-current
+> reproduction) is downgraded because R1 answered the source-level
+> question definitively.
+
+**Status.** Planning document. R0 (preflight) and R1 (upstream audit)
+completed 2026-08-04 (CPU-only, no source touched). R2 onward remains
+paused on the shared CUDA/driver blocker described in `plan.md` §9.
+No SGLang source modifications authorised yet — all fix work stays in
+scratchpad until the six pre-modification requirements are met.
 
 **Branch.** `debug/qwen3vl-bcg-deepstack-fix`, cut from
 `debug/qwen35-4b-gdn-prefill-bcg` HEAD `b8c0f45` (which is a strict
@@ -230,20 +246,28 @@ common prefix).
 **Advance rule.** `FAIL_BCG_DEEPSTACK` with the same signature → R3.
 Otherwise, diagnose before continuing.
 
-### R3 — upstream-current reproduction (GPU, conditional on R1)
+### R3 — upstream-current reproduction (GPU, downgraded after R1)
 
-**Do.** If R1 shows meaningful upstream changes in the DeepStack
-code path (outcomes c or d from R1), cut a fresh SGLang clone at
-current upstream `main`, wire the profiler runner to import from it
-via `PYTHONPATH`, verify the pin check succeeds, and rerun the 2×2.
+**Downgraded from "conditional on R1" to "optional confirmation".**
+R1 answered the upstream-current source-level question definitively:
+the DeepStack-half of the bug is unchanged on current main, and the
+`input_embeds`-half was fixed with a landed slot-and-copy pattern
+that the DeepStack fix now mirrors. R3 remains useful only as a
+runtime sanity check on the current-main clone under the same
+monkey-patch — if R2 signature holds bit-identically to Attempt 03,
+R3 is redundant. Run only if the R2 baseline diverges unexpectedly
+from Attempt 03.
 
-**Expected.** Same `FAIL_BCG_DEEPSTACK` signature as R2 modulo any
-new upstream defence. If a numel-guard eager fallback has landed
-upstream, expect the arm to `FEATURE_GAP_EAGER_FALLBACK` at the
-image request instead of divergence.
+**Do (if run).** Cut a fresh SGLang clone at current-main HEAD,
+wire the profiler runner via `PYTHONPATH`, apply the monkey-patch,
+rerun the 2×2.
 
-**Advance rule.** Signature holds → R4. Signature changed →
-characterise and update the fix design before R4.
+**Expected.** Same `FAIL_BCG_DEEPSTACK` signature as R2. Any
+divergence indicates upstream churn we missed in R1 that changed
+the failure mode.
+
+**Advance rule.** Signature holds → skip R4-R8 as redundant. Signature
+changed → re-open source audit before continuing.
 
 ### R4 — non-empty DeepStack proof (re-verification, GPU-cheap)
 
@@ -586,6 +610,54 @@ given for each step.
    until user review.**
 
 ---
+
+## R1 findings summary (added 2026-08-04)
+
+Full write-up at [`r1_upstream_audit.md`](./r1_upstream_audit.md).
+
+**Definitive answers to the five verification questions on current
+main HEAD `e76d0acdc9…`:**
+
+1. **Qwen3-VL eligible for BCG?** NO. Allowlist unchanged
+   (`model_config.py:1839-1842`). Latent-only unless monkey-patched.
+2. **Non-empty DeepStack reaches LM entry?** YES when routed.
+   `general_mm_embed_routine` synthesis path unchanged
+   (`mm_utils.py:1122-1245`); Attempt 03's `nonzero_frac ≈ 0.98`
+   evidence remains applicable because nothing on the routing side
+   moved.
+3. **Stable BCG replay slot?** NO. `cuda_graph_buffer_registry.py:867-877`
+   registers `input_embeds` for multimodal but no
+   `input_deepstack_embeds` slot.
+4. **Where omitted?** Three co-omissions: slot registration
+   (`buffer_registry.py:867-877`); capture-pass `_run_forward`
+   (`prefill_cuda_graph_runner.py:660-668` — passes 4 positional
+   args, no `input_deepstack_embeds`); replay-pass
+   `replay_layer_forward` (`prefill_cuda_graph_runner.py:1610-1628`
+   — reads `layer_kwargs["input_embeds"]` and copies to slot but
+   ignores `layer_kwargs["input_deepstack_embeds"]`).
+5. **Can `input_embeds` design generalize?** YES. Three-site
+   symmetric mirror. Slot allocation is gated on
+   `getattr(model, "num_deepstack_embeddings", 0) > 0`, so Qwen3.5
+   (empty DeepStack) sees no allocation and no overhead.
+
+**Change to plan since R1:**
+
+* The pinned-SHA claim that both `input_embeds` and DeepStack were
+  omitted at replay is out of date. `input_embeds` is fixed on
+  current main; DeepStack still needs the mirror treatment.
+* Approach 4.A is now provably a symmetric mirror of a landed
+  pattern (not just conceptually), which sharpens the PR framing
+  and lowers reviewer risk.
+* Approach 4.C is definitively rejected: current main's TC piecewise
+  `run_dummy_multimodal_deepstack_forward` co-exists with the
+  BCG `input_embeds` slot; BCG needs both slot registration and
+  capture-pass wiring, so 4.C's capture-only stance is not enough.
+* R3 downgraded from "conditional" to "optional confirmation" (see
+  above).
+* Harness compatibility with current main is verified — no script
+  rewrite needed; only the `--frozen-sglang` path and pin SHA need
+  bumping to point at a fresh current-main clone when R2 becomes
+  executable.
 
 ## 10. References
 
