@@ -1172,3 +1172,151 @@ Once CUDA works, resume from **M3** in
 Do not upstream from `/data/sglang-fork` unchanged — apply the
 change to a clean branch off current upstream `main` for the PR.
 
+## 10. Sub-track — Qwen3-VL BCG DeepStack fix (planning, active)
+
+> **Scope pivot from §7.** §7 closed the Qwen3.5 target as
+> `NOT_APPLICABLE_QWEN35` because every shipped `Qwen/Qwen3.5-*`
+> release carries `vision_config.deepstack_visual_indexes = []`.
+> Attempt 03 (2026-08-01, `attempt_gpu1_20260801T115524Z/`) converted
+> the source-level suspicion into a live-fire `FAIL_BCG_DEEPSTACK`
+> on `Qwen/Qwen3-VL-8B-Instruct` under a profiler-owned test-only
+> BCG allowlist monkey-patch. This sub-track picks up from that
+> evidence and moves toward a general, production-safe upstream fix.
+
+Active branch: `debug/qwen3vl-bcg-deepstack-fix` (cut from
+`debug/qwen35-4b-gdn-prefill-bcg` HEAD `b8c0f45`, which is itself a
+strict superset of `debug/qwen35-4b-bcg-deepstack` HEAD `d29b4a6`
+and contains all Attempt 01-03 evidence, the DeepStack harness,
+the L2Norm sub-track record, and the GDN Stages 1-4 record).
+
+Planning anchor:
+[`experiments/qwen3vl_bcg_deepstack_fix/plan.md`](experiments/qwen3vl_bcg_deepstack_fix/plan.md).
+
+### 10.1 Prior evidence status
+
+**Valid, preserved verbatim.**
+
+* Source-level `replay_layer_forward` diagnosis (§7.3(4)) — verified
+  again against `/data/sglang-fork` at
+  `python/sglang/srt/model_executor/runner/prefill_cuda_graph_runner.py:923-929`.
+  Body drops `**layer_kwargs` (which contains
+  `input_deepstack_embeds`) and forwards enclosing `**kwargs`.
+* Live-fire `FAIL_BCG_DEEPSTACK`
+  (`attempt_gpu1_20260801T115524Z/verdict.md`). Signature: `bcg_normal`
+  bit-identical to `bcg_zero_deepstack` (l1_max_abs 0.0); both track
+  `eager_zero_deepstack` within bf16 noise (l1_max_abs 0.066);
+  `eager_zero_deepstack` diverges from `eager_normal` at first
+  non-boilerplate token (7/15 common prefix, l1_max_abs 1.15). Textbook
+  zero-DeepStack-under-BCG signature.
+* Cross-arch DeepStack + BCG audit
+  ([`latent_bug_analysis.md`](experiments/qwen35_4b/latent_bug_analysis.md)
+  §2) — intersection of "on BCG allowlist" and "populates DeepStack"
+  is empty on upstream `main @ 58974ca1`, hence latent-regression
+  framing.
+* Repaired harness under `experiments/qwen35_4b/scripts/`
+  (`server_launcher.py`, `bcg_allowlist_patch.py`, `client.py`,
+  `instrumentation.py`, `verdict.py`, `bootstrap/sitecustomize.py`)
+  with CPU-only tests passing.
+* Byte-pinned image fixture SHA-256
+  `8fa3ed69d78049835d6631b3b4314be21ea3e797626be6c58fc72adfb30070a2`.
+
+**Must be revalidated.**
+
+* Current upstream `main` HEAD — has anything landed since
+  `58974ca16c…` (2026-07-31) that touches `replay_layer_forward`,
+  the BCG allowlist, `cuda_graph_buffer_registry`, or DeepStack
+  routing?
+* Whether `Qwen3VLForConditionalGeneration` has since been added to
+  `multimodal_breakable_cuda_graph_supported_model_archs` (if so,
+  the bug is now shipped-live and the monkey-patch is unnecessary).
+* Instrumentation robustness against upstream LM class-name churn.
+* Fixture placeholder alignment against current Qwen3-VL processor.
+
+**Blocked shared with §9.** All GPU reproductions are gated on the
+`595.71.05` driver upgrade (2026-08-04 12:53 UTC) being resolved —
+same shared constraint as the L2Norm sub-track.
+
+### 10.2 Proposed reproduction ladder (short form)
+
+Full detail in
+[`experiments/qwen3vl_bcg_deepstack_fix/plan.md`](experiments/qwen3vl_bcg_deepstack_fix/plan.md)
+§3.
+
+* **R0** — preflight, CPU-only, executable now.
+* **R1** — upstream state audit vs pinned SHA, CPU-only, executable now.
+* **R2** — reproduce Attempt 03's FAIL on pinned SHA (GPU, blocked).
+* **R3** — reproduce on current upstream (GPU, conditional on R1).
+* **R4** — re-verify DeepStack is non-empty at LM entry.
+* **R5** — direct evidence the captured graph lacks DeepStack `add_`
+  kernels (nsys kernel-name diff).
+* **R6** — zero-DeepStack ablation signature re-verification.
+* **R7** — sensitivity to graph-bucket size (256 – 2048).
+* **R8** — request-order isolation with mixed batches.
+
+### 10.3 Proposed fix direction (short form)
+
+Full detail in
+[`experiments/qwen3vl_bcg_deepstack_fix/plan.md`](experiments/qwen3vl_bcg_deepstack_fix/plan.md)
+§4.
+
+**Recommended: 4.A register-slot-and-copy + 4.B numel-guard as
+defence-in-depth.**
+
+* Extend the existing `input_embeds` register-slot pattern (PR
+  #30872) to `input_deepstack_embeds`. Slot allocation is
+  data-driven — Qwen3.5-style empty DeepStack sees no allocation,
+  Qwen3-VL populates the slot at replay.
+* `replay_layer_forward` forwards `layer_kwargs` and copies live
+  `input_deepstack_embeds` into the slot before `.replay(...)`.
+* BCG capture-pass routes the LM with the slot buffer so the
+  DeepStack `add_` branch is traced into the captured graph.
+* Retain a `numel() > 0` guard around the copy as defence-in-depth.
+
+**Alternatives.**
+* **4.B alone** (numel guard + eager fallback) — correct but
+  concedes BCG on image requests; kept as a fallback if 4.A's
+  buffer-registry lifecycle is too complex for the current window.
+* **4.C** (dummy-trace at capture only, no slot) — insufficient
+  standalone; the slot is required.
+
+### 10.4 Major risks and uncertainties
+
+* Shared CUDA / driver mismatch blocker with §9.
+* Upstream may have partially fixed this since the pin — R1
+  characterises.
+* Buffer-registry lifecycle for shape-variable slots needs care;
+  matches the `input_embeds` slot pattern.
+* Fixture / placeholder churn if the Qwen3-VL processor moves —
+  caught by R0 before GPU work begins.
+
+### 10.5 Immediate next steps (§10 track)
+
+Executed only after this plan is reviewed and explicit approval is
+given for each step. Detail in
+[`experiments/qwen3vl_bcg_deepstack_fix/plan.md`](experiments/qwen3vl_bcg_deepstack_fix/plan.md)
+§9.
+
+1. **N1** — file this plan; update plan.md §10 (this section).
+   Commit `docs(qwen3vl): plan BCG DeepStack fix — reproduction
+   ladder and fix design`.
+2. **N2** — R0 + R1 (CPU-only): preflight + upstream audit; commit
+   the outcome.
+3. **N3** — wait for §9's CUDA / driver blocker to lift.
+4. **N4** — R2 baseline reproduction on the pinned SHA.
+5. **N5** — climb R3 – R8.
+6. **N6** — prototype fix 4.A + 4.B in a fresh upstream-`main`
+   scratchpad worktree.
+7. **N7** — write and stage the upstream PR (regression tests +
+   correctness gates); do **not** open the PR until user review.
+
+### 10.6 §10 out of scope
+
+* Editing `/data/sglang-fork` — preserved read-only.
+* Editing the pinned scratchpad checkout at `58974ca16c…` —
+  preserved read-only. Fix work happens against a fresh clone.
+* Filing an upstream PR before R2 and R3 both pass.
+* Producing a BCG-vs-eager performance headline for Qwen3-VL under
+  the fix — deferred to a follow-up track.
+* Rewriting or repurposing the §7 Qwen3.5 close-out or the §4
+  Qwen3-VL PCG capture-stream evidence.
+
