@@ -68,7 +68,7 @@ Source: GitHub issues #1–#5 on `bowenwan6/sglang-vllm-profiler`
 | 1 | Tracking: next-round follow-ups | meta | open (tracking) |
 | **2** | **Default-overlap Qwen3-VL rebaseline** | **P0** | ✅ COMPLETE / PASS (results under `v2/caseAC_rebaseline/results/`) |
 | **4** | **Qwen3-VL image+text + CUDA IPC** | **P1** | Sub-track investigation ✅ concluded 2026-07-29 (see §4). Root cause fixed on fork; upstream SGLang PR #30868 (merged 2026-07-19) addresses the same root cause. Non-PCG IMG-A resume (`S0_ipc_repeat → V0_vllm → S0_noipc`) remains queued under `v2/image_text_benchmarks/fixed_generator_plan.md`. |
-| 3 | Qwen3.5 VL-model profiling | P1 | next candidate (parallel / after #2; transfer check) |
+| 3 | Qwen3.5 VL-model profiling | P1 | **active sub-track (correctness first, not perf transfer):** Qwen3.5-4B BCG DeepStack investigation on branch `debug/qwen35-4b-bcg-deepstack` — see §7. Perf transfer check remains queued behind correctness gate. |
 | 5 | Selective / default-on PCG PR plan | P2 | planned (needs #4) |
 
 ## 4. Sub-track — Qwen3-VL PCG capture-stream investigation
@@ -94,7 +94,7 @@ source the fork via `PYTHONPATH=/data/sglang-fork/python`.
 | Stock SGLang SHA | `da802ddcafe55e25b3e1db86b1e0444afc3e05bc` |
 | Final fork SHA | `986c89e69c25882ab6f3d396f8eb306f38f2c8d2` |
 | Model snapshot | `0c351dd01ed87e9c1b53cbc748cba10e6187ff3b` |
-| System python | `python 3.12.3` · torch 2.11.0+cu130 · flashinfer 0.6.12 · sgl_kernel 0.4.4 |
+| System python | `python 3.12.3` · torch 2.11.0+cu130 · flashinfer 0.6.12 · sgl_kernel 0.4.5 |
 | Profiling env | `/opt/miniconda3/envs/profiling` — torch 2.11.0+cu130, vLLM 0.21.0 |
 | Text dataset | `datasets/qwen3vl8b/caseA_short.jsonl` (SHA-256 `fab4917772…`) |
 | Runtime libcuda | `LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05` (host driver 595.71.05, fixes `cuda-compat-13-0` loader precedence) |
@@ -231,8 +231,15 @@ the current merge.
 
 ## 5. Immediate next steps
 
-- **Issue #3** — Qwen3.5 VL-model profiling: apply the v2 methodology and
-  test whether the Case A PCG finding transfers.
+- **Issue #3 — new sub-track (highest priority in #3).** A new
+  `Qwen3.5-4B BCG DeepStack` investigation opens on branch
+  `debug/qwen35-4b-bcg-deepstack` — see §7. This runs **before** the
+  perf-transfer check because a suspected correctness gap on
+  `Qwen3_5ForConditionalGeneration` under multimodal prefill BCG must be
+  proven or disproven first; a perf comparison against an uncertified
+  correctness base would be meaningless.
+- **Issue #3 (perf transfer, deferred).** Apply the v2 methodology and
+  test whether the Case A PCG finding transfers — gated on §7's verdict.
 - **Issue #5** — Selective / default-on PCG PR plan: needs #4's image
   evidence, which is now audited and available in R6.
 - **Upstream verification** — a separate CPU-only + fresh-run task to
@@ -278,3 +285,890 @@ profiler commits.
 - Raw per-rep dumps and server logs are generated but not committed unless
   explicitly approved (committed deliverables = summaries + aggregate
   `case*_results.json`).
+
+## 7. Sub-track — Qwen3.5-4B BCG DeepStack investigation (active)
+
+> **Investigation, not confirmed upstream bug.** The runtime hypothesis
+> stated below is a source-reading of current upstream SGLang, not a
+> reproduced runtime failure. Nothing in §7 asserts that outputs are wrong
+> on real hardware; that is what §7's validation plan is designed to prove
+> or disprove. No GPU work is authorised until the plan lands and a GPU is
+> explicitly approved.
+
+> **Reframe after Attempt 02 (2026-08-01):** the Qwen3.5 target was
+> shown to be unable to exercise DeepStack at all — every shipped
+> `Qwen/Qwen3.5-*` release carries
+> `vision_config.deepstack_visual_indexes = []`, so `input_deepstack_embeds`
+> is empty and the DeepStack `add_` branch is trivially skipped. A cross-arch
+> audit ([`experiments/qwen35_4b/latent_bug_analysis.md`](experiments/qwen35_4b/latent_bug_analysis.md))
+> shows the intersection of "on BCG allowlist" and "actually populates
+> DeepStack" is empty on current upstream. The source-level suspicion
+> remains valid but is a **latent regression** rather than a live-production
+> bug. Attempt 03 will retarget the repaired harness to
+> `Qwen/Qwen3-VL-8B-Instruct` under a profiler-owned test-only
+> monkey-patch that adds Qwen3-VL to the BCG allowlist at runtime, to
+> convert the latent hypothesis into live-fire evidence. No source edit
+> to the frozen SGLang checkout; no upstream fix or issue filed yet.
+
+Active branch: `debug/qwen35-4b-bcg-deepstack` (based on `main` = `a803285`).
+Tracking issue: [profiler-repo issue #9](https://github.com/bowenwan6/sglang-vllm-profiler/issues/9)
+(sub-track of #3; no upstream SGLang issue filed at investigation
+start — deferred until runtime evidence is in hand).
+Investigation anchor:
+[`experiments/qwen35_4b/README.md`](experiments/qwen35_4b/README.md)
+with `source_audit.md`, `provenance.md`, `hypothesis.md`,
+`validation_plan.md`, and reserved `results/` / `scripts/` subdirs.
+
+### 7.1 Why Qwen3.5-4B (target choice)
+
+`Qwen/Qwen3.5-4B` (HF, `sha=851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a`,
+`config.architectures=["Qwen3_5ForConditionalGeneration"]`,
+`model_type=qwen3_5`, ungated, `pipeline_tag=image-text-to-text`) is the
+lowest-cost reproduction target that (a) is a **natively multimodal**
+Qwen3.5 model, (b) is registered on current SGLang as multimodal +
+prefill-BCG-supported, and (c) inherits the Qwen3-VL DeepStack wrapper
+from which the hypothesis is drawn. It replaces the earlier Qwen3-VL-8B
+plan for BCG DeepStack validation because 4B is much cheaper to
+serve and does not change any of the source-level control paths under test.
+
+### 7.2 Upstream provenance (rebaselined 2026-07-31)
+
+Values verified against `sgl-project/sglang` on 2026-07-31 via GitHub API.
+
+| Item | Value |
+|---|---|
+| **Executed local SGLang checkout (HARD PIN)** | isolated `git clone` under `<scratchpad>/sglang_checkout/sglang/`, HEAD pinned to `58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8`. The runner sources it via `PYTHONPATH` and verifies `sglang.__file__` resolves inside it. |
+| Upstream SGLang `main` HEAD at rebaseline | `58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8` (2026-08-01 refresh, subject: `[perf] Assemble flat prompt top logprobs scheduler-side as numpy arrays (#32223)`). `/data/sglang-fork` main was also fast-forwarded to this SHA on the same date; the historical `fix/pcg-vlm-deepstack-warmup` branch stays at `986c89e69c25882ab6f3d396f8eb306f38f2c8d2`. Later remote-main movement is informational only, not a hard failure — see `provenance.md` §1. |
+| PR #30872 (`Enable multimodal prefill BCG for VL and audio models`) | **MERGED** 2026-07-28T22:47:40Z — merge commit `c9947b087bf9d3d16b5198234ba4c39b68bb79e9`. Adds Qwen3.5 to `multimodal_breakable_cuda_graph_supported_model_archs` (the **BCG** allowlist), registers the `input_embeds` static slot, and adds the `replay_layer_forward` per-request copy of `input_embeds`. **Contains no `input_deepstack_embeds` slot or copy on the BCG code path.** |
+| PR #30868 (`fix: fix vlm cuda graph shape stability`) | **MERGED** 2026-07-19T14:35:51Z. Introduces `run_dummy_multimodal_deepstack_forward` and a defensive eager fallback, **both scoped to `tc_piecewise_cuda_graph_backend`**. This is a Dynamo shape-stability warmup for **TC piecewise / PCG**, not a BCG capture / replay slot. |
+| Local mirror `/sgl-workspace/sglang` | `da802dd` — stale older HEAD; the installed sglang at that path is **not** the runner's source of truth. Runners override via `PYTHONPATH` to the frozen checkout and assert `sglang.__file__` resolves inside it. |
+| Historical local fork `/data/sglang-fork` | `986c89e69c25882ab6f3d396f8eb306f38f2c8d2` — untouched by §7; read-only reference only. The runner sanity-checks that this HEAD is unchanged before and after every attempt. |
+
+### 7.3 Established facts (source-level, on upstream `main` @ `58974ca1`)
+
+Verified by inspection of files under
+`python/sglang/srt/{models,model_executor,managers,configs}`. All line
+numbers refer to raw upstream files captured 2026-07-31.
+
+1. **BCG and PCG allowlists are DISTINCT; Qwen3.5 is on BCG only.**
+   In `python/sglang/srt/configs/model_config.py`:
+   - Lines `1836-1841` — `multimodal_piecewise_cuda_graph_supported_model_archs`
+     (the **PCG / `tc_piecewise` / torch.compile-based** allowlist)
+     contains **only** `Cohere2VisionForConditionalGeneration`,
+     `KimiK25ForConditionalGeneration`, `MiniMaxM3SparseForCausalLM`,
+     `MiniMaxM3SparseForConditionalGeneration` — **not** Qwen3.5.
+   - Lines `1845-1848` — `multimodal_breakable_cuda_graph_supported_model_archs`
+     (the **BCG** allowlist) contains `Qwen3_5ForConditionalGeneration`
+     and `Qwen3_5MoeForConditionalGeneration`. The in-source comment
+     is: "embed-carrying batches are rejected at replay
+     (can_run_graph) and run eager." (See §7.3(6) below for what
+     "embed-carrying" actually gates.)
+   - `is_multimodal_piecewise_cuda_graph_supported` (line `1908`)
+     and `is_multimodal_breakable_cuda_graph_supported` (line `1916`)
+     are two independent accessors. `ModelConfig` computes both.
+     **`--enforce-piecewise-cuda-graph` is not a valid BCG control
+     for Qwen3.5**; the validation plan does not use it.
+2. **Qwen3.5 inherits the Qwen3-VL multimodal wrapper.**
+   `python/sglang/srt/models/qwen3_5.py:1771`:
+   `class Qwen3_5ForConditionalGeneration(Qwen3VLForConditionalGeneration)`
+   with `language_model_cls=Qwen3_5ForCausalLM`. The MoE variant
+   (line `1928`) does the same. `Qwen3_5ForCausalLM.forward`
+   (line `1408-1478`) accepts
+   `input_deepstack_embeds: Optional[torch.Tensor] = None`, and the
+   loop at line `1448-1458` `add_`s
+   `input_deepstack_embeds[:, sep : sep + hidden_size]` to
+   `hidden_states` for `layer_idx < 3` when the tensor is non-`None`
+   and non-empty. The DeepStack contribution is *injected* at
+   layers 0–2 but propagates through later layers via the residual
+   stream — the observable effect is not restricted to layers 0–2.
+3. **`general_mm_embed_routine` synthesises DeepStack per request.**
+   `python/sglang/srt/managers/mm_utils.py:1108-1140` allocates
+   `input_deepstack_embeds` as a per-call `torch.zeros(...)`
+   (`(num_tokens, hidden_size * num_deepstack_embeddings)`), scatters
+   per-modality tiles into it, and stores it in `other_info`. Lines
+   `1247-1373` route the routine and unpack
+   `other_info["input_deepstack_embeds"]` into the LM's `kwargs`.
+   Lines `1361-1363` copy `input_embeds` into a stable slot when
+   one exists; **no analogous copy exists for
+   `input_deepstack_embeds`**. The Python tensor is fresh per call;
+   its `.data_ptr()` is not stable by contract but the CUDA caching
+   allocator may reuse the same address, so pointer equality alone
+   is not diagnostic.
+4. **BCG replay copies `input_embeds` into a stable slot; there is
+   no equivalent for `input_deepstack_embeds`.**
+   - `python/sglang/srt/model_executor/cuda_graph_buffer_registry.py:867-877`
+     registers an `input_embeds` slot when `is_multimodal and
+     register_input_embeds=True`; **no slot named
+     `input_deepstack_embeds` is ever registered**.
+   - `python/sglang/srt/model_executor/runner/prefill_cuda_graph_runner.py`,
+     `_execute_body_capture` closure `replay_layer_forward` (lines
+     `1498-1519`) copies **only** the live `input_embeds` argument
+     into the registry's `input_embeds` slot before calling
+     `self.backend.replay(shape_key, static_forward_batch, **kwargs)`.
+     `**kwargs` here is the **outer** tail-forward kwargs, not
+     `layer_kwargs`; `input_deepstack_embeds` (routed as a
+     `layer_kwargs` entry) is not forwarded into `.replay()` and
+     not copied anywhere. The BCG backend's `.replay(...)`
+     (`runner_backend/breakable_cuda_graph_backend.py:241-248`)
+     replays the captured graph and ignores `**kwargs`.
+5. **The one existing DeepStack accommodation is TC piecewise only,
+   not BCG.** `run_dummy_multimodal_deepstack_forward` at
+   `prefill_cuda_graph_runner.py:662-725` is a Dynamo shape-stability
+   warmup that allocates a local `torch.zeros(...)` and traces the
+   tensor-valued DeepStack branch. Its **only** caller is
+   `tc_piecewise_cuda_graph_backend._run_compile_pass`
+   (`runner_backend/tc_piecewise_cuda_graph_backend.py:214-216`),
+   after `torch.compile` is installed. **The BCG capture path never
+   invokes it.** BCG's `_run_forward` (`prefill_cuda_graph_runner.py:606-649`)
+   drives `layer_model.forward(input_ids, positions, forward_batch,
+   forward_batch.input_embeds)` — four positional args, no
+   `input_deepstack_embeds` kwarg. The DeepStack `add_` branch is
+   therefore **cold at BCG capture time**, and the captured graph
+   contains no DeepStack kernels at all. This is a distinct concern
+   from PR #30868's PCG Dynamo warmup and PR #30872's BCG replay
+   bridge; the two PRs together do not close it.
+6. **`can_run_graph`'s `input_embeds is not None` gate targets
+   API-`input_embeds`, not multimodal image requests.**
+   `prefill_cuda_graph_runner.py:1015-1016` returns `False` when
+   `forward_batch.input_embeds is not None`. In `managers/schedule_batch.py:2233-2401`,
+   `batch.input_embeds` is populated only when the request carries
+   an API-level `req.input_embeds`; normal multimodal image requests
+   leave it `None` and set `batch.multimodal_inputs` instead. So
+   the "embed-carrying rejection" comment (§7.3(1)) applies to
+   API-provided embeddings, not to image requests. Image requests
+   are not filtered here by construction.
+7. **Existing tests do not cover the DeepStack BCG replay path.**
+   Registered tests referencing BCG / piecewise + deepstack are
+   limited to the wrapper-resolution / helper units from PRs #30872
+   and #30868, plus the allowlist assertion; no test verifies that
+   the captured BCG graph's DeepStack contribution matches the eager
+   result on a real image request.
+
+### 7.4 Runtime hypothesis (unverified)
+
+Given §7.3, the working hypothesis is:
+
+> On current upstream SGLang `main` at
+> `58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8`, when
+> `Qwen/Qwen3.5-4B` serves an image request under the default
+> breakable prefill backend, the BCG-captured layer-body graph has
+> no DeepStack `add_` kernels (the branch was cold at capture) and
+> no stable slot for `input_deepstack_embeds`. Consequences may be
+> (a) silent output divergence versus the eager path with a
+> "DeepStack-zeroed" signature, (b) illegal-memory / assertion at
+> replay, (c) a runtime filter this audit did not find routes image
+> requests to eager (feature gap; correctness preserved but BCG not
+> exercised for images), or (d) some code path pins DeepStack that
+> the audit missed and correctness holds. The validation plan must
+> distinguish these with direct evidence, not by elimination.
+
+This is the hypothesis §7's validation plan proves or disproves.
+It is **not** a confirmed bug and must not be quoted as one until
+runtime evidence supports it.
+
+### 7.5 Machine verdict shape (predeclared)
+
+The validation plan must emit exactly one of the following. **An
+eager fallback is never "bug closed" or full PASS.**
+
+- **`PASS_BCG_CORRECT`** — Image request demonstrably replays BCG
+  and DeepStack-active results match the eager reference within the
+  eager-vs-eager noise envelope.
+- **`FEATURE_GAP_EAGER_FALLBACK`** — Correctness is preserved
+  because the image request runs eager, but multimodal BCG
+  support/performance is not demonstrated. Documented as a feature
+  gap.
+- **`FAIL_BCG_DEEPSTACK`** — Image request demonstrably replays BCG
+  and live DeepStack is missing, stale, or produces a matched
+  correctness divergence (zero-DeepStack signature), or the BCG
+  replay raises an assertion / illegal memory access at inference
+  time.
+- **`AMBIGUOUS`** — Divergence exists but cannot be cleanly
+  attributed.
+- **`INFRA_FAILURE`** — Environment / GPU / preflight failure;
+  neutral outcome, does not count for or against any hypothesis.
+- **`NOT_APPLICABLE_QWEN35`** (closure verdict, added 2026-08-03) —
+  The primary target does not exercise the code path under test on
+  any shipped release, and the harness will not fabricate the input
+  by editing the checkpoint. See
+  [`experiments/qwen35_4b/hypothesis.md`](experiments/qwen35_4b/hypothesis.md)
+  §5 and Amendment 5 for the full criteria and preservation rules.
+
+Predeclared **diagnostic ablation**: on top of `eager_normal` and
+`bcg_normal`, the runner also collects `eager_zero_deepstack`
+(eager run with a branch-local instrumentation hook that zeros
+`input_deepstack_embeds` immediately before the LM forward). If
+`bcg_normal` tracks `eager_zero_deepstack` rather than
+`eager_normal`, that is strong attribution evidence for
+`FAIL_BCG_DEEPSTACK`. This is a diagnostic ablation, not production
+behavior.
+
+### 7.6 Immediate next steps (§7 track)
+
+Executed in one continuous pass; each step commits+pushes on
+success.
+
+1. **Step 1 (docs)** — corrected the BCG-vs-PCG facts, the
+   caller/scope of `run_dummy_multimodal_deepstack_forward`, the
+   pointer wording, the verdict labels, the simplified
+   correctness/path protocol, the diagnostic ablation, and the
+   top-level README. Commit `docs(qwen35): correct BCG DeepStack
+   validation protocol`.
+2. **Step 2 (live runner)** — implemented the profiler-owned
+   instrumentation patch, the live runner, the live client, and
+   the real verdict inference. All CPU-only tests pass. Commit
+   `feat(qwen35): add live BCG DeepStack validation runner`.
+3. **Step 3 (authorised-GPU acquisition)** — read-only query the
+   authorised GPU (allowlist `{0, 1, 7}` per `validation_plan.md`
+   Amendments 1 and 2, 2026-08-01); qualifies only when zero compute
+   processes, memory ≤ 500 MiB, utilisation ≤ 5 %; the
+   10-continuous-minute idle requirement applies unless the operator
+   explicitly waives it AND the target GPU is currently qualifying;
+   never signal a foreign PID.
+4. **Step 4 (INFRA_CHECK) — PASS (2026-08-01, GPU 7).** Attempt
+   `experiments/qwen35_4b/results/infracheck_gpu7_20260801T012122Z/`
+   brought Qwen3.5-4B up on the authorised alternate GPU 7 under the
+   frozen SGLang checkout `58974ca16…`: every hard pin matched
+   (`Qwen3_5ForConditionalGeneration` @
+   `851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a`, imported sglang
+   `INSIDE_FROZEN`, `/data/sglang-fork` still `986c89e69…`,
+   `sglang-kernel==0.4.5` clearing the prior 0.4.4 blocker),
+   `Multimodal data loading enabled with 16 worker threads` +
+   `Using fa3 as multimodal attention backend`, prefill backend
+   `breakable` captured all 58 shape buckets, warmup exercised BCG
+   (`cuda graph: True`), the server reported `The server is fired up
+   and ready to roll!` at 129 s, teardown signalled only own PGID,
+   GPU 7 memory returned from 111,760 MiB to 4 MiB, and the 11
+   foreign compute processes on other GPUs were unchanged pre-vs-post.
+   One caveat carried into Step 5 — SGLang uses
+   `mp.set_start_method('spawn', force=True)` for scheduler /
+   model-worker subprocesses, so the branch instrumentation installed
+   in the launcher parent does **not** propagate to workers; the
+   authoritative per-batch BCG-vs-eager signal for Step 5 is SGLang's
+   own `cuda graph: True/False` server-log line, and the
+   `eager_zero_deepstack` diagnostic ablation behaves identically to
+   `eager_normal` under this constraint (weakens attribution for the
+   zero-DeepStack signature path only). Commit
+   `test(qwen35): verify Qwen3.5 BCG infrastructure`.
+5. **Step 5 (validation) — AMBIGUOUS (2026-08-01, GPU 7).** Attempt
+   `experiments/qwen35_4b/results/attempt_gpu7_20260801T013522Z/`
+   ran the three predeclared configs. Instrumentation propagation
+   into SGLang spawn workers was unblocked by
+   `experiments/qwen35_4b/scripts/bootstrap/sitecustomize.py`, so
+   `bcg_execute_body_enter`, `model_runner_forward_enter`, and
+   `general_mm_embed_routine_enter/exit` events fired inside the
+   scheduler / worker subprocesses as intended. `bcg_normal` served
+   both scored image prefills via BCG replay
+   (`bcg_execute_body_enter` with `contains_mm_inputs=true`,
+   `shape_key size=16`, `cuda graph: True`, no
+   `bcg_execute_body_error`), and greedy text was bit-identical to
+   `eager_normal` for every scored request. That rules out both
+   `FEATURE_GAP_EAGER_FALLBACK` (BCG was not bypassed) and
+   `FAIL_BCG_DEEPSTACK` (no divergence, no crash). However,
+   `PASS_BCG_CORRECT` requires positive evidence that
+   `input_deepstack_embeds.nonzero_frac > 0` at LM forward time, and
+   this is not available: the branch instrumentation's
+   `language_model.__call__` interceptor writes to the instance
+   `__dict__` but `nn.Module` resolves `__call__` on the class, so
+   `lm_forward_input_deepstack` never fires and `QWEN35_ZERO_DEEPSTACK=1`
+   is a no-op — the `eager_zero_deepstack` ablation degenerates to
+   `eager_normal`. A fixture caveat compounds this: the client's
+   prompt used `<image>` rather than Qwen VL's expected
+   `<|vision_start|><|image_pad|><|vision_end|>`, producing the
+   "More image data items provided than corresponding tokens found
+   in the prompt" warning on every image prefill. Under
+   `validation_plan.md` §6, both conditions ("ablation arm was
+   corrupted", fixture may not exercise DeepStack) trigger
+   `AMBIGUOUS`. No upstream correctness bug is demonstrated; the
+   source-level suspicion is neither confirmed nor refuted. No fix
+   was implemented and no upstream issue was opened, per §7.7. GPU 7
+   returned clean (4 MiB / 0 % / 0 apps), the 11 foreign compute
+   processes on other GPUs are unchanged pre-vs-post, and
+   `/data/sglang-fork` HEAD is still `986c89e69…`. Commit
+   `test(qwen35): record Qwen3.5 BCG DeepStack verdict`.
+
+6. **Step 6 (harness repair, CPU-only) — landed 2026-08-01.** Under
+   `validation_plan.md` Amendment 2, the two Attempt-01 flaws are
+   fixed on-branch without touching a GPU. The DeepStack observer
+   moves to `language_model.register_forward_pre_hook(hook,
+   with_kwargs=True)` scoped to one `general_mm_embed_routine` call
+   and removed in `finally`; it records shape/dtype/numel/finite/
+   nonzero_frac/abs_sum/sq_sum/SHA-256-16/data_ptr before
+   modification, and in zero mode records a second summary proving
+   the replacement is really zero. The client emits
+   `<|vision_start|><|image_pad|><|vision_end|>` verbatim, records
+   the rendered prompt / placeholder count / image count, and hard-
+   fails any mismatch. `verdict.py` requires the full 2×2
+   (`eager_normal`, `eager_zero_deepstack`, `bcg_normal`,
+   `bcg_zero_deepstack`), valid image/placeholder alignment,
+   nonzero DeepStack in normal arms, verified zero replacement in
+   ablation arms, BCG replay confirmed in BCG arms, and
+   ablation sensitivity (`eager_normal ≠ eager_zero_deepstack`
+   beyond the eager-repeat noise floor) before returning any
+   non-`AMBIGUOUS` verdict. The runner accepts
+   `--config bcg_zero_deepstack`. The GPU allowlist widens to
+   `{0, 1, 7}` — GPU 1 was extended by the operator on 2026-08-01
+   as a standing addition. Proved by
+   `scripts/test_instrumentation.py` on CPU (normal-mode hook
+   fires on a nonzero tensor without changing output; zero-mode
+   hook fires, verified-zero substitution changes output; no hook
+   accumulation across repeated calls). Commit
+   `fix(qwen35): repair DeepStack instrumentation and image input`.
+7. **Step 7 (harness GPU validation) — HARNESS_NOT_DIAGNOSTIC
+   (2026-08-01, GPU 1).** Attempt
+   `experiments/qwen35_4b/results/harness_gpu1_20260801T062833Z/`
+   ran `eager_normal` + `eager_zero_deepstack` on GPU 1 under the
+   repaired harness. The `nn.Module.register_forward_pre_hook`
+   interceptor fired 111 times per arm on real
+   `Qwen3_5ForCausalLM` prefills; the corrected
+   `<|vision_start|><|image_pad|><|vision_end|>` placeholder
+   produced zero "More image data items…" warnings (down from 2
+   per arm in Attempt 01); image data was really consumed
+   (greedy output describes the fixture's colours). However,
+   `Qwen/Qwen3.5-4B`'s `vision_config.deepstack_visual_indexes = []`
+   (verified against every publicly released `Qwen/Qwen3.5-*`
+   size: 0.8B / 2B / 4B / 9B / 27B / 35B-A3B), so
+   `num_deepstack_embeddings = 0`, `input_deepstack_embeds` is
+   allocated with `shape=(N, 0)` / `numel = 0`, and
+   `Qwen3_5ForCausalLM.forward`'s DeepStack `add_` branch is
+   trivially skipped by its `numel() > 0` guard. Runtime
+   instrumentation confirms `nonzero_frac = 0.0` on every image
+   request; the zero-substitution guard correctly skips the
+   empty tensor; `eager_normal` == `eager_zero_deepstack` bit-for-
+   bit. Per the brief's Step 2 fail-path rule and
+   `validation_plan.md` Amendment 3, Step 8 (scored 2×2 rerun) is
+   **skipped by design**. The source-level BCG DeepStack suspicion
+   (F5, F6, F7, F8) remains **not testable** against any
+   publicly-released `Qwen/Qwen3.5-*` checkpoint at the pinned
+   SGLang SHA. GPU 1 returned clean (0 MiB / 0 % / 0 compute
+   apps pre and post); `/data/sglang-fork` HEAD unchanged. Commit
+   `test(qwen35): validate DeepStack measurement harness`.
+8. **Step 8 (scored 2×2 rerun) — skipped by design.** Would run
+   `eager_normal` + `eager_zero_deepstack` + `bcg_normal` +
+   `bcg_zero_deepstack` if Step 7 had passed. Skipped because the
+   Step 7 evidence establishes the ablation is trivially non-
+   diagnostic on this model target.
+9. **Step 9 (Attempt 03 retarget — Qwen3-VL under monkey-patched
+   BCG) — `FAIL_BCG_DEEPSTACK` (2026-08-01, GPU 1).** Attempt
+   `experiments/qwen35_4b/results/attempt_gpu1_20260801T115524Z/`
+   ran the full 4-arm 2×2 (`eager_normal`, `eager_zero_deepstack`,
+   `bcg_normal`, `bcg_zero_deepstack`) against
+   `Qwen/Qwen3-VL-8B-Instruct @ 0c351dd0` under the profiler-owned
+   test-only monkey-patch (`scripts/bcg_allowlist_patch.py`, opt-in
+   via `QWEN35_PATCH_BCG_ALLOWLIST=1` or `--patch-bcg-allowlist`).
+   Pre-state allowlist `["Qwen3_5ForConditionalGeneration",
+   "Qwen3_5MoeForConditionalGeneration"]`; post-state adds
+   `Qwen3VLForConditionalGeneration` and
+   `Qwen3VLMoeForConditionalGeneration`. Frozen SGLang source at
+   `58974ca16` unchanged (`git diff --stat` empty). All arms
+   served the 893-token scored image prefill; both BCG arms served
+   it with `cuda graph: True` and zero `bcg_execute_body_error`.
+   DeepStack tensor observed at the LM entry (`module_class =
+   Qwen3LLMModel`, `module_class_recognised = true`) with
+   `shape=[896, 12288]` (= `[N, hidden_size * 3]` for text
+   hidden=4096) and `nonzero_frac ≈ 0.98` in the two normal arms;
+   the zero-substitution guard verified `nonzero_frac → 0.0` /
+   `abs_sum → 0.0` in the two zero arms. **Live-fire verdict:
+   `bcg_normal` is bit-identical to `bcg_zero_deepstack` (20/20
+   tokens equal, mean logprob diff 0.0) and both track
+   `eager_zero_deepstack`, while `eager_zero_deepstack` diverges
+   from `eager_normal` at the very first non-boilerplate token
+   (7/15 common prefix, l1_max_abs_diff = 1.14)**. This is the
+   predicted `FAIL_BCG_DEEPSTACK` signature: SGLang's
+   `replay_layer_forward` bridge silently drops the DeepStack
+   contribution under BCG replay. The source-level suspicion in
+   `experiments/qwen35_4b/latent_bug_analysis.md` § 2 is confirmed
+   live-fire, with the caveat that the reproduction depends on the
+   runtime monkey-patch — no shipped upstream configuration
+   currently reaches this code path. GPU 1 returned to qualifying
+   after cleanup; `/data/sglang-fork` HEAD unchanged. Commits
+   `feat(qwen35): retarget harness to Qwen3-VL under monkey-patched BCG`
+   (CPU scaffolding + validation_plan.md Amendment 4) and
+   `test(qwen35): rerun 2x2 with Qwen3-VL under patched BCG`
+   (GPU 2×2). Follow-up filing decision — defensive upstream note
+   about `replay_layer_forward` copying `input_deepstack_embeds` in
+   parallel with `input_embeds` — is out of scope for this pass
+   per the brief.
+
+Follow-up (queued, not on this branch): to test the source-level
+BCG DeepStack suspicion at runtime, rebaseline the investigation
+onto a checkpoint whose config ships a non-empty
+`deepstack_visual_indexes` list (e.g. a Qwen3-VL model — that has
+its own PCG investigation on
+`debug/v2-imgA-pcg-capture-stream-fix`).
+
+### 7.7 §7 out of scope
+
+- Filing an upstream SGLang issue or PR — deferred until runtime
+  reproduction (or definitive disproof) is in hand.
+- Implementing a fix — the whole plan is diagnostic; a fix is a
+  separate follow-up gated on the verdict.
+- Rewriting or repurposing the historical Qwen3-VL PCG evidence
+  under §4 or the `debug/v2-imgA-pcg-capture-stream-fix` branch.
+  §7 links historically where useful but treats §4 as read-only.
+- Editing anything under `/data/sglang-fork`. That fork is
+  preserved read-only as historical evidence at `986c89e69`.
+- Using any GPU outside the authorised allowlist `{0, 1, 7}` (see
+  `experiments/qwen35_4b/validation_plan.md` Amendment 1 and
+  Amendment 2).
+
+### 7.8 Sub-track closure (2026-08-03) — verdict `NOT_APPLICABLE_QWEN35`
+
+The Qwen3.5-4B DeepStack sub-track closes with verdict
+**`NOT_APPLICABLE_QWEN35`** (see
+[`experiments/qwen35_4b/hypothesis.md`](experiments/qwen35_4b/hypothesis.md)
+§5 and Amendment 5). The Qwen3.5 target does not exercise the code
+path under test on any shipped release, and the harness will not
+fabricate the input by editing the checkpoint. Attempts 01, 02, 03
+are preserved verbatim; Attempt 03's `FAIL_BCG_DEEPSTACK` on
+Qwen3-VL under a profiler-owned test-only monkey-patch stands as an
+exhibit of the latent regression on a different model, **not** as the
+closing verdict for Qwen3.5. Investigation continues on a distinct
+Qwen3.5 code path — see §8.
+
+## 8. Sub-track — Qwen3.5-4B GDN prefill-BCG investigation (pivot, active)
+
+Active branch: `debug/qwen35-4b-gdn-prefill-bcg` (cut from
+`debug/qwen35-4b-bcg-deepstack` at close-out commit).
+Investigation anchor: `experiments/qwen35_4b/gdn/README.md`.
+
+**Target and constraints (from operator brief 2026-08-03):**
+
+- Model: `Qwen/Qwen3.5-4B`, BF16, single GPU, TP=1.
+- No MTP, no quantization, no MoE, no custom model patches.
+- 4-arm matrix: `{eager prefill + eager decode}`,
+  `{prefill BCG only}`, `{full decode CUDA Graph only}`,
+  `{both enabled}`.
+- Sweep: prompt length ∈ `{128, 512, 2048, 8192}` ×
+  batch size ∈ `{1, 4, 16, 32}`.
+- Tool: Nsight Systems (`nsys profile`); measure kernel counts,
+  CPU launch gaps, graph breaks, TTFT, prefill throughput per arm.
+- GDN focus areas: input projections, fused split/reshape, linear-
+  attention call, gated norm, output projection. **Do not assume**
+  recurrent-state handling is faulty; first identify a repeated
+  graph break or measurable launch-overhead bottleneck.
+- **Correctness gates (blocking before any perf claim):**
+  eager-vs-BCG token/logprob equivalence; request-order isolation;
+  chunked-prefill equivalence; graph-bucket equivalence.
+- **Rule:** do not modify upstream SGLang source until the baseline
+  profile identifies one specific BCG limitation.
+- GPU allowlist widened to `{0..7}` per
+  [`gdn/validation_plan.md`](experiments/qwen35_4b/gdn/validation_plan.md)
+  Amendment 1 (2026-08-03, operator authorisation); idle-verification
+  rules from `experiments/qwen35_4b/validation_plan.md` Amendments 1
+  and 2 continue to apply on every attempt.
+- Preservation invariants unchanged: read-only `/data/sglang-fork`
+  at `986c89e69`; frozen SGLang checkout unchanged; §4 evidence
+  read-only.
+
+### 8.1 Phase log
+
+- **2026-08-03** — GDN charter landed (`1b6c1b1`); CPU-only foundation
+  scaffolding + fixture + preflight + tests (`de0569d`); 4-arm runner
+  + sweep client + baseline instrumentation (`ff66db6`); correctness
+  verifier + verdict runner + Nsight wrapper (`d9e185f`); allowlist
+  widened to `{0..7}` (`47e6a37`); three live-fire fixes surfaced by
+  smoke — preflight `text_config` (`66d91cd`), canonical prefill/
+  decode flag names (`271a666`), setsid PID capture (`5736f96`);
+  smoke test on GPU 2 recorded `SCAFFOLDING_PASS` (`2490057`).
+- **2026-08-03** — Phase 1 consolidated audit landed
+  ([`gdn/audit.md`](experiments/qwen35_4b/gdn/audit.md)). Three
+  parallel agent reports (repo/harness, source/BCG, validation/
+  methodology) merged into one document with three `SIGNAL_GOOD`
+  records. 13 blocking harness gaps + no major blocker. Leading perf
+  hypothesis for the smallest-cell test: GDN alt-stream branch is
+  active under BCG for every prefill bucket with `padded_num_tokens <
+  1024` (`_gdn_use_alt_stream = True` unconditionally on CUDA at
+  `models/qwen3_5.py:128`; `get_is_capture_mode()` True during both
+  BCG capture and replay; no BCG-specific short-circuit exists —
+  only TC piecewise zeroes the threshold). One correctness risk
+  added to Gate-1 attention list (R13.4 alt-stream capture join
+  integrity, `runner_backend_utils/breakable_cuda_graph/breakable_cuda_graph.py:112-136`).
+- **2026-08-03** — Stage 1 (`T8` arm self-repeat, `T9` first-token
+  cross-arm, `T10` diagnostic signal) — all 4 arms internally
+  deterministic; A0/A1/A2/A3 first-token 8/8 agreement across arms
+  on the smallest cell (`p128 b1`). Correctness gate PASSED. Commits
+  `d29adc5`, `7ab57bf`, `ba1cb5c`, `5efe0d3`, `84e5fdb`.
+- **2026-08-03** — Stage 2 (A0/A1 reproducibility on steady-state
+  kernel counts, windowed extractor). H_A supported: `+13.6 % ± 0.4 %`
+  A1-vs-A0 kernel-count inflation, reproducible across reps. Commit
+  `1aefa29`.
+- **2026-08-03** — Stage 3 (threshold ladder to test the `<1024`
+  alt-stream hypothesis, 4 prompt lengths × 2 arms × 2 reps = 16
+  captures). **H12.1 REJECTED** — inflation is essentially constant
+  (13.4–13.7 %) across all prompt lengths, independent of whether
+  the padded bucket sits above or below the 1024 alt-stream
+  threshold. `cudaGraphLaunch/request` is constant at 36.3 across
+  every cell (evidence file
+  [`gdn_stage3_gpu6_20260803T234412Z/stage3_summary.md`](experiments/qwen35_4b/gdn/results/gdn_stage3_gpu6_20260803T234412Z/stage3_summary.md)).
+  Commits `75c55fc`, `1ffa8b0`.
+- **2026-08-03** — Stage 4 (mechanism attribution from existing Nsight
+  kernel names, no NVTX needed). Attribution:
+  [`gdn/stage4_mechanism.md`](experiments/qwen35_4b/gdn/stage4_mechanism.md).
+  Under BCG, SGLang switches Qwen3.5-4B's GDN prefill from the eager
+  "recurrent packed" kernel family to the FLA "chunk" kernel family.
+  Nine chunk-family kernels each fire ~4,176 additional times per
+  Stage-2 trace (`chunk_gated_delta_rule_fwd_kernel_h_blockdim64`,
+  `chunk_gated_delta_rule_fwd_kkt_solve_kernel`, `chunk_fwd_kernel_o`,
+  `chunk_local_cumsum_scalar_kernel`, `recompute_w_u_fwd_kernel`,
+  `fused_qkv_split_gdn_prefill_kernel`, `fused_gdn_gating_kernel`,
+  `_causal_conv1d_fwd_kernel`, and `l2norm_fwd_kernel` at 2×).
+  Wall-clock impact: `+22 – 61 ms/req (0.6–1.6 %)` — real but modest
+  because decode dominates e2e. **The FLA chunk kernel family is the
+  structurally-required path for BCG on hybrid GDN**; removing it
+  would disable BCG. Commit `408e99f`.
+- **2026-08-03** — Final report + verdict `PASS_BCG_GDN_NOTABLE_GAP`:
+  [`gdn/final_report.md`](experiments/qwen35_4b/gdn/final_report.md).
+  No source patch is justified at the frozen SHA. The kernel-count
+  inflation is the intrinsic cost of graph-compatible prefill on this
+  architecture. Investigation pivots to an *incremental optimization*
+  question: which of the chunk-family launches can be fused to
+  reduce the number of launches without breaking BCG or correctness?
+  This becomes §9. Commit `3531fd1`.
+
+## 8.2 §8 out of scope
+
+- Modifying the FLA chunk-kernel family at the frozen SGLang SHA. The
+  Stage-4 verdict is `NOTABLE_GAP`, not `BUG`; the correct next step
+  is incremental optimization (§9), not intrusive rewiring.
+- Switching the GDN prefill back to the recurrent-packed kernel family
+  under BCG. That would disable graph capture and defeat the very
+  behaviour BCG exists to provide. Discussed and rejected in
+  [`gdn/optimization_design.md`](experiments/qwen35_4b/gdn/optimization_design.md)
+  Deliverable 3.
+- Filing an upstream issue based on Stage 1–4 alone. The observed
+  behaviour is a known structural trade-off, not an upstream defect.
+
+## 9. Sub-track — Qwen3.5-4B GDN L2Norm-fusion optimisation (deferred)
+
+> **Status: deferred, not failed.** Design review clean; production
+> code path confirmed; hot-path re-confirmed on live traces; prototype
+> written and Option-b signature adapted to the running fork.
+> Bit-exact parity test not yet run because the host nvidia driver
+> was upgraded on 2026-08-04 12:53 UTC to `595.71.05`, breaking the
+> torch 2.11.0+cu130 build's `cuInit(0)` (returns
+> `CUDA_ERROR_SYSTEM_DRIVER_MISMATCH`). Continuation gate is external
+> to this project — driver rollback, torch upgrade, or alternate
+> host. All work is reversible; nothing has been merged into
+> `/data/sglang-fork` or the frozen checkout.
+
+Active branch: `debug/qwen35-4b-gdn-prefill-bcg`. Anchor documents:
+[`gdn/optimization_design.md`](experiments/qwen35_4b/gdn/optimization_design.md)
+(design + feasibility), [`gdn/optimization_review.md`](experiments/qwen35_4b/gdn/optimization_review.md)
+(Stage-1 independent 3-reviewer audit), and
+[`gdn/optimization_review_addendum.md`](experiments/qwen35_4b/gdn/optimization_review_addendum.md)
+(Stage-2 progress + blocker).
+
+### 9.1 Why the direction was investigated
+
+Stage 4 (§8.1) attributed the `+13.6 % ± 0.4 %` A1-vs-A0 kernel-count
+inflation to 9 chunk-family kernels. The `PASS_BCG_GDN_NOTABLE_GAP`
+verdict closed the *bug* question and opened the *optimization*
+question: since the chunk family is structurally required, the only
+value-generating direction is to *fuse* launches inside that family
+so BCG pays fewer per-launch dispatches per prefill without
+disturbing the graph shape. The candidate had to be (a) numerically
+safe, (b) upstream-acceptable as a single small PR, (c) implementable
+in ≤ 1 week, and (d) demonstrably reducing kernel-launch count on
+the live traces. Six fusion candidates (F1–F6) were surveyed; F1
+(fuse the two consecutive `l2norm_fwd_kernel` launches for Q and K
+inside `chunk_gated_delta_rule_fwd`) was selected as the standalone
+PR pick.
+
+### 9.2 Confirmed execution path and production call sites
+
+Verified by direct reading of `/data/sglang-fork` at HEAD
+`986c89e69c…`. The paired-l2norm pattern (two independent
+`l2norm_fwd` calls, one on Q one on K, back-to-back, guarded by
+`use_qk_l2norm_in_kernel=True` — always True on the SGLang GDN
+dispatcher path) appears at **5 production call sites**:
+
+1. `python/sglang/srt/layers/attention/fla/chunk.py:108-110` — GDN
+   chunk-prefill under the Triton dispatcher.
+2. `python/sglang/srt/layers/attention/fla/kda.py:1155-1156` — KDA
+   (Kimi delta attention) chunk-prefill.
+3. `python/sglang/srt/layers/attention/linear/kernels/gdn_flashinfer.py:295-296`
+   — GDN flashinfer backend, unconditional pre-norm.
+4. `python/sglang/srt/layers/attention/linear/kernels/gdn_cutedsl.py:133-134`
+   — GDN CuteDSL backend, via `self._l2norm_fn`.
+5. `python/sglang/srt/layers/attention/linear/kernels/kda_cutedsl.py:121-122`
+   — KDA CuteDSL backend, via `self._l2norm_fn`.
+
+Plus 4 benchmark sites (`bench_gdn_prefill.py:212/213, 396/397`;
+`bench_gdn_prefill_cutedsl.py:146/147, 272/273`). No single-tensor
+`l2norm_fwd` caller exists in the SGLang tree — every existing call
+is one of a paired q+k invocation, so a paired helper amortises
+across all five backends.
+
+Q and K have identical shape/dtype/stride on the Qwen3-Next / Qwen3.5
+GDN path: `num_q_heads == num_k_heads` and `head_q_dim == head_k_dim
+== 128` (verified from
+`python/sglang/srt/models/qwen3_next.py:238-242` and
+`python/sglang/srt/configs/qwen3_next.py:205-208`, gated by
+`gdn_backend.py:87-88`). Both tensors are fresh contiguous
+allocations produced by `fused_qkv_split_gdn_prefill_kernel`
+(`triton_gdn_fused_proj.py:373-387`). The D=128 route triggers the
+D≤512 branch of the l2norm launcher.
+
+### 9.3 Hot-path and Nsight findings
+
+Existing Stage-3 A1_p128_rep1 nsys capture (evidence at
+[`gdn_stage3_gpu6_20260803T234412Z/A1_p128_rep1/raw/`](experiments/qwen35_4b/gdn/results/gdn_stage3_gpu6_20260803T234412Z/A1_p128_rep1/raw/)),
+re-extracted 2026-08-04 via
+`nsys stats --report cuda_gpu_kern_sum`:
+
+| arm | kernel | launches | total time | avg per launch |
+|---|---|---|---|---|
+| A0_p128_rep1 | `l2norm_fwd_kernel` | 576 | 635 μs | 1.10 μs |
+| A1_p128_rep1 | `l2norm_fwd_kernel` | 8,928 | 35.4 ms | 3.97 μs |
+| Δ | — | +8,352 | +34.8 ms/trace | — |
+
+The Δ 8,352 equals exactly 2 × 4,176 (the per-trace Δ of every
+other chunk-family kernel), consistent with l2norm firing twice per
+prefill layer as expected (once for Q, once for K). Fusing halves
+the launch count on the chunk-family l2norm bucket to 4,176; savings
+estimate 4,176 × 3.97 μs = **16.6 ms per trace = 1.66 ms per prefill**
+(10 prefills / trace).
+
+### 9.4 Proposed fused-kernel design (Option-b signature)
+
+Introduce a new `l2norm_fwd_pair(x_q, x_k, eps, output_dtype)` helper
+in `python/sglang/srt/layers/attention/fla/l2norm.py` that dispatches
+one Triton launch fusing both q and k reductions:
+
+* Grid shape `(cdiv(max(T_q, T_k), BT), 2)`.
+* `pid1 ∈ {0, 1}` — compile-time (`tl.constexpr`) branch picks the
+  (x_q, y_q, T_q) or (x_k, y_k, T_k) triple. Only one path is emitted
+  per program — no runtime `if` on pid1, no register-pressure hit at
+  `num_warps=8`.
+* Kernel body byte-identical to `l2norm_fwd_kernel`: `tl.make_block_ptr`
+  over `(T, D)` with block `(BT=16, BD)`, fp32 upcast, per-row
+  reduction, `1 / sqrt(var + eps)`, stored via `tl.make_block_ptr`.
+* Same `num_warps=8`, `num_stages=3`, same `BT=16`, same
+  `MAX_FUSED_SIZE = 65536 / element_size`.
+* D > 512 fallback dispatches two independent `l2norm_fwd_kernel1`
+  launches (matches the existing per-row branch exactly).
+* Launcher asserts `D_q == D_k` and `stride(-1) == 1` for both
+  outputs.
+
+Rationale for Option-b over Option-a (`(cdiv(T*H, BT), 2)` with
+shared T): Option-b tolerates future `T_q ≠ T_k` without a rewrite
+at negligible cost (4 extra kernel args). Prototype implemented in
+scratchpad:
+`/tmp/claude-0/-data-sglang-vllm-profiler/1617f0f1-bb43-4914-afad-2284642acd9f/scratchpad/f1_prototype/l2norm_fwd_pair.py`.
+
+Call-site change is 2 lines at each of the 5 production sites:
+
+```python
+if use_qk_l2norm_in_kernel:
+    q, k = l2norm_fwd_pair(q, k)
+```
+
+### 9.5 Feasibility and reviewer conclusions
+
+Three independent parallel reviewers were run on the design (Stage 1
+of the L2Norm sub-track, commit `bfe1a84`) covering kernel feasibility,
+performance skepticism, and integration/correctness:
+
+* **Kernel feasibility → VIABLE.** Q and K identical shape/stride;
+  bit-exact numerics; fusion implementable in `≈ 40` LOC; no autograd
+  backward exists in SGLang's `L2NormFunction`; risk items limited to
+  register pressure at `num_warps=8` (verify with a smoke bench
+  before landing).
+* **Performance skepticism → NEGLIGIBLE at wall-clock,
+  MEASURABLE at kernel-count.** Expected saving `≈ 0.5 – 2 ms/req`
+  prefill (below Stage-3's `0.36 %` within-cell noise floor);
+  `≈ 0.05 %` of e2e (decode dominates 3200 ms of 3800 ms). Nsys
+  kernel-count halving is the primary detectable evidence.
+* **Integration/correctness → CLEAN.** Five production call sites
+  benefit from a single helper; no single-tensor caller to preserve;
+  no backward parity needed; `use_qk_l2norm_in_kernel` invariantly
+  `True` on the production path; upstream route is FLA-first
+  (comment `Adapt from https://github.com/fla-org/flash-linear-attention/...`
+  in `l2norm.py:1`) with a local wrapper as a fallback.
+
+Verdict: **`PLAN_ACCEPT`** (commit `bfe1a84`) with three amendments to
+the original design: extend fusion to all 5 call sites (not just
+`chunk.py:108-110`); prefer Option-b signature; frame any PR as
+"launch-count reduction under CUDA-graph replay", not as wall-clock
+speedup — honesty preserves upstream trust.
+
+### 9.6 Expected kernel-launch reduction
+
+Per prefill per GDN layer: **−1** on the chunk-family l2norm bucket
+(2 launches → 1). On Qwen3.5-4B: 24 GDN layers × ≈ 17.4 BCG replays
+per layer per prefill = ≈ 418 launches removed per prefill. In the
+Stage-3 rig (10 prefills / trace) that is **≈ 4,176 launches / trace
+eliminated**, directly measurable via
+`nsys stats --report cuda_gpu_kern_sum` and cross-checked against the
+Stage-4 per-kernel Δ table.
+
+### 9.7 Realistic kernel-level and end-to-end benefit
+
+* **Per-launch amortised.** ≈ 3.97 μs × 4,176 = **16.6 ms / trace**
+  = **1.66 ms / prefill** (Stage-3 arithmetic; top end of the
+  Stage-1 estimated `0.5 – 2 ms` band).
+* **Prefill wall-clock.** ≈ 5 % reduction of the +30 ms A1-vs-A0
+  gap; ≈ 3 – 7 % of the ~30 ms prefill delta if measured
+  prefill-only.
+* **End-to-end wall-clock.** ≈ 0.03 – 0.07 % — **below the Stage-3
+  within-cell rep variability of 0.36 %**. Not detectable on total
+  request latency, expected null result.
+* **Better alternatives ranked below F1.** F2 (fold gating into
+  cumsum) and F3 (fold l2norm into `fused_qkv_split_gdn_prefill`)
+  save more launches but require touching SGLang-owned kernels
+  with heavier rewrites; both are candidates for follow-on PRs once
+  the reusable `l2norm_fwd_pair` helper is battle-tested.
+* **Autotune enablement of `wy_fast.py`** (a parallel-track pick
+  entirely orthogonal to F1) has unknown magnitude but a real per-
+  launch improvement ceiling; should be pursued in parallel, not as
+  a substitute for F1.
+
+### 9.8 Correctness, integration, backward, and production risks
+
+* **Correctness (numerical).** Very low. Bit-exact by construction —
+  same tile order, same eps, same fp32 upcast, per-row reductions
+  are independent between q and k. Verification is one unit test
+  (`torch.equal` on `l2norm_fwd_pair` vs
+  `(l2norm_fwd(q), l2norm_fwd(k))`) across the production shapes.
+* **Correctness (shape/stride).** Low. Q and K are guaranteed same
+  shape by the Qwen3-Next model config. The Option-b signature makes
+  a future GQA-style split silent rather than a shape bug.
+* **Backward parity.** Not needed. SGLang's `L2NormFunction`
+  (`l2norm.py:125-127`) has only `forward`; no `l2norm_bwd` exists
+  in the SGLang tree. Upstream FLA retains a backward; an upstream
+  PR to FLA would need to add a paired backward variant for training
+  users, but SGLang inference is unaffected.
+* **Alternate GDN paths.** Unaffected. `decode`, `packed_decode`,
+  `target_verify` (in `gdn_triton.py:46-241`) all fuse l2norm
+  *inside* their respective kernels, so no separate `l2norm_fwd`
+  launches exist to fuse there.
+* **Register pressure at `num_warps=8`.** Low. Compile-time branch
+  on `pid1` (constexpr) means only one path is emitted per program;
+  smoke bench (planned M4) will catch any regression before landing.
+* **Upstream maintenance risk.** Low. The file explicitly annotates
+  `Adapt from https://github.com/fla-org/flash-linear-attention/…`,
+  so the clean route is FLA first, SGLang inherits at next sync;
+  fallback is a local SGLang wrapper.
+* **Overselling risk in the PR description.** Real. The wall-clock
+  story is a null result at this measurement resolution. The
+  correct PR framing is "N launches removed under CUDA-graph replay,
+  matching the existing 3→2 kkt+solve fusion at `chunk_fwd.py:349-357`",
+  not "prefill speedup".
+
+### 9.9 Work already completed (milestones M1 – M2)
+
+* **M1 hot-path confirmation → EXEC_ACCEPT** (2026-08-04). Fresh
+  `nsys stats` on existing Stage-3 nsys-rep files confirmed
+  `l2norm_fwd_kernel` counts and per-launch avg latency (see §9.3).
+* **M2 prototype fused kernel → EXEC_UNCLEAR → EXEC_ACCEPT** (same
+  day). While adapting the prototype, discovered that the design
+  report and Stage-1 review had cited a *different* SGLang checkout
+  (scratchpad reference at HEAD `58974ca16c…`, paths under
+  `python/sglang/kernels/ops/attention/fla/`) than the SGLang the
+  profiler actually loads (`/data/sglang-fork` at HEAD `986c89e69c…`,
+  paths under `python/sglang/srt/layers/attention/fla/`). Verified
+  the F1 fusion target at `srt/layers/attention/fla/chunk.py:108-110`
+  is byte-identical to the scratchpad citation; the live-fork
+  kernel signature adds a `NB: tl.constexpr` argument and drops
+  `do_not_specialize=["T"]`. Prototype adapted accordingly and
+  preserved under
+  `<scratchpad>/f1_prototype/l2norm_fwd_pair.py`. Both the drift
+  and the adaptation are documented in
+  [`optimization_review_addendum.md`](experiments/qwen35_4b/gdn/optimization_review_addendum.md).
+
+### 9.10 Current blocker — CUDA / driver mismatch
+
+The host nvidia driver was upgraded to `595.71.05` on
+2026-08-04 12:53 UTC (evidence:
+`/proc/driver/nvidia/version` modification time; verified via
+`stat`). Torch 2.11.0+cu130 requires driver in one of the ranges
+`[535,536), [550,551), [565,566), [570,571), [575,576)`;
+`595` is outside all of them. `cuInit(0)` returns error
+`803 = CUDA_ERROR_SYSTEM_DRIVER_MISMATCH`, verified independently by
+`ctypes` on `libcuda.so.1`. `nvidia-smi` still works because it uses
+a separate compatibility layer, but no Python process on this host
+can initialise CUDA under the current torch build. The pre-upgrade
+driver at the time of the Stage-3 Aug-3 captures was compatible;
+those captures remain valid evidence for §9.3.
+
+M3 (bit-exact parity test), M4 (kernel-latency microbench), M5–M8
+(integration + validation) all require a working CUDA runtime and
+are therefore paused.
+
+### 9.11 Relevant commits and artefacts
+
+Commits on `debug/qwen35-4b-gdn-prefill-bcg`:
+
+| Commit | Message | Kind |
+|---|---|---|
+| `cc21e0e` | `docs(qwen35): optimization design and feasibility plan for GDN BCG chunk pipeline` | Design report (all 5 deliverables) |
+| `bfe1a84` | `docs(qwen35): Stage-1 review for F1 (l2norm q+k fusion) — PLAN_ACCEPT` | 3-reviewer independent audit |
+| `f3224d5` | `docs(qwen35): Stage-2 progress addendum — M1/M2 done, M3 blocked on driver upgrade` | Stage-2 execution status + blocker record |
+
+Artefacts on-branch:
+
+* [`gdn/optimization_design.md`](experiments/qwen35_4b/gdn/optimization_design.md)
+  — 442-line design + feasibility (F1–F6, ranked opportunities,
+  recommendation).
+* [`gdn/optimization_review.md`](experiments/qwen35_4b/gdn/optimization_review.md)
+  — 260-line Stage-1 review, verdict `PLAN_ACCEPT` with 3 scope
+  amendments (5 call sites, Option-b signature, launch-count framing).
+* [`gdn/optimization_review_addendum.md`](experiments/qwen35_4b/gdn/optimization_review_addendum.md)
+  — 131-line Stage-2 addendum: M1/M2 completion, live-fork
+  adaptation, driver-mismatch blocker.
+
+Scratchpad (uncommitted, disposable):
+
+* `<scratchpad>/f1_prototype/l2norm_fwd_pair.py` — fused Triton
+  kernel + launcher, Option-b signature, live-fork-compatible.
+* `<scratchpad>/f1_prototype/test_parity.py` — bit-exact parity
+  test harness, ready to run when CUDA returns.
+
+### 9.12 Why the work is being deferred
+
+The blocker is external to this project (system-level driver
+upgrade), not internal to the F1 plan. The review and prototype
+work are complete, correct, and ready. Attempting a substitute
+validation path (e.g. running on a different host without a matched
+frozen SGLang install) would introduce provenance drift and
+provide no faster route to the same conclusion. Continuing in the
+current environment is not possible.
+
+The user has explicitly authorised a switch to the Qwen3-VL
+DeepStack track (§10 below) in parallel. This sub-track is
+**deferred**, not abandoned: no code has been discarded, no artefact
+overwritten, and every conclusion so far is a `PLAN_ACCEPT`.
+
+### 9.13 Exact conditions and next steps for resuming
+
+Resume when **any** of the following is true:
+
+* nvidia driver is rolled back to a CUDA-13.0-compatible version
+  (system-level, out of this project's scope);
+* torch is upgraded on the host to a build linking a CUDA runtime
+  compatible with driver `595.x` (e.g., cu131 or a pytorch nightly);
+* work migrates to an alternate host that already has a compatible
+  driver + torch + `/data/sglang-fork` at the same pinned SHA.
+
+Once CUDA works, resume from **M3** in
+[`optimization_review.md` §Recommended validation sequence](experiments/qwen35_4b/gdn/optimization_review.md):
+
+1. Run `python3 <scratchpad>/f1_prototype/test_parity.py` — expect
+   element-wise equality on all shapes; abort if any mismatch.
+2. Write and run the kernel-latency microbench (M4).
+3. On pass, create a git worktree of `/data/sglang-fork` off a fresh
+   `f1-l2norm-fusion` branch; apply F1 to `fla/l2norm.py` and
+   `fla/chunk.py:108-110`. **Do not amend the frozen pin** — the
+   fork-branch modification is what changes; the pinned SHA moves
+   in a follow-on `chore(qwen35): bump frozen SGLang pin` commit.
+4. Re-run Stage-3 A0/A1 on `p128 b1` and confirm `l2norm_fwd_kernel`
+   count halves on A1 (M5).
+5. Extend to the other 4 production call sites (M6).
+6. E2E correctness + perf validation (M7); keep/revert decision (M8).
+7. Draft an FLA upstream PR in parallel with the SGLang change; do
+   not gate the SGLang change on FLA acceptance.
+
+Do not upstream from `/data/sglang-fork` unchanged — apply the
+change to a clean branch off current upstream `main` for the PR.
+

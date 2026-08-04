@@ -1,0 +1,21 @@
+# Per-attempt raw outputs are large / transient. Only metadata /
+# summary / verdict files are committed by default.
+#
+# Both the `attempt_*` result trees and the `infracheck_*` result trees
+# follow the same layout: verdict.md / verdict.json / summary.md /
+# metadata.json at the top, everything else under `raw/`. The globs
+# below keep every `raw/` subtree and every top-level log / jsonl file
+# untracked; the small text files above stay committed as attempt
+# evidence.
+attempt_*/raw/
+attempt_*/logs/
+attempt_*/*.log
+attempt_*/*.jsonl
+infracheck_*/raw/
+infracheck_*/logs/
+infracheck_*/*.log
+infracheck_*/*.jsonl
+harness_*/raw/
+harness_*/logs/
+harness_*/*.log
+harness_*/*.jsonl

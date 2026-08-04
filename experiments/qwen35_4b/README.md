@@ -1,0 +1,206 @@
+# Qwen3.5-4B — BCG DeepStack Investigation
+
+> **Sub-track closed 2026-08-03 with verdict `NOT_APPLICABLE_QWEN35`.**
+> Every publicly released `Qwen/Qwen3.5-*` checkpoint ships
+> `vision_config.deepstack_visual_indexes = []`, so the code path
+> under test is not exercised on any shipped Qwen3.5 configuration,
+> and the harness will not fabricate the input by editing the
+> checkpoint (see `hypothesis.md` §5 and Amendment 5). Attempts 01,
+> 02, 03 are preserved verbatim. Attempt 03's live-fire
+> `FAIL_BCG_DEEPSTACK` on `Qwen/Qwen3-VL-8B-Instruct` under a
+> profiler-owned test-only BCG-allowlist monkey-patch remains valid
+> as an exhibit of the **latent regression on a different model** —
+> it is not the closing verdict for Qwen3.5. Investigation continues
+> on a distinct Qwen3.5 code path under
+> `debug/qwen35-4b-gdn-prefill-bcg` (see `plan.md` §8 and
+> `gdn/README.md`).
+
+> **Investigation, not a confirmed bug.** This directory tracks a
+> source-level suspicion on current upstream SGLang. Nothing here
+> asserts a runtime failure until runtime evidence supports it.
+
+- **Branch:** `debug/qwen35-4b-bcg-deepstack` (based on `main` = `a803285`).
+- **Tracking issue:** [profiler-repo issue #9](https://github.com/bowenwan6/sglang-vllm-profiler/issues/9)
+  (sub-track of #3; no upstream SGLang issue filed until runtime
+  evidence is in hand).
+- **Model target:** `Qwen/Qwen3.5-4B` (HF, `sha=851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a`,
+  `config.architectures=["Qwen3_5ForConditionalGeneration"]`,
+  `model_type=qwen3_5`, ungated).
+- **Upstream anchor (rebaselined 2026-08-01):** SGLang `main` @
+  `58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8`. All line references in
+  this subtree resolve to this SHA. This is a 21-commit refresh from
+  the earlier `89f4a80c1f…` anchor; the source-audit spot-checks are
+  recorded in `source_audit.md` § 1.
+- **Executed local checkout:** an isolated `git clone` under
+  `<scratchpad>/sglang_checkout/sglang/` at the same SHA. Runners
+  source it via `PYTHONPATH`. `/data/sglang-fork` is also refreshed
+  to upstream `main` on this date; the historical Qwen3-VL branch
+  `fix/pcg-vlm-deepstack-warmup` is preserved untouched.
+- **sglang-kernel:** upgraded system-wide 2026-08-01 to `0.4.5` to
+  satisfy the frozen SGLang `assert_pkg_version` floor (was `0.4.4`).
+- **Plan-level context:** `plan.md` §7.
+
+## What this investigation is about
+
+`Qwen/Qwen3.5-4B` is registered on current SGLang as multimodal and
+on the multimodal **breakable-CUDA-graph** (BCG) allowlist —
+distinct from the piecewise-CUDA-graph (PCG / `tc_piecewise`)
+allowlist, which does not contain Qwen3.5. Its language model
+receives per-request `input_deepstack_embeds` that are added to
+`hidden_states` in layers 0–2 (the effect can propagate through
+later layers via the residual stream).
+
+The BCG replay bridge visibly stabilises `input_embeds` (registered
+slot + per-request copy into that slot) but does not stabilise
+`input_deepstack_embeds` — no slot is registered, and the replay
+closure only forwards `input_embeds`. In addition, the single
+DeepStack accommodation upstream
+(`run_dummy_multimodal_deepstack_forward`, PR #30868) is a Dynamo
+shape-stability warmup scoped to the `tc_piecewise` backend; it is
+**not** called on the BCG capture path.
+
+The runtime question is which of the following holds for an image
+request served by a Qwen3.5-4B BCG-enabled server: (a) it enters BCG
+replay and correctness is preserved by some code path this audit
+missed; (b) it enters BCG replay and produces silent output
+divergence in the "DeepStack-zeroed" signature; (c) it enters BCG
+replay and crashes; or (d) some runtime filter routes it to eager,
+so BCG is documented as not running for images (a feature gap, not
+a bug). The five possible verdicts are enumerated in
+`hypothesis.md` §5.
+
+### Reframe after Attempt 02 (2026-08-01): the bug is latent
+
+The Qwen3.5 target proved unable to exercise DeepStack at all
+(shipped `vision_config.deepstack_visual_indexes = []` on every
+release). A cross-arch audit — see
+[`latent_bug_analysis.md`](latent_bug_analysis.md) — shows the
+**intersection of "on BCG allowlist" and "actually populates
+DeepStack" is empty on current upstream**. The source-level
+suspicion is real; the bug is a **latent regression** that would
+activate if a future Qwen3.5 release populated DeepStack, or if
+Qwen3-VL were added to the BCG allowlist. Attempt 03 will
+retarget the repaired harness to `Qwen/Qwen3-VL-8B-Instruct` under
+a profiler-owned test-only monkey-patch that adds Qwen3-VL to the
+BCG allowlist at runtime, to convert the latent hypothesis into
+live-fire evidence.
+
+**Live-fire evidence (Attempt 03 — 2026-08-01, GPU 1, verdict `FAIL_BCG_DEEPSTACK`).**
+Under the profiler-owned test-only monkey-patch that adds
+`Qwen3VLForConditionalGeneration` to
+`multimodal_breakable_cuda_graph_supported_model_archs` at runtime,
+`Qwen/Qwen3-VL-8B-Instruct @ 0c351dd0` ran the 2×2. All four arms
+served the scored 893-token image prefill; both BCG arms served it
+under `cuda graph: True` with no `bcg_execute_body_error`. The
+DeepStack tensor was observed at LM entry with `shape=[896, 12288]`
+(`= [N, hidden_size * 3]` for text hidden=4096) and `nonzero_frac ≈
+0.98` in the two normal arms; the zero-substitution guard verified
+the ablation replacement (nonzero_frac → 0.0, abs_sum → 0.0) in the
+two zero arms. Greedy tokens: `eager_normal` = "The image displays
+three vertical stripes of red, green, and blue." (15 tokens);
+`eager_zero_deepstack` diverges at token 7. `bcg_normal` matches
+`bcg_zero_deepstack` exactly (20/20 identical tokens, mean logprob
+diff 0.0), and both track `eager_zero_deepstack`. This is the
+predicted `FAIL_BCG_DEEPSTACK` signature: SGLang's
+`replay_layer_forward` bridge silently drops the DeepStack
+contribution under BCG replay. The bug is now live-fire — see
+`results/attempt_gpu1_20260801T115524Z/`. Attempt landed under
+commit `test(qwen35): rerun 2x2 with Qwen3-VL under patched BCG`.
+Caveat: obtained under the monkey-patched allowlist; no shipped
+config reaches this code path today.
+
+- Retarget scaffolding landed 2026-08-01 as
+  `feat(qwen35): retarget harness to Qwen3-VL under monkey-patched BCG`:
+  new `scripts/bcg_allowlist_patch.py` sibling module mutates the
+  frozen SGLang checkout's
+  `multimodal_breakable_cuda_graph_supported_model_archs` list **in
+  memory only** to include `Qwen3VLForConditionalGeneration` and
+  `Qwen3VLMoeForConditionalGeneration`, opt-in via
+  `QWEN35_PATCH_BCG_ALLOWLIST=1` env var or the
+  `--patch-bcg-allowlist` runner/launcher flag; idempotent; frozen
+  SGLang source unchanged (`git diff` empty). The pre-hook
+  installer in `instrumentation.py` was generalised to also
+  recognise Qwen3-VL's `Qwen3LLMModel` / `Qwen3MoeLLMModel`
+  language-model classes (tagged `module_class_recognised=true` on
+  every `lm_forward_input_deepstack` event). The
+  `scripts/bootstrap/sitecustomize.py` shim was extended to
+  reapply the BCG allowlist mutation inside every SGLang scheduler
+  / model-worker spawn child so the child's re-imported
+  `is_multimodal_breakable_cuda_graph_supported` returns True for
+  `Qwen3VLForConditionalGeneration`. Validated by CPU tests in
+  `scripts/test_instrumentation.py` (opt-in adds classes, opt-out
+  is no-op, repeated apply is idempotent, hook fires on a toy
+  `Qwen3LLMModel`-named `nn.Module`).
+
+## Layout
+
+| Path | Purpose | Status |
+|---|---|---|
+| [`README.md`](README.md) | Index (this file) — entry point and reader map. | landed Part 1 |
+| [`source_audit.md`](source_audit.md) | Deep source-level audit of upstream SGLang `main` — files, line numbers, PR provenance; corrected 2026-07-31 to separate BCG vs PCG. | landed Part 2, corrected 2026-07-31 |
+| [`provenance.md`](provenance.md) | Frozen SHAs / model / environment pins the validation must verify at run time; hard vs soft pin convention. | landed Part 2, corrected 2026-07-31 |
+| [`hypothesis.md`](hypothesis.md) | Established facts vs source-level observations vs unverified runtime hypotheses vs pre-declared acceptance criteria; verdict labels revised 2026-07-31. | landed Part 2, corrected 2026-07-31 |
+| [`validation_plan.md`](validation_plan.md) | Correctness/path experiment design (small matched test + diagnostic ablation), verdict shape, evidence layers, configurations, fixtures, confounder controls; revised 2026-07-31 to remove perf-benchmark controls and the incorrect `--enforce-piecewise-cuda-graph` control. | landed Part 3, corrected 2026-07-31 |
+| [`latent_bug_analysis.md`](latent_bug_analysis.md) | Cross-arch audit (2026-08-01): BCG allowlist × DeepStack-in-shipped-config intersection is empty; retarget-with-monkey-patch plan for Attempt 03. | landed 2026-08-01 |
+| [`scripts/bcg_allowlist_patch.py`](scripts/bcg_allowlist_patch.py) | Profiler-owned test-only monkey-patch that mutates the frozen SGLang checkout's `multimodal_breakable_cuda_graph_supported_model_archs` list in memory to include `Qwen3VLForConditionalGeneration` / `Qwen3VLMoeForConditionalGeneration`. Opt-in via `QWEN35_PATCH_BCG_ALLOWLIST=1` or `--patch-bcg-allowlist`; idempotent; frozen SGLang source unchanged. | landed 2026-08-01 |
+| [`fixtures/`](fixtures/) | Byte-pinned deterministic assets (image + `manifest.json`). Regeneration must be bit-identical. | landed Part 5 |
+| [`scripts/`](scripts/) | CPU-only scaffolding + live runner (Step 2): fixture generator, provenance preflight, live runner, client, verdict scorer, instrumentation patch. All refuse to touch a GPU without an explicitly authorised ID. | evolving |
+| [`results/`](results/) | Validation attempts (see `results/README.md`). Raw per-attempt outputs are gitignored; only summary / metadata / verdict files are committed. Step 4 INFRA_CHECK landed 2026-08-01 as `infracheck_gpu7_20260801T012122Z` (PASS). Step 5 correctness/path validation landed same day as `attempt_gpu7_20260801T013522Z` with verdict `AMBIGUOUS` (preserved as historical evidence: `language_model.__call__` instance-dict interceptor ineffective on `nn.Module`, and `<image>` placeholder mismatched the pinned Qwen VL processor's `<\|vision_start\|><\|image_pad\|><\|vision_end\|>`). Both flaws are repaired under `validation_plan.md` Amendment 2 (2026-08-01). The harness-validation follow-up `harness_gpu1_20260801T062833Z` (2026-08-01, GPU 1) confirms the repair works on GPU (pre-hook fires, placeholder warnings gone) but records `HARNESS_NOT_DIAGNOSTIC`: every publicly released `Qwen/Qwen3.5-*` checkpoint ships `vision_config.deepstack_visual_indexes = []`, so `input_deepstack_embeds` is empty (`numel = 0`) and the DeepStack `add_` branch is trivially skipped on every request. Under `validation_plan.md` Amendment 3, the source-level suspicion is not testable against this model family without a model swap. Attempt 03 (`attempt_gpu1_20260801T115524Z`, 2026-08-01, GPU 1) retargets to `Qwen/Qwen3-VL-8B-Instruct` under the profiler-owned test-only BCG allowlist monkey-patch (`scripts/bcg_allowlist_patch.py`, opt-in via `QWEN35_PATCH_BCG_ALLOWLIST=1` / `--patch-bcg-allowlist`) and records verdict **`FAIL_BCG_DEEPSTACK`** — live-fire confirmation of the source-level suspicion in `latent_bug_analysis.md` § 2. `bcg_normal` produces the same greedy output as `bcg_zero_deepstack` and diverges from `eager_normal` in the exact zero-DeepStack signature. Caveat: obtained under the runtime monkey-patch; no shipped upstream configuration currently reaches this code path. | populated as attempts land |
+
+## Read order for a fresh reader
+
+1. `plan.md` §7 (top-level context and roadmap position).
+2. `hypothesis.md` (what is established vs suspected — sets expectations).
+3. `source_audit.md` (why we suspect it — direct source citations).
+4. `provenance.md` (the SHAs / env this rests on).
+5. `validation_plan.md` — how we plan to prove or disprove the
+   hypothesis (predeclared verdicts, evidence layers, configurations).
+6. `scripts/` and `fixtures/` — CPU-only scaffolding and the live
+   runner.
+7. `results/` — populated as attempts land.
+
+## CPU dry-run smoke test
+
+Everything below runs on any CPU-only environment and touches no GPU:
+
+```bash
+# regenerate the byte-pinned image fixture (must be bit-identical)
+python3 experiments/qwen35_4b/scripts/generate_fixture.py --check --strict
+
+# provenance preflight (dry-run skips the network probes)
+python3 experiments/qwen35_4b/scripts/preflight_provenance.py --dry-run
+
+# runner dry-run (writes /tmp/qwen35_launch_ctx_*.json, no server)
+bash experiments/qwen35_4b/scripts/runner.sh --dry-run
+
+# runner must refuse without --gpu-id or QWEN35_GPU_ID set (exit 64).
+# Authorised allowlist: {0, 1, 7} per validation_plan.md Amendment 2.
+bash experiments/qwen35_4b/scripts/runner.sh   # expect FATAL + rc=64
+
+# client + verdict dry runs (no network, no CUDA)
+python3 experiments/qwen35_4b/scripts/client.py --launch-ctx \
+    "$(ls -t /tmp/qwen35_launch_ctx_*.json | head -1)" --dry-run
+python3 experiments/qwen35_4b/scripts/verdict.py --attempt-dir /tmp/some-dir --dry-run
+```
+
+## Historical context (read-only)
+
+The Qwen3-VL-8B PCG capture-stream investigation on
+`debug/v2-imgA-pcg-capture-stream-fix` (§4 in `plan.md`) touches
+adjacent code but is a **different** problem and a different
+reproduction target. That branch and its
+`experiments/qwen3vl8b/v2/…/root_cause/` tree remain historical
+evidence; nothing under §7 rewrites, reorders, or supersedes it.
+The historical fork at `/data/sglang-fork` (HEAD `986c89e69`) is
+not touched by this investigation.
+
+## Reporting rules
+
+- Preserve exact SHAs, commands, and external PR links.
+- Never claim "confirmed upstream bug" until runtime reproduction is
+  in hand.
+- Never launch GPU work outside the authorised allowlist `{0, 1, 7}`
+  (see `validation_plan.md` Amendment 1 and Amendment 2, 2026-08-01)
+  and without idle-verification of the chosen GPU.
+- Commit convention: `docs(qwen35): …`, `feat(qwen35): …`,
+  `test(qwen35): …`, `fix(qwen35): …` per `CLAUDE.md`.

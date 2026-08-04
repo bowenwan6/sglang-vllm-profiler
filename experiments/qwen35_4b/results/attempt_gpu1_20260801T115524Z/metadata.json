@@ -1,0 +1,65 @@
+{
+  "amendments_in_force": [
+    "Amendment 1",
+    "Amendment 2",
+    "Amendment 4"
+  ],
+  "arm_launch_ids": {
+    "bcg_normal": "2026-08-01T12-01-38Z",
+    "bcg_zero_deepstack": "2026-08-01T12-03-39Z",
+    "eager_normal": "2026-08-01T11-56-16Z",
+    "eager_zero_deepstack": "2026-08-01T11-57-45Z"
+  },
+  "arms_planned": [
+    "eager_normal",
+    "eager_zero_deepstack",
+    "bcg_normal",
+    "bcg_zero_deepstack"
+  ],
+  "attempt_id": "attempt_gpu1_20260801T115524Z",
+  "bcg_allowlist_patch": {
+    "flag": "--patch-bcg-allowlist",
+    "opt_in": true
+  },
+  "deepstack_visual_indexes": [
+    8,
+    16,
+    24
+  ],
+  "expected_deepstack_shape_width": 12288,
+  "fixture": "fixtures/image_bands.png",
+  "fixture_sha256": "8fa3ed69d78049835d6631b3b4314be21ea3e797626be6c58fc72adfb30070a2",
+  "frozen_sglang_head": "58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8",
+  "gpu_id": "1",
+  "gpu_snapshot_pre": {
+    "compute_apps_on_gpu": 0,
+    "memory_used_mib": 0,
+    "utilization_pct": 0
+  },
+  "gpu_uuid": "GPU-2396c1ff-41ff-385f-30fe-0272d99c5d6c",
+  "launch_context": {
+    "attempt_id": "attempt_gpu1_20260801T115524Z",
+    "prelaunch_utc": "20260801T115524Z"
+  },
+  "model_id": "Qwen/Qwen3-VL-8B-Instruct",
+  "model_revision": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+  "notes": [
+    "Retarget to Qwen/Qwen3-VL-8B-Instruct under profiler-owned test-only monkey-patch",
+    "See experiments/qwen35_4b/latent_bug_analysis.md \u00a7 3 and validation_plan.md Amendment 4",
+    "Stale nvidia-smi driver bookkeeping entries appeared on GPU 1 during the run (PIDs 633963/661434 from prior arms' now-dead workers; not in /proc). Runner's foreign_pid_check was refined to skip PIDs not present in /proc \u2014 those are stale entries that cannot contend.",
+    "arm_launch_ids records each arm's per-server prelaunch_utc; verdict.py accepts either the attempt-level launch_id or the arm-specific launch_id."
+  ],
+  "preflight_status": "OK",
+  "prelaunch_utc": "20260801T115524Z",
+  "profiler_repo_branch": "debug/qwen35-4b-bcg-deepstack",
+  "profiler_repo_head": "ed64391477593d0c6e3d634829e48e24b9f1e7af",
+  "sampling": {
+    "seed": "fixed",
+    "temperature": 0.0,
+    "top_k": 1,
+    "top_p": 1.0
+  },
+  "sglang_fork_expected": "986c89e69c25882ab6f3d396f8eb306f38f2c8d2",
+  "sglang_fork_head_pre": "986c89e69c25882ab6f3d396f8eb306f38f2c8d2",
+  "text_hidden_size": 4096
+}

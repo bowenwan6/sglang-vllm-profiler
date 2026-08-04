@@ -1,0 +1,41 @@
+{
+  "image_bands.png": {
+    "bands": [
+      {
+        "end_x": 426,
+        "rgb": [
+          200,
+          96,
+          96
+        ],
+        "start_x": 0
+      },
+      {
+        "end_x": 853,
+        "rgb": [
+          96,
+          160,
+          96
+        ],
+        "start_x": 426
+      },
+      {
+        "end_x": 1280,
+        "rgb": [
+          96,
+          96,
+          200
+        ],
+        "start_x": 853
+      }
+    ],
+    "bytes": 4347,
+    "generator": "experiments/qwen35_4b/scripts/generate_fixture.py",
+    "height": 720,
+    "mime": "image/png",
+    "path": "image_bands.png",
+    "pillow_version": "12.2.0",
+    "sha256": "8fa3ed69d78049835d6631b3b4314be21ea3e797626be6c58fc72adfb30070a2",
+    "width": 1280
+  }
+}

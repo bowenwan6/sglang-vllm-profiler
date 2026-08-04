@@ -1,0 +1,73 @@
+{
+  "evidence": {
+    "ablation_not_diagnostic_root_cause": {
+      "greedy_text_eager_normal": " The image features three vertical stripes in red, green, and blue.",
+      "greedy_text_eager_zero_deepstack": " The image features three vertical stripes in red, green, and blue.",
+      "input_deepstack_embeds_observed_nonzero_frac": 0.0,
+      "input_deepstack_embeds_observed_numel": 0,
+      "input_deepstack_embeds_observed_shape": [
+        893,
+        0
+      ],
+      "model_config_deepstack_visual_indexes": [],
+      "texts_identical": true,
+      "zeroed_events_actually_expected_given_empty_tensor": 0,
+      "zeroed_events_expected_if_diagnostic": 2,
+      "zeroed_events_observed": 0
+    },
+    "arms_run": [
+      "eager_normal",
+      "eager_zero_deepstack"
+    ],
+    "attempt_kind": "harness_validation",
+    "follow_up_options_out_of_scope_for_this_pass": [
+      "Rebaseline the investigation onto a Qwen3-VL checkpoint (e.g. Qwen/Qwen3-VL-8B) whose config.json ships a non-empty deepstack_visual_indexes list (that model already has an SGLang PCG DeepStack investigation on debug/v2-imgA-pcg-capture-stream-fix \u2014 this would be a different investigation).",
+      "File an SGLang doc-tracking issue that the multimodal breakable_cuda_graph_supported_model_archs allowlist entry for Qwen3.5 lists arches whose public checkpoints do not exercise DeepStack."
+    ],
+    "gpu_1_evidence": {
+      "post_eager_normal_compute_apps_on_gpu1": 0,
+      "post_eager_normal_used_MiB": 0,
+      "post_eager_zero_used_MiB": 0,
+      "pre_run_compute_apps_on_gpu1": 0,
+      "pre_run_used_MiB": 0,
+      "pre_run_util_pct": 0
+    },
+    "harness_repair_confirmed": {
+      "image_provided_count_per_image_request": 1,
+      "placeholder_provided_count_per_image_request": 1,
+      "placeholder_warning_normal": 0,
+      "placeholder_warning_zero": 0,
+      "pre_hook_fired_normal": 111,
+      "pre_hook_fired_zero": 111,
+      "rendered_prompt": "<|vision_start|><|image_pad|><|vision_end|>Describe the colours in this image in one short sentence.",
+      "server_generated_output": " The image features three vertical stripes in red, green, and blue."
+    },
+    "implications": [
+      "The branch-owned harness repair from commit fix(qwen35): repair DeepStack instrumentation and image input works as designed on GPU 1.",
+      "The BCG DeepStack correctness hypothesis (H_A, source-level readings F5, F6, F7, F8) CANNOT be validated against any publicly released Qwen/Qwen3.5-* checkpoint at the frozen SGLang SHA.",
+      "Under Amendment 2 verdict rules, running Step 3 (the scored 2\u00d72 rerun) would produce all four arms with identical output, so no non-AMBIGUOUS verdict is achievable \u2014 Step 3 is skipped by design.",
+      "The source-level suspicion (BCG silently omits DeepStack) remains neither confirmed nor refuted; it is untestable against this model family and requires a Qwen3-VL or Qwen3-Omni checkpoint with non-empty deepstack_visual_indexes."
+    ],
+    "per_arm_summary": {
+      "eager_normal": {
+        "greedy_text_scored_1": " The image features three vertical stripes in red, green, and blue.",
+        "greedy_text_scored_2": " The image features three vertical stripes in red, green, and blue.",
+        "lm_forward_input_deepstack_events": 111,
+        "lm_forward_input_deepstack_zeroed_events": 0,
+        "max_deepstack_nonzero_frac": 0.0,
+        "placeholder_warning_hits": 0,
+        "server_ready_seconds": 41
+      },
+      "eager_zero_deepstack": {
+        "greedy_text_scored_1": " The image features three vertical stripes in red, green, and blue.",
+        "greedy_text_scored_2": " The image features three vertical stripes in red, green, and blue.",
+        "lm_forward_input_deepstack_events": 111,
+        "lm_forward_input_deepstack_zeroed_events": 0,
+        "max_deepstack_nonzero_frac": 0.0,
+        "placeholder_warning_hits": 0
+      }
+    },
+    "root_cause_narrative": "The public config.json of every released Qwen/Qwen3.5-* checkpoint (0.8B / 2B / 4B / 9B / 27B / 35B-A3B) reports vision_config.deepstack_visual_indexes = []. Qwen3VLForConditionalGeneration (the superclass of Qwen3_5ForConditionalGeneration) initialises self.deepstack_visual_indexes from this list, so num_deepstack_embeddings = 0. In general_mm_embed_routine, deepstack_embedding_shape becomes (num_tokens, hidden_size * 0) = (num_tokens, 0). Qwen3_5ForCausalLM.forward gates DeepStack on input_deepstack_embeds is not None and input_deepstack_embeds.numel() > 0, so the add_ branch is trivially skipped on every request. Consequently the zero-DeepStack ablation is a no-op on this model, not because the branch instrumentation misfires (it fires 111 times per arm and correctly reports numel=0), but because there is nothing to zero."
+  },
+  "verdict": "HARNESS_NOT_DIAGNOSTIC"
+}

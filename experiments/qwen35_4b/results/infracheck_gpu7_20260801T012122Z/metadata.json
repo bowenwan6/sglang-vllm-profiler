@@ -1,0 +1,99 @@
+{
+  "attempt_id": "infracheck_gpu7_20260801T012122Z",
+  "attempt_kind": "INFRA_CHECK",
+  "gpu_id": "7",
+  "gpu_uuid": "GPU-da0d9c21-eb80-f5c6-c12c-bfc5bcb9f207",
+  "runner_pgid": "770564",
+  "prelaunch_utc": "2026-08-01T01-21-28Z",
+  "launch_id": "infracheck_gpu7_20260801T012122Z-bcg_normal-2026-08-01T01-21-28Z",
+  "profiler_repo": {
+    "head": "d43345105d34643be3baf70458728028e8becb81",
+    "branch": "debug/qwen35-4b-bcg-deepstack"
+  },
+  "frozen_sglang": {
+    "path": "/tmp/claude-0/-data-sglang-vllm-profiler/1617f0f1-bb43-4914-afad-2284642acd9f/scratchpad/sglang_checkout/sglang",
+    "pinned_sha": "58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8",
+    "observed_sha": "58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8",
+    "imported_sglang_file": "/tmp/claude-0/-data-sglang-vllm-profiler/1617f0f1-bb43-4914-afad-2284642acd9f/scratchpad/sglang_checkout/sglang/python/sglang/__init__.py",
+    "imported_sglang_status": "INSIDE_FROZEN"
+  },
+  "sglang_fork_guardrail": {
+    "path": "/data/sglang-fork",
+    "expected_head": "986c89e69c25882ab6f3d396f8eb306f38f2c8d2",
+    "observed_head": "986c89e69c25882ab6f3d396f8eb306f38f2c8d2"
+  },
+  "hf_model": {
+    "id": "Qwen/Qwen3.5-4B",
+    "revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+    "architecture": "Qwen3_5ForConditionalGeneration",
+    "model_type": "qwen3_5"
+  },
+  "kernel": {
+    "sglang_kernel_version": "0.4.5",
+    "note": "Bumped 2026-08-01 to satisfy frozen SGLang assert_pkg_version floor (was 0.4.4 in the prior failed attempt infracheck_gpu7_20260801T004841Z)."
+  },
+  "environment": {
+    "python": "3.12.3",
+    "torch": "2.11.0+cu130",
+    "libcuda_preload": "/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05",
+    "attention_backend": "fa3",
+    "multimodal_attention_backend": "fa3"
+  },
+  "server_flags": [
+    "--model-path", "Qwen/Qwen3.5-4B",
+    "--revision", "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+    "--port", "30000",
+    "--host", "127.0.0.1",
+    "--tp", "1",
+    "--dtype", "bfloat16",
+    "--disable-radix-cache",
+    "--mem-fraction-static", "0.75",
+    "--log-level", "info",
+    "--allow-auto-truncate",
+    "--trust-remote-code"
+  ],
+  "cuda_graph_config": {
+    "prefill_backend": "breakable",
+    "prefill_max_bs": 8192,
+    "prefill_bucket_count": 58,
+    "prefill_captures_observed": 58,
+    "decode_backend": "full",
+    "decode_max_bs": 256,
+    "disable_cuda_graph": false,
+    "disable_prefill_cuda_graph": false,
+    "note": "prefill backend='breakable' + tc_compiler='eager' confirms Breakable CUDA Graph (BCG) path is active; no PCG flag."
+  },
+  "preflight_status": "PASS",
+  "preflight_hard_pins": {
+    "frozen_sglang_checkout": "PIN_MATCH",
+    "imported_sglang_path": "INSIDE_FROZEN",
+    "hf_model": "PIN_MATCH",
+    "image_fixture": "PIN_MATCH",
+    "sglang_fork_unchanged": "PIN_MATCH"
+  },
+  "infracheck_result": {
+    "status": "PASS",
+    "server_health_first_200_after_seconds": 129,
+    "bcg_capture_banner_present": true,
+    "bcg_capture_bucket_lines": 58,
+    "warmup_prefill_cuda_graph_true_lines": 1,
+    "server_ready_message_seen": true,
+    "peak_gpu7_memory_mib": 111760,
+    "post_teardown_gpu7_memory_mib": 4,
+    "gpu7_returned_to_qualifying_state": true,
+    "own_pgid_signaled_only": true,
+    "foreign_pids_pre_run_count": 11,
+    "foreign_pids_post_run_count": 11,
+    "foreign_pids_unchanged": true,
+    "gpu7_foreign_compute_apps_pre_run": 0,
+    "gpu7_foreign_compute_apps_post_run": 0
+  },
+  "instrumentation_note": "The branch-owned instrumentation.install() ran in the launcher parent process (pid 770564) and installed patches for prefill_cuda_graph_runner, model_runner, and mm_utils.general_mm_embed_routine. SGLang uses mp.set_start_method('spawn', force=True) (engine.py:1621) for its scheduler / model-worker subprocesses; those spawn-children reimport modules fresh and DO NOT inherit the parent's monkey-patches. Consequently, request-level instrumentation events (bcg_execute_body_enter, lm_forward_input_deepstack, model_runner_forward_enter) are not expected to fire in worker subprocesses; SGLang's own per-batch 'cuda graph: True/False' server-log line remains authoritative for BCG-vs-eager path attribution.",
+  "raw_evidence_files": {
+    "preflight_json": "raw/preflight_bcg_normal_2026-08-01T01-21-28Z.json",
+    "preflight_stderr": "raw/preflight_bcg_normal_2026-08-01T01-21-28Z.stderr",
+    "server_stderr": "raw/server_stderr_bcg_normal.log",
+    "server_stdout": "raw/server_stdout_bcg_normal.log",
+    "instrumentation_jsonl": "raw/instrumentation_bcg_normal.jsonl"
+  }
+}
