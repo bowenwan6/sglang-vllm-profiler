@@ -34,10 +34,17 @@ from pathlib import Path
 # --- Frozen pins (mirror provenance.md; keep in sync manually) ---------
 
 # Hard pin — the executed local SGLang checkout SHA. Preflight aborts
-# on mismatch (see check_frozen_checkout).
-PINNED_FROZEN_SGLANG_SHA = "58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8"
+# on mismatch (see check_frozen_checkout). Overridable via env var
+# QWEN35_FROZEN_SGLANG_SHA for M2/M4 upstream-tracking reruns.
+PINNED_FROZEN_SGLANG_SHA = os.environ.get(
+    "QWEN35_FROZEN_SGLANG_SHA",
+    "58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8",
+)
 # Informational — the remote main HEAD at rebaseline. Drift is WARN only.
-PINNED_UPSTREAM_SGLANG_HEAD = "58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8"
+PINNED_UPSTREAM_SGLANG_HEAD = os.environ.get(
+    "QWEN35_PINNED_UPSTREAM_SGLANG_HEAD",
+    "58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8",
+)
 PINNED_MODEL_ID = "Qwen/Qwen3.5-4B"
 PINNED_MODEL_SHA = "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a"
 PINNED_MODEL_ARCH = ["Qwen3_5ForConditionalGeneration"]
@@ -46,8 +53,13 @@ PINNED_FIXTURE_SHA = (
     "8fa3ed69d78049835d6631b3b4314be21ea3e797626be6c58fc72adfb30070a2"
 )
 # Sanity-check pin for the historical Qwen3-VL fork; runner refuses to
-# touch it and warns loudly if it has moved.
-PINNED_SGLANG_FORK_HEAD = "986c89e69c25882ab6f3d396f8eb306f38f2c8d2"
+# touch it and warns loudly if it has moved. Overridable via env var
+# QWEN35_SGLANG_FORK_EXPECTED_SHA for M2/M4 upstream-tracking reruns
+# where the fork main is deliberately fast-forwarded to upstream.
+PINNED_SGLANG_FORK_HEAD = os.environ.get(
+    "QWEN35_SGLANG_FORK_EXPECTED_SHA",
+    "986c89e69c25882ab6f3d396f8eb306f38f2c8d2",
+)
 PINNED_SGLANG_FORK_PATH = "/data/sglang-fork"
 
 # Soft environment expectations (from provenance.md §3; warnings only
