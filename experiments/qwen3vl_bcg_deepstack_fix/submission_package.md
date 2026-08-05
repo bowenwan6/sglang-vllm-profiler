@@ -17,7 +17,8 @@ performance gains.
 | Exact base SHA | `eac1f78568026f60982c255f6fe2cb5e09129be3` |
 | Base subject | `[CI] Free hosted-runner disk space only when it is low (#33644)` |
 | Base date (UTC) | `2026-08-05T04:55:06Z` |
-| Adversarial review | Completed 2026-08-05; behavior-preserving simplifications applied as commit 3 |
+| Current `upstream/main` HEAD | `6fa3f9df11c8bdbc0e3b4ddc87a3d873343aca72` (2026-08-05T08:54:46Z; 8 unrelated commits ahead; none touch the 4 patched files or 3 adjacent test files; `git merge-tree` simulation is conflict-free — no rebase required) |
+| Adversarial review | Completed 2026-08-05; simplifications as commit 3; black auto-format as commit 4 |
 
 ## 2. Clean fix branch
 
@@ -25,7 +26,7 @@ performance gains.
 |---|---|
 | Fork | `bowenwan6/sglang` |
 | Branch | `fix/bcg-deepstack-replay-slot` |
-| Branch HEAD | `9410775e29` (after adversarial-review simplification commit) |
+| Branch HEAD | `cdb27bd65e006a4db66489a67d3d6a28e0d6faf3` (after final black auto-format) |
 | Remote status | pushed; `origin/…..HEAD` divergence = 0 |
 | Ancestor of `upstream/main`? | No (branch adds 2 commits on top) |
 | Any investigation-branch history? | No (built directly on `upstream/main`, verified with `git merge-base --is-ancestor fix/pcg-vlm-deepstack-warmup fix/bcg-deepstack-replay-slot` → returns non-zero) |
@@ -33,6 +34,7 @@ performance gains.
 ## 3. Commit list
 
 ```
+cdb27bd65e  style(bcg): apply black auto-formatting for DeepStack replay-slot patch
 9410775e29  refactor(bcg): shrink DeepStack replay-slot patch after adversarial review
 c9d6d898ea  test(bcg): unit tests for DeepStack BCG replay-slot contract
 fd4c4cb599  fix(bcg): copy Qwen3-VL input_deepstack_embeds into a stable replay slot
@@ -42,15 +44,16 @@ fd4c4cb599  fix(bcg): copy Qwen3-VL input_deepstack_embeds into a stable replay 
 
 ```
  .../model_executor/cuda_graph_buffer_registry.py   |  15 ++
- .../runner/prefill_cuda_graph_runner.py            |  51 ++++++
+ .../runner/prefill_cuda_graph_runner.py            |  49 ++++++
  .../srt/model_executor/runner_utils/buffers.py     |  11 ++
  python/sglang/srt/models/qwen3_vl.py               |   5 +
- .../model_executor/test_deepstack_replay_slot.py   | 193 +++++++++++++++++++++
- 5 files changed, 275 insertions(+)
+ .../model_executor/test_deepstack_replay_slot.py   | 194 +++++++++++++++++++++
+ 5 files changed, 274 insertions(+)
 ```
 
-(Down from +333 at initial commit — the third commit is a behavior-
-preserving refactor per the adversarial-review findings; see
+(Down from +333 at initial commit — commit 3 is a behavior-
+preserving refactor per the adversarial-review findings; commit 4
+applies black auto-formatting flagged by pre-commit. See
 [reviewer_qa.md](./fix_prototype/reviewer_qa.md) and
 [review_report.md](./fix_prototype/review_report.md).)
 
@@ -346,24 +349,57 @@ Local inspection (in your `/data/sglang-fork`):
 ```bash
 cd /data/sglang-fork
 
-# Fetch and confirm base
+# 1. Fetch upstream and confirm the branch is up-to-date-enough:
 git fetch upstream --quiet
 git log fix/bcg-deepstack-replay-slot --oneline upstream/main..HEAD
-git diff upstream/main...fix/bcg-deepstack-replay-slot --stat
-git diff upstream/main...fix/bcg-deepstack-replay-slot -- python/sglang/srt/models/qwen3_vl.py
-git diff upstream/main...fix/bcg-deepstack-replay-slot -- python/sglang/srt/model_executor/
+# Expected: 4 commits (cdb27bd65e, 9410775e29, c9d6d898ea, fd4c4cb599)
 
-# Confirm nothing from the investigation branch leaked in
-git merge-base --is-ancestor fix/pcg-vlm-deepstack-warmup fix/bcg-deepstack-replay-slot \
+# 2. Confirm no investigation-branch history:
+git merge-base --is-ancestor fix/pcg-vlm-deepstack-warmup \
+  fix/bcg-deepstack-replay-slot \
   && echo "LEAKED" || echo "CLEAN"
+# Expected: CLEAN
 
-# Verify the unit tests pass on the fix branch
+# 3. Full diff stat + names + hunks:
+git diff upstream/main...fix/bcg-deepstack-replay-slot --stat
+git diff upstream/main...fix/bcg-deepstack-replay-slot --name-only
+# Expected: exactly these 5 files:
+#   python/sglang/srt/model_executor/cuda_graph_buffer_registry.py
+#   python/sglang/srt/model_executor/runner/prefill_cuda_graph_runner.py
+#   python/sglang/srt/model_executor/runner_utils/buffers.py
+#   python/sglang/srt/models/qwen3_vl.py
+#   test/registered/unit/model_executor/test_deepstack_replay_slot.py
+git diff upstream/main...fix/bcg-deepstack-replay-slot -- \
+  python/sglang/srt/models/qwen3_vl.py
+git diff upstream/main...fix/bcg-deepstack-replay-slot -- \
+  python/sglang/srt/model_executor/
+
+# 4. Pre-commit + git diff --check:
+git diff upstream/main...fix/bcg-deepstack-replay-slot --check
+# Expected: silent (no whitespace / conflict-marker issues)
 git checkout fix/bcg-deepstack-replay-slot
+pre-commit run --files \
+  python/sglang/srt/model_executor/cuda_graph_buffer_registry.py \
+  python/sglang/srt/model_executor/runner/prefill_cuda_graph_runner.py \
+  python/sglang/srt/model_executor/runner_utils/buffers.py \
+  python/sglang/srt/models/qwen3_vl.py \
+  test/registered/unit/model_executor/test_deepstack_replay_slot.py
+# Expected: every hook Passed (or Skipped for irrelevant hooks)
+
+# 5. Unit tests — new + adjacent existing:
 LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05 \
   PYTHONPATH=/data/sglang-fork/python \
-  python3 -m pytest test/registered/unit/model_executor/test_deepstack_replay_slot.py -v
+  python3 -m pytest \
+    test/registered/unit/model_executor/test_deepstack_replay_slot.py \
+    test/registered/unit/model_executor/test_cuda_graph_buffer_registry.py \
+    test/registered/unit/model_executor/test_prefill_cuda_graph_runner.py \
+    test/registered/unit/model_executor/test_prefill_cuda_graph_runner_helpers.py \
+    -v
+# Expected: 57 passed (11 new + 46 existing + 2 subtests)
 
-# Return to a safe branch afterwards
+# 6. Return to a safe branch to keep /data/sglang-fork HEAD at its
+#    investigation-branch pin (preserves the profiler test harness's
+#    default preflight expectation):
 git checkout fix/pcg-vlm-deepstack-warmup
 ```
 
