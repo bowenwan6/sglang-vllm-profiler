@@ -1,0 +1,15 @@
+{
+  "attempt_id": "m8_qwen35_bcg_gate10_20260805T045227Z",
+  "role": "gate_10_no_regression",
+  "model_id": "Qwen/Qwen3.5-4B",
+  "model_revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+  "config": "bcg_normal",
+  "gpu_id": "7",
+  "frozen_sglang_head": "198a3bc29bbf2ed169d50f5b7ad35c74262ff10f",
+  "frozen_sglang_head_with_patch": true,
+  "notes": [
+    "Gate #10 no-regression: Qwen3.5-4B under BCG on patched upstream.",
+    "Qwen3.5 inherits supports_bcg_deepstack_replay=True from Qwen3-VL parent BUT has num_deepstack_embeddings=0 on every shipped release → deepstack_replay_width=0 → no slot registered → fix path fully skipped.",
+    "Server + 4 requests all succeeded; instrumentation confirms input_deepstack_embeds present=False on every LM entry."
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "amendments_in_force": [
+    "Amendment 1",
+    "Amendment 2",
+    "Amendment 4"
+  ],
+  "arm_launch_ids": {
+    "eager_normal": "2026-08-05T04-11-55Z",
+    "eager_zero_deepstack": "2026-08-05T04-13-05Z",
+    "bcg_normal": "2026-08-05T04-13-53Z",
+    "bcg_zero_deepstack": "2026-08-05T04-14-52Z"
+  },
+  "arms_planned": [
+    "eager_normal",
+    "eager_zero_deepstack",
+    "bcg_normal",
+    "bcg_zero_deepstack"
+  ],
+  "attempt_id": "m2_unpatched_upstream_gpu7_20260805T041024Z",
+  "bcg_allowlist_patch": {
+    "flag": "--patch-bcg-allowlist",
+    "opt_in": true
+  },
+  "deepstack_visual_indexes": [
+    8,
+    16,
+    24
+  ],
+  "expected_deepstack_shape_width": 12288,
+  "fixture": "fixtures/image_bands.png",
+  "fixture_sha256": "8fa3ed69d78049835d6631b3b4314be21ea3e797626be6c58fc72adfb30070a2",
+  "frozen_sglang_head": "198a3bc29bbf2ed169d50f5b7ad35c74262ff10f",
+  "gpu_id": "7",
+  "gpu_uuid": "GPU-da0d9c21-eb80-f5c6-c12c-bfc5bcb9f207",
+  "launch_context": {
+    "attempt_id": "m2_unpatched_upstream_gpu7_20260805T041024Z",
+    "prelaunch_utc": "20260805T041024Z"
+  },
+  "model_id": "Qwen/Qwen3-VL-8B-Instruct",
+  "model_revision": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+  "notes": [
+    "M2: unpatched-upstream reproduction rerun of Attempt 03 conditions.",
+    "Frozen SGLang checkout is a FRESH FULL CLONE of sgl-project/sglang at HEAD 198a3bc29bbf2ed169d50f5b7ad35c74262ff10f (2026-08-05 03:53Z, PR #33615). NOT the previously pinned 58974ca16c.",
+    "R1 audit established that the three DeepStack co-omission sites are unchanged from 58974ca16c to 198a3bc29b (overnight upstream drift was MLA-only, not DeepStack-related). This M2 empirically confirms the bug still reproduces on latest upstream.",
+    "See experiments/qwen3vl_bcg_deepstack_fix/r1_upstream_audit.md and plan.md §10.0."
+  ],
+  "preflight_status": "OK",
+  "prelaunch_utc": "20260805T041024Z",
+  "profiler_repo_branch": "debug/qwen3vl-bcg-deepstack-fix",
+  "profiler_repo_head": "a501b3b4602b1fc33bfca1e894baa7ea6d1f9374",
+  "sampling": {
+    "seed": "fixed",
+    "temperature": 0.0,
+    "top_k": 1,
+    "top_p": 1.0
+  },
+  "sglang_fork_expected": "986c89e69c25882ab6f3d396f8eb306f38f2c8d2",
+  "sglang_fork_head_pre": "986c89e69c25882ab6f3d396f8eb306f38f2c8d2",
+  "text_hidden_size": 4096,
+  "upstream_sglang_main_at_run": {
+    "sha": "198a3bc29bbf2ed169d50f5b7ad35c74262ff10f",
+    "committer_date": "2026-08-04T20:53:26-07:00",
+    "subject": "[Test] Route GEMM backend UTs through real layer modules and weight loaders (#33615)"
+  }
+}

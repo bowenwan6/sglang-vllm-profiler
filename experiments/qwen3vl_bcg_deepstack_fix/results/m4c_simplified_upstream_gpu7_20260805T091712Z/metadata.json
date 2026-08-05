@@ -1,0 +1,30 @@
+{
+  "attempt_id": "m4c_simplified_upstream_gpu7_20260805T091712Z",
+  "amendments_in_force": ["Amendment 1", "Amendment 2", "Amendment 4"],
+  "arms_planned": ["eager_normal", "eager_zero_deepstack", "bcg_normal", "bcg_zero_deepstack"],
+  "arm_launch_ids": {
+    "eager_normal": "2026-08-05T09-18-40Z",
+    "eager_zero_deepstack": "2026-08-05T09-19-28Z",
+    "bcg_normal": "2026-08-05T09-20-17Z",
+    "bcg_zero_deepstack": "2026-08-05T09-21-24Z"
+  },
+  "bcg_allowlist_patch": {"flag": "--patch-bcg-allowlist", "opt_in": true},
+  "deepstack_visual_indexes": [8, 16, 24],
+  "expected_deepstack_shape_width": 12288,
+  "fixture": "fixtures/image_bands.png",
+  "fixture_sha256": "8fa3ed69d78049835d6631b3b4314be21ea3e797626be6c58fc72adfb30070a2",
+  "frozen_sglang_head": "eac1f78568026f60982c255f6fe2cb5e09129be3",
+  "frozen_sglang_head_with_patch": true,
+  "gpu_id": "7",
+  "gpu_uuid": "GPU-da0d9c21-eb80-f5c6-c12c-bfc5bcb9f207",
+  "launch_context": {"attempt_id": "m4c_simplified_upstream_gpu7_20260805T091712Z", "prelaunch_utc": "20260805T091712Z"},
+  "model_id": "Qwen/Qwen3-VL-8B-Instruct",
+  "model_revision": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+  "notes": ["M4c: rerun of M4/M4b on the SIMPLIFIED patch (post-adversarial-review). Source line count reduced from +119 to +82; test line count reduced from 214 to 193. Expected behavior identical to M4/M4b."],
+  "preflight_status": "OK",
+  "prelaunch_utc": "20260805T091712Z",
+  "sampling": {"seed": "fixed", "temperature": 0.0, "top_k": 1, "top_p": 1.0},
+  "sglang_fork_expected": "986c89e69c25882ab6f3d396f8eb306f38f2c8d2",
+  "sglang_fork_head_pre": "986c89e69c25882ab6f3d396f8eb306f38f2c8d2",
+  "text_hidden_size": 4096
+}

@@ -413,10 +413,11 @@ else
     echo "WARN: LIBCUDA_PRELOAD ($LIBCUDA_PRELOAD) missing; continuing without."
 fi
 
+FROZEN_SGLANG_SHA_PIN="${QWEN35_FROZEN_SGLANG_SHA:-58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8}"
 LAUNCHER_ARGS=(
     --instrumentation "$INSTRUMENTATION_PATH"
     --frozen-sglang "$FROZEN_SGLANG"
-    --frozen-sglang-sha "58974ca16ca2a4bb2f02f9ceb9622a0fd2ccf7f8"
+    --frozen-sglang-sha "$FROZEN_SGLANG_SHA_PIN"
     --patch-log "$PATCH_LOG"
 )
 if [ "$PATCH_BCG_ALLOWLIST" = "1" ]; then
