@@ -17,6 +17,7 @@ performance gains.
 | Exact base SHA | `eac1f78568026f60982c255f6fe2cb5e09129be3` |
 | Base subject | `[CI] Free hosted-runner disk space only when it is low (#33644)` |
 | Base date (UTC) | `2026-08-05T04:55:06Z` |
+| Adversarial review | Completed 2026-08-05; behavior-preserving simplifications applied as commit 3 |
 
 ## 2. Clean fix branch
 
@@ -24,7 +25,7 @@ performance gains.
 |---|---|
 | Fork | `bowenwan6/sglang` |
 | Branch | `fix/bcg-deepstack-replay-slot` |
-| Branch HEAD | `c9d6d898ea76a23ce64e6b1e3dbd155a1f24cddc` |
+| Branch HEAD | `9410775e29` (after adversarial-review simplification commit) |
 | Remote status | pushed; `origin/…..HEAD` divergence = 0 |
 | Ancestor of `upstream/main`? | No (branch adds 2 commits on top) |
 | Any investigation-branch history? | No (built directly on `upstream/main`, verified with `git merge-base --is-ancestor fix/pcg-vlm-deepstack-warmup fix/bcg-deepstack-replay-slot` → returns non-zero) |
@@ -32,6 +33,7 @@ performance gains.
 ## 3. Commit list
 
 ```
+9410775e29  refactor(bcg): shrink DeepStack replay-slot patch after adversarial review
 c9d6d898ea  test(bcg): unit tests for DeepStack BCG replay-slot contract
 fd4c4cb599  fix(bcg): copy Qwen3-VL input_deepstack_embeds into a stable replay slot
 ```
@@ -39,13 +41,18 @@ fd4c4cb599  fix(bcg): copy Qwen3-VL input_deepstack_embeds into a stable replay 
 ## 4. `git diff upstream/main...HEAD --stat`
 
 ```
- .../model_executor/cuda_graph_buffer_registry.py   |  22 +++
- .../runner/prefill_cuda_graph_runner.py            |  69 +++++++
- .../srt/model_executor/runner_utils/buffers.py     |  16 ++
- python/sglang/srt/models/qwen3_vl.py               |  12 ++
- .../model_executor/test_deepstack_replay_slot.py   | 214 +++++++++++++++++++++
- 5 files changed, 333 insertions(+)
+ .../model_executor/cuda_graph_buffer_registry.py   |  15 ++
+ .../runner/prefill_cuda_graph_runner.py            |  51 ++++++
+ .../srt/model_executor/runner_utils/buffers.py     |  11 ++
+ python/sglang/srt/models/qwen3_vl.py               |   5 +
+ .../model_executor/test_deepstack_replay_slot.py   | 193 +++++++++++++++++++++
+ 5 files changed, 275 insertions(+)
 ```
+
+(Down from +333 at initial commit — the third commit is a behavior-
+preserving refactor per the adversarial-review findings; see
+[reviewer_qa.md](./fix_prototype/reviewer_qa.md) and
+[review_report.md](./fix_prototype/review_report.md).)
 
 ## 5. Full changed-file list
 

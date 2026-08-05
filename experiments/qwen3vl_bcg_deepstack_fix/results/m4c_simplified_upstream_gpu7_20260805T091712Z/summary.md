@@ -1,0 +1,1 @@
+Qwen3.5-4B BCG DeepStack attempt m4c_simplified_upstream_gpu7_20260805T091712Z: verdict PASS_BCG_CORRECT. bcg_normal matches eager_normal AND diverges from bcg_zero (so DeepStack was retained under BCG). PASS_BCG_CORRECT.
