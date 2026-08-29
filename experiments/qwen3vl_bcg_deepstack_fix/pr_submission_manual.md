@@ -1,5 +1,11 @@
 # Manual PR submission — everything you paste into GitHub
 
+> ⚠️ **SUPERSEDED — historical record, 2026-08-05.** The PR is open as
+> [sgl-project/sglang#33726](https://github.com/sgl-project/sglang/pull/33726);
+> the branch HEAD and upstream base named below are long obsolete.
+> **Current state: [`upstream_handoff.md`](upstream_handoff.md).**
+> Preserved unedited as provenance for the submission-time materials.
+
 **PR is NOT open yet.** All materials here are ready to copy verbatim.
 
 ---

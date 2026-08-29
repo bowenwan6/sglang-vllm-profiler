@@ -1,5 +1,13 @@
 # Submission package — Qwen3-VL DeepStack BCG replay-slot fix
 
+> ⚠️ **SUPERSEDED — historical record, 2026-08-05.** The PR was opened on
+> 2026-08-05 as [sgl-project/sglang#33726](https://github.com/sgl-project/sglang/pull/33726)
+> and has since advanced well past this snapshot. Every SHA, branch HEAD, and
+> commit count below is stale; the branch now carries fail-closed, test-pruning,
+> allowlist, and six `main` merge commits. **Current state:
+> [`upstream_handoff.md`](upstream_handoff.md).** Preserved unedited as
+> provenance for what was prepared at submission time.
+
 **Prepared for review — PR not opened.** Submit via the exact commands
 in §12 below when you're ready. The materials here are what a reviewer
 will need to inspect the change; the framing sticks to correctness
