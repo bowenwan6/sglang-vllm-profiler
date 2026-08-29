@@ -63,13 +63,16 @@ Source: GitHub issues #1–#5 on `bowenwan6/sglang-vllm-profiler`
 (@JustinTong0323, 2026-05-27). Dependency order:
 **#2 → {#4, #3 parallel} → #5 → report restructure**.
 
+Status as of **2026-08-29** (verified against the live GitHub API):
+
 | # | Title | Priority | Status |
 |---|---|---|---|
-| 1 | Tracking: next-round follow-ups | meta | open (tracking) |
-| **2** | **Default-overlap Qwen3-VL rebaseline** | **P0** | ✅ COMPLETE / PASS (results under `v2/caseAC_rebaseline/results/`) |
-| **4** | **Qwen3-VL image+text + CUDA IPC** | **P1** | Sub-track investigation ✅ concluded 2026-07-29 (see §4). Root cause fixed on fork; upstream SGLang PR #30868 (merged 2026-07-19) addresses the same root cause. Non-PCG IMG-A resume (`S0_ipc_repeat → V0_vllm → S0_noipc`) remains queued under `v2/image_text_benchmarks/fixed_generator_plan.md`. |
-| 3 | Qwen3.5 VL-model profiling | P1 | **active sub-track (correctness first, not perf transfer):** Qwen3.5-4B BCG DeepStack investigation on branch `debug/qwen35-4b-bcg-deepstack` — see §7. Perf transfer check remains queued behind correctness gate. |
-| 5 | Selective / default-on PCG PR plan | P2 | planned (needs #4) |
+| 1 | Tracking: next-round follow-ups | meta | open — post refreshed checklist, close last |
+| **2** | **Default-overlap Qwen3-VL rebaseline** | **P0** | ✅ COMPLETE / PASS (results under `v2/caseAC_rebaseline/results/`) — closed |
+| 9 | Qwen3.5 DeepStack under multimodal prefill BCG | P1 | ✅ ANSWERED `NOT_APPLICABLE_QWEN35` — **ready to close on the tracker.** Spun out the real Qwen3-VL bug → upstream PR [#33726](https://github.com/sgl-project/sglang/pull/33726), open/approved/mergeable (see `experiments/qwen3vl_bcg_deepstack_fix/upstream_handoff.md`). |
+| **4** | **Qwen3-VL image+text + CUDA IPC** | **P0 — active** | ⚠️ PARTIAL. Only `IMG_A_S0_ipc` completed (5/5 reps, 2 000 requests, TTFT p50 64.8 ms); `S2_ipc_pcg` crashed on the capture-stream assertion; `S0_ipc_repeat` / `V0_vllm` / `S0_noipc` unrun. Capture-stream sub-track ✅ concluded 2026-07-29 (§4). Resume plan: `v2/image_text_benchmarks/fixed_generator_plan.md`. |
+| 3 | Qwen3.5 SGLang-vs-vLLM transfer check | P1 | ❌ **NOT RUN.** The DeepStack (§7) and GDN studies answered different correctness/mechanism questions; neither is the roadmap's cross-framework Case-A/Case-C comparison. Needs a freshly pinned, version-aligned environment. |
+| 5 | Selective / default-on graph-enablement policy | P2 | ❌ blocked on #4. **Must be re-scoped to distinguish PCG from BCG** — the fork now carries a BCG allowlist while this issue was written about PCG. Do not silently substitute one for the other. |
 
 ## 4. Sub-track — Qwen3-VL PCG capture-stream investigation
 
@@ -231,27 +234,50 @@ the current merge.
 
 ## 5. Immediate next steps
 
-- **Issue #3 — new sub-track (highest priority in #3).** A new
-  `Qwen3.5-4B BCG DeepStack` investigation opens on branch
-  `debug/qwen35-4b-bcg-deepstack` — see §7. This runs **before** the
-  perf-transfer check because a suspected correctness gap on
-  `Qwen3_5ForConditionalGeneration` under multimodal prefill BCG must be
-  proven or disproven first; a perf comparison against an uncertified
-  correctness base would be meaningless.
-- **Issue #3 (perf transfer, deferred).** Apply the v2 methodology and
-  test whether the Case A PCG finding transfers — gated on §7's verdict.
-- **Issue #5** — Selective / default-on PCG PR plan: needs #4's image
-  evidence, which is now audited and available in R6.
-- **Upstream verification** — a separate CPU-only + fresh-run task to
-  reproduce the R6.1 Amendment B repeated-shape crash on current upstream
-  SGLang (post PR #30868). If the assertion no longer reproduces, close the
-  Issue #4 sub-track as "already fixed upstream"; if some residual case
-  reproduces, file a smaller PR scoped to that residual case. Do **not**
-  upstream the old fork branch unchanged.
-- **IMG-A non-PCG resume** — `S0_ipc_repeat → V0_vllm → S0_noipc` remains
-  queued under
-  [`fixed_generator_plan.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/fixed_generator_plan.md);
-  orthogonal to the PCG sub-track.
+> Rewritten 2026-08-29. The §7 correctness detour is finished and its fix is
+> upstream; the profiling mainline resumes at #4. Detailed work packages and
+> acceptance gates:
+> [`reports/2026-08-28_profiling_resumption_audit.md`](reports/2026-08-28_profiling_resumption_audit.md).
+
+1. **Tracker hygiene (half day, no GPU).** Close #9 as `NOT_APPLICABLE_QWEN35`,
+   stating that no shipped Qwen3.5 checkpoint exercises DeepStack and
+   cross-linking the separate Qwen3-VL FAIL→PASS evidence. Post a refreshed
+   checklist on #1. Amend #5 to name PCG and BCG as distinct backends.
+
+2. **Close out the BCG handoff (engineering lane, low effort).** The fix is in
+   an approved, mergeable PR. What remains is watching CI on `c31e6fe315`,
+   optionally tightening `assertRaises` → `assertRaisesRegex`, and — if a
+   current devbox becomes available — repeating the smoke on a
+   production-representative stack. Tracked in
+   [`upstream_handoff.md`](experiments/qwen3vl_bcg_deepstack_fix/upstream_handoff.md).
+   Do **not** treat this as closing #4 or #5: BCG ≠ PCG.
+
+3. **#4 — finish IMG-A (next GPU work, 1–2 GPU days).** Freeze a new environment
+   manifest (SGLang SHA, vLLM version, model revision, harness revision, CUDA /
+   driver / torch / kernel, attention backend, launch flags, IPC env). Run
+   Phase-0 correctness plus a tiny current-upstream image+PCG smoke: if the
+   capture-stream assertion is gone, restore the PCG arm; if not, record the
+   exact current failure and exclude it transparently. Then complete
+   `S0_ipc_repeat → V0_vllm → S0_noipc`. Keep the existing `S0_ipc` result only
+   if provenance and stack match, else rerun the whole bracket. Answer the three
+   questions separately: SGLang vs vLLM, IPC on vs off, PCG on vs default.
+
+4. **#3 — the actual Qwen3.5 transfer study (1–2 GPU days, parallelisable).**
+   Confirm both frameworks can serve the same checkpoint and API semantics
+   first. Repeat Phase-0 parity, then clean text-only Case A (128→128, c=1) and
+   Case C (512→128, c=16) with SGLang default, the canonical supported graph
+   intervention, and a vLLM anchor. Do not assume the Qwen3-VL PCG lever is
+   valid for Qwen3.5 — its supported route is BCG unless a source audit says
+   otherwise. The GDN report is an appendix, not a substitute.
+
+5. **#5 — decide policy from the matrix (after #4).** Build backend × modality ×
+   load explicitly, then implement the *smallest* policy the evidence supports.
+   If benefit is confined to stable text c=1, choose selective enablement with
+   observable hit/miss/fallback reasons rather than a global force-on.
+
+6. **#1 — restructure the final report and close the umbrella** once #3, #4, #5
+   and #9 have final dispositions. Optional B/D baselines and GDN L2Norm fusion
+   must not block closure.
 
 ## 6. Commit cadence and artifact rules
 

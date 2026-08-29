@@ -2,7 +2,13 @@
 
 > Short, executable memory for resuming v2 work across context windows. Not a report.
 > Active source of truth is root [`plan.md`](../../../plan.md); this file just speeds re-entry.
-> Last refreshed: 2026-05-29 (for issue #4 image+text benchmarks).
+> Last refreshed: **2026-08-29** (post-BCG-detour; #4 resumption).
+>
+> **Since the 2026-05-29 refresh:** the #4 smoke passed and IMG-A *partially*
+> ran; a correctness detour (#9 → Qwen3-VL BCG DeepStack bug) was fixed and
+> upstreamed as [sgl-project/sglang#33726](https://github.com/sgl-project/sglang/pull/33726);
+> the Qwen3.5 DeepStack question closed as `NOT_APPLICABLE_QWEN35`. §§5–6 below
+> are updated; §§1–3, 7–8 still hold.
 
 ## 1. Repo / commit rules
 
@@ -50,7 +56,7 @@
 ## 5. Issue #4 protocol summary
 
 Protocol: [`image_text_benchmarks/protocol.md`](image_text_benchmarks/protocol.md) (decision-complete,
-gated). Scaffold READMEs exist; **no runner, no runs, no servers yet.**
+gated). **Runner exists; the Phase-4.0 smoke passed and IMG-A ran partially** — see §6.
 
 - **Workloads:** IMG-A (1×720p + short text, c=1; primary Case-A analog), IMG-B (medium text, c=1),
   IMG-C (short text, c=16; Case-C analog), IMG-D (opt, 2 images).
@@ -64,16 +70,41 @@ gated). Scaffold READMEs exist; **no runner, no runs, no servers yet.**
 - **Open items (UNVERIFIED — gate Phase 4.0):** (1) vLLM image anchor via `sglang-oai-chat`;
   (2) text-length pinning via `--random-range-ratio`; (3) `SGLANG_USE_CUDA_IPC_TRANSPORT=1` actually engages.
 
-## 6. Immediate execution plan (Phase 4.0 smoke first)
+## 6. Where #4 actually stands (updated 2026-08-29)
 
-- **Phase 4.0 = smoke, NOT a full benchmark.** Implement
-  `experiments/qwen3vl8b/v2/image_text_benchmarks/run_image_text_smoke.py`.
-- Before running: `python3 -m py_compile` + diff review.
-- Smoke covers 3 paths: SGLang+IPC, SGLang no-IPC, vLLM anchor. Tiny `--num-prompts 2`, c=1.
-  **No perf conclusions** — purpose is only to resolve the 3 open items.
-- **If smoke fails → stop and report** (do NOT run IMG-A).
-- **If smoke succeeds → commit smoke summary, then implement the IMG-A formal runner.** IMG-A formal runs
-  only after smoke passes (Phase 4.1).
+Phase 4.0 smoke **passed**; the benchmark-generator `<|video_pad|>` bug was fixed
+and merged upstream (`07f326c184`, SGLang #26864). Stage 4.2 IMG-A is **PARTIAL**:
+
+| Variant | Result |
+|---|---|
+| `IMG_A_S0_ipc` | ✅ 5/5 reps, 2 000 requests, 0 failures, TTFT p50 **64.8 ms** |
+| `IMG_A_S2_ipc_pcg` | ❌ rep 1 server crash — `AssertionError: PCG capture stream is not set` |
+| `IMG_A_S0_ipc_repeat` / `V0_vllm` / `S0_noipc` | ⏸ skipped per protocol §9 |
+
+So **no comparison exists yet**: there is one SGLang arm, no vLLM anchor, and no
+IPC ablation. The single number above is not a finding.
+
+### Resume order (next GPU work)
+
+1. Freeze a **new environment manifest** — the old stack is stale, so re-pin
+   SGLang SHA, vLLM version, model revision, harness revision, CUDA/driver/torch/
+   kernel, attention backend, and IPC env before anything runs.
+2. Re-run Phase-0 correctness plus a **tiny current-upstream image+PCG smoke**.
+   If the capture-stream assertion no longer reproduces, restore the PCG arm; if
+   it does, record the exact current-upstream failure and exclude PCG
+   transparently.
+3. Complete the bracket `S0_ipc_repeat → V0_vllm → S0_noipc`. Keep the existing
+   `S0_ipc` result **only** if provenance and stack match — otherwise rerun the
+   whole bracket.
+4. Gate to close #4: headline-quality IMG-A with a vLLM anchor and an IPC
+   ablation; PCG either has clean data or a documented current-upstream
+   exclusion. **Do not start IMG-B/C before that.**
+
+Recovery plan: [`fixed_generator_plan.md`](image_text_benchmarks/fixed_generator_plan.md).
+
+⚠️ **BCG ≠ PCG.** The Qwen3-VL BCG DeepStack fix (upstream PR #33726) is a
+different graph backend. It does not restore the PCG arm and must not be
+silently substituted for it here.
 
 ## 7. Artifact rules for #4
 

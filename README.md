@@ -21,7 +21,7 @@ latency gap comes from — not a generic benchmark ranking.
 
 ## Overview
 
-This repo holds two experiments:
+This repo holds three tracks:
 
 1. **`qwen3vl8b`** — the original TTFT-gap investigation on Qwen3-VL-8B-Instruct, asking a focused
    question: **where does SGLang's time-to-first-token (TTFT) gap versus vLLM come from?** The goal
@@ -30,11 +30,20 @@ This repo holds two experiments:
    optimization. Organised as a phase-gated pipeline (Phase 0 → 5): prove the two servers are
    comparable, establish a baseline, shape / de-noise the workloads, collect torch-profiler traces,
    triage them, and validate the top hypothesis. See §Directory Layout below and `plan.md` §1–§6.
-2. **`qwen35_4b`** — a correctness-first sub-track under active development on branch
-   `debug/qwen35-4b-bcg-deepstack`. Source-level audit of `Qwen/Qwen3.5-4B` on current upstream
-   SGLang `main` for a suspected multimodal prefill BCG DeepStack gap. **This is an investigation,
-   not a confirmed bug** — verdict pending runtime validation on GPU 0. See
+   **Text-only Case A/C is complete; the image+text arm (#4) is the active profiling priority.**
+2. **`qwen35_4b`** — correctness-first sub-track, **concluded**. Two questions were asked and
+   answered: the DeepStack gap on `Qwen/Qwen3.5-4B` is `NOT_APPLICABLE_QWEN35` (every shipped
+   Qwen3.5 checkpoint has an empty DeepStack index list), and the GDN study returned
+   `PASS_BCG_GDN_NOTABLE_GAP` (+13.6 % launches, ≤2 % wall-clock, no correctness bug). See
    [`experiments/qwen35_4b/README.md`](experiments/qwen35_4b/README.md) and `plan.md` §7.
+   The roadmap's actual **SGLang-vs-vLLM Qwen3.5 transfer comparison (#3) has not been run** —
+   these two studies answer different questions and are not a substitute.
+3. **`qwen3vl_bcg_deepstack_fix`** — spun out of #9. A real, live-fire correctness bug: a
+   BCG-replayed Qwen3-VL image prefill dropped its DeepStack contribution. Fixed, validated
+   `FAIL → PASS`, and upstreamed as
+   **[sgl-project/sglang#33726](https://github.com/sgl-project/sglang/pull/33726)** (open, approved,
+   mergeable). Current state:
+   [`upstream_handoff.md`](experiments/qwen3vl_bcg_deepstack_fix/upstream_handoff.md).
 
 ## Main Findings
 
@@ -94,6 +103,17 @@ Clean validation focuses on **Case A** (the actionable gap) and **Case C** (the 
 | 5 — Validation | clean Case A/C validation | ✅ Complete for scoped A/C clean validation |
 | v2 #2 — Default-overlap rebaseline | production-default overlap-ON Case A/C baseline + PCG re-test | ✅ Complete / PASS (`experiments/qwen3vl8b/v2/caseAC_rebaseline/results/`) |
 
+### Round-2 track status (as of 2026-08-29)
+
+| Track | Issue | Status |
+|---|---|---|
+| Default-overlap rebaseline | [#2](https://github.com/bowenwan6/sglang-vllm-profiler/issues/2) | ✅ Complete / PASS — closed |
+| Qwen3.5 DeepStack question | [#9](https://github.com/bowenwan6/sglang-vllm-profiler/issues/9) | ✅ Answered `NOT_APPLICABLE_QWEN35` — **ready to close on the tracker** |
+| Qwen3-VL BCG DeepStack fix | (spun out of #9) | ✅ Fixed + validated; upstream PR [#33726](https://github.com/sgl-project/sglang/pull/33726) open, approved, mergeable |
+| Qwen3-VL image+text + CUDA IPC | [#4](https://github.com/bowenwan6/sglang-vllm-profiler/issues/4) | ⚠️ **PARTIAL — the active profiling priority.** Only `IMG_A_S0_ipc` completed (5/5 reps, 2 000 requests, TTFT p50 64.8 ms). PCG arm crashed; repeat / vLLM / no-IPC controls unrun. |
+| Qwen3.5 SGLang-vs-vLLM transfer | [#3](https://github.com/bowenwan6/sglang-vllm-profiler/issues/3) | ❌ **Not run.** The DeepStack and GDN studies answer different questions. |
+| Selective / default-on graph policy | [#5](https://github.com/bowenwan6/sglang-vllm-profiler/issues/5) | ❌ Blocked on #4. Must now distinguish **PCG** from **BCG** — they are different backends. |
+
 ## Directory Layout
 
 Every data directory has one `qwen3vl8b/` subtree (the single experiment):
@@ -108,8 +128,9 @@ Every data directory has one `qwen3vl8b/` subtree (the single experiment):
 | `logs/qwen3vl8b/` | infrastructure side-effects (server stderr, kernel-API trails) — consult on failure only |
 | `configs/qwen3vl8b/` | reserved for Phase 5 sweep configs |
 | `plan.md` | **active v2 source of truth** (short; current mainline + Round 2 roadmap). Full v1 plan archived at `experiments/qwen3vl8b/v1_archive_plan.md` |
-| `experiments/qwen3vl8b/v2/` | Round 2 (v2) experiments; first is `caseAC_rebaseline/` (issue #2, protocol drafted, pending approval) |
-| `experiments/qwen35_4b/` | **Qwen3.5-4B BCG DeepStack investigation** (branch `debug/qwen35-4b-bcg-deepstack`, plan §7). Correctness-first source-level audit of `Qwen/Qwen3.5-4B` on current upstream SGLang; runtime validation not yet run. Not related to the historical Qwen3-VL-8B PCG capture-stream sub-track under `experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/`. |
+| `experiments/qwen3vl8b/v2/` | Round 2 (v2) experiments: `caseAC_rebaseline/` (#2, ✅ complete) and `image_text_benchmarks/` (#4, ⚠️ partial — the active priority) |
+| `experiments/qwen35_4b/` | **Qwen3.5-4B correctness sub-track — concluded.** DeepStack verdict `NOT_APPLICABLE_QWEN35`; GDN verdict `PASS_BCG_GDN_NOTABLE_GAP` (`gdn/final_report.md`). Unrelated to the Qwen3-VL-8B PCG capture-stream sub-track under `experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/`. |
+| `experiments/qwen3vl_bcg_deepstack_fix/` | **Qwen3-VL BCG DeepStack replay-slot fix** — upstream PR [#33726](https://github.com/sgl-project/sglang/pull/33726). Start at [`upstream_handoff.md`](experiments/qwen3vl_bcg_deepstack_fix/upstream_handoff.md); `results/m*/` hold the milestone evidence (M10 = post-merge smoke). The two `*submission*.md` files are superseded historical snapshots. |
 
 ## How To Read This Repo
 
@@ -147,14 +168,20 @@ Every data directory has one `qwen3vl8b/` subtree (the single experiment):
 
 ## Next Step
 
-v2 #2 (default-overlap rebaseline) is **complete**. **#4 is now active (protocol drafting)** — see
-[`experiments/qwen3vl8b/v2/image_text_benchmarks/protocol.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/protocol.md).
-Next on the v2 roadmap (see `plan.md`):
+The correctness detour is done: the Qwen3-VL BCG DeepStack bug is fixed and sitting in an approved,
+mergeable upstream PR. **The profiling mainline resumes at #4.** Full execution plan and acceptance
+gates in [`reports/2026-08-28_profiling_resumption_audit.md`](reports/2026-08-28_profiling_resumption_audit.md).
 
-1. **#4 — Qwen3-VL image+text + `SGLANG_USE_CUDA_IPC_TRANSPORT=1` (active, protocol drafted).** The
-   realistic VLM production path. **Image+text conclusions are reported separately from the text-only (#2)
-   findings**, and the **CUDA-IPC transport** benefit is separated from the **PCG** prefill-graph lever.
-   No benchmark runs until Phase-4.0 smoke resolves the open items.
-2. **#3 — Qwen3.5 transfer check** (parallel/after #4): re-run the clean Case A/C methodology on Qwen3.5.
-3. **#5 — selective/default-on PCG PR** (after #4): minimum safe exception in the VLM auto-disable for the
-   Case-A locus — no global VLM force-on.
+1. **#4 — finish IMG-A (active, next GPU work).** Only the `S0_ipc` arm ran. Pin a fresh environment
+   manifest, run a small current-upstream image+PCG smoke to see whether the capture-stream assertion
+   still reproduces, then complete the bracket `S0_ipc_repeat → V0_vllm → S0_noipc` even if PCG stays
+   excluded. **Do not start IMG-B/C** until IMG-A has drift, framework-anchor, and IPC controls.
+   Image+text conclusions stay separate from the text-only (#2) findings, and the **CUDA-IPC transport**
+   benefit stays separate from the **PCG** prefill-graph lever.
+2. **#3 — the real Qwen3.5 transfer check** (parallel, after a common environment pin): clean Case A/C,
+   SGLang default vs the supported graph lever vs a vLLM anchor. Note the old Qwen3-VL PCG lever may
+   not be valid for Qwen3.5 — its supported route is BCG unless a source audit proves otherwise.
+3. **#5 — graph-enablement policy** (after #4): build the backend × modality × load matrix, and decide
+   PCG vs BCG explicitly. **BCG must not silently replace the PCG arm** — different backends.
+4. **Tracker hygiene (no GPU):** close #9 as `NOT_APPLICABLE_QWEN35` with a cross-link to the
+   Qwen3-VL fix evidence; post a refreshed checklist on #1.
