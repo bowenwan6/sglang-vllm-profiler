@@ -52,7 +52,7 @@ evidence supports the following disposition:
 | [#4 — Qwen3-VL image+text + CUDA IPC](https://github.com/bowenwan6/sglang-vllm-profiler/issues/4) | Partial. The fixed-generator S0 IPC arm is complete (5/5, 2,000 requests, 64.8 ms TTFT p50); PCG crashed; repeat/vLLM/no-IPC controls did not run. | **Keep open and make this the immediate profiling priority.** |
 | [#3 — Qwen3.5 clean profiling](https://github.com/bowenwan6/sglang-vllm-profiler/issues/3) | Core deliverable not run. The DeepStack and GDN studies answer different correctness/mechanism questions; neither is the promised SGLang-vs-vLLM Case-A/Case-C transfer benchmark. | **Keep open; run in parallel with #4 after a common environment pin.** |
 | [#5 — selective/default-on Qwen3-VL PCG](https://github.com/bowenwan6/sglang-vllm-profiler/issues/5) | Not complete. Text-only evidence supports selective PCG, image evidence is incomplete, and the newer fork prototype is BCG—not PCG. | **Keep open; amend it to compare PCG and BCG explicitly, then decide policy after #4.** |
-| [#1 — tracking parent](https://github.com/bowenwan6/sglang-vllm-profiler/issues/1) | Foundation #2 is done; #9 is ready to close; #3/#4/#5 remain. | **Keep open, post a refreshed checklist now, close last.** |
+| [#1 — tracking parent](https://github.com/bowenwan6/sglang-vllm-profiler/issues/1) | Foundation #2 is done; #9 is ready to close; #3/#4/#5 remain. *(Update 2026-09-03: #9 is now closed.)* | **Keep open, post a refreshed checklist now, close last.** |
 
 The key distinction is that TC-piecewise PCG and breakable CUDA graph BCG are
 different execution paths. The Qwen3-VL BCG DeepStack replay-slot fix does not
@@ -71,11 +71,11 @@ complete the PCG benchmark or selective-PCG policy issue.
 | Qwen3.5 GDN BCG investigation | Complete | `PASS_BCG_GDN_NOTABLE_GAP`; +13.6% launches, <=2% wall-clock delta, no correctness bug. |
 | Qwen3-VL BCG DeepStack fix | Technically complete | FAIL -> PASS, ten gates passed, dense and MoE validation completed. |
 
-Primary local evidence: [README.md](/data/sglang-vllm-profiler/README.md:39),
-[active plan](/data/sglang-vllm-profiler/plan.md:12),
-[BCG validation report](/data/sglang-vllm-profiler/experiments/qwen3vl_bcg_deepstack_fix/fix_prototype/validation_report.md:24),
-[MoE smoke](/data/sglang-vllm-profiler/experiments/qwen3vl_bcg_deepstack_fix/results/m9_moe_smoke_gpu1_20260816T092836Z/report.md:1), and
-[GDN final report](/data/sglang-vllm-profiler/experiments/qwen35_4b/gdn/final_report.md:337).
+Primary local evidence: [README.md](../README.md) (L39),
+[active plan](../plan.md) (L12),
+[BCG validation report](../experiments/qwen3vl_bcg_deepstack_fix/fix_prototype/validation_report.md) (L24),
+[MoE smoke](../experiments/qwen3vl_bcg_deepstack_fix/results/m9_moe_smoke_gpu1_20260816T092836Z/report.md) (L1), and
+[GDN final report](../experiments/qwen35_4b/gdn/final_report.md) (L337).
 
 ## What remains
 
@@ -85,9 +85,9 @@ The top-level README, active plan, project memory, image-text status, and BCG
 submission package disagree with later results. The most serious stale claims
 say Qwen3.5 runtime validation is still pending, Issue #4 has not run, and the
 Qwen3-VL BCG fix is still only planning. See
-[README.md](/data/sglang-vllm-profiler/README.md:33),
-[plan.md](/data/sglang-vllm-profiler/plan.md:232), and
-[project_memory.md](/data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/project_memory.md:50).
+[README.md](../README.md) (L33),
+[plan.md](../plan.md) (L232), and
+[project_memory.md](../experiments/qwen3vl8b/v2/project_memory.md) (L50).
 
 ### 2. Close the BCG upstream handoff
 
@@ -110,7 +110,7 @@ The fixed-generator run completed only `S0_ipc`: 5/5 reps, 2,000 requests,
 skipped. First run a small current-upstream PCG regression smoke; then complete
 `S0_ipc_repeat -> V0_vllm -> S0_noipc` even if PCG remains excluded. Do not
 start IMG-B/C until IMG-A has drift, framework-anchor, and IPC controls. See the
-[image-text status](/data/sglang-vllm-profiler/experiments/qwen3vl8b/v2/image_text_benchmarks/README.md:8).
+[image-text status](../experiments/qwen3vl8b/v2/image_text_benchmarks/README.md) (L8).
 
 ### 4. Run the real Qwen3.5 transfer comparison
 
