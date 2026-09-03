@@ -9,7 +9,13 @@
 > be widened to four (`default` / `disabled` / `tc_piecewise` / `breakable`) and
 > every arm must log its **resolved** backend, because an unsupported request is
 > silently downgraded to `disabled`. See [`plan.md` §3.5](../../../../plan.md).
-> The CUDA-IPC half of this protocol is unaffected.
+> **Superseded 2026-09-03:** the variant matrix in §4–§6 below is replaced by
+> [`plan.md` §11](../../../../plan.md) (Issue #4 execution plan v3). The goal,
+> dataset, workload shapes and artifact rules here still stand. The CUDA-IPC
+> half is **also** affected: `SGLANG_USE_CUDA_IPC_TRANSPORT` is deprecated in
+> favour of `--mm-feature-transport={cpu,cuda_ipc,cuda_vmm}`, and unset now
+> resolves to `cpu` — so this protocol's "headline must set IPC on" rule
+> describes a non-default configuration.
 
 > **Status: protocol drafting / pending approval. No benchmark runs, no servers started, no SGLang source
 > changes.** Builds on #2 (text-only, complete). Clean only: never set `SGLANG_KERNEL_API_LOGLEVEL` /

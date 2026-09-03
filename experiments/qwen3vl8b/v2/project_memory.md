@@ -86,6 +86,11 @@ IPC ablation. The single number above is not a finding.
 
 ### Resume order (next GPU work)
 
+> **Superseded 2026-09-03 by [`plan.md` §11](../../../plan.md)** — Issue #4
+> execution plan v3 (6 SGLang arms + vLLM anchor, engagement verifier, phased
+> gates). The 4 steps below are kept as the shape of the argument; §11 is the
+> executable version.
+
 1. Freeze a **new environment manifest** — the old stack is stale, so re-pin
    SGLang SHA, vLLM version, model revision, harness revision, CUDA/driver/torch/
    kernel, attention backend, and IPC env before anything runs.

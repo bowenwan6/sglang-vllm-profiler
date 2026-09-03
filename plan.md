@@ -324,15 +324,14 @@ the current merge.
    [`upstream_handoff.md`](experiments/qwen3vl_bcg_deepstack_fix/upstream_handoff.md).
    Do **not** treat this as closing #4 or #5: BCG ≠ PCG.
 
-3. **#4 — finish IMG-A (next GPU work, 1–2 GPU days).** Freeze a new environment
-   manifest (SGLang SHA, vLLM version, model revision, harness revision, CUDA /
-   driver / torch / kernel, attention backend, launch flags, IPC env). Run
-   Phase-0 correctness plus a tiny current-upstream image+PCG smoke: if the
-   capture-stream assertion is gone, restore the PCG arm; if not, record the
-   exact current failure and exclude it transparently. Then complete
-   `S0_ipc_repeat → V0_vllm → S0_noipc`. Keep the existing `S0_ipc` result only
-   if provenance and stack match, else rerun the whole bracket. Answer the three
-   questions separately: SGLang vs vLLM, IPC on vs off, PCG on vs default.
+3. **#4 — the next GPU work. Detailed plan: [§11](#11-issue-4-execution-plan-v3-drafted-2026-09-03-not-started).**
+   Superseded 2026-09-03: the upstream audits (§3.5 and §11.1) found that all
+   four of #4's levers now have silent-degradation paths — the deprecated IPC
+   env, the IPC pool's CPU fallback, the PCG capture-stream assertion demoted to
+   a warning, and the moving default backend. The two-arm `default` vs `+PCG`
+   bracket would still run and would measure the wrong thing. v3 replaces it
+   with 6 SGLang arms + a vLLM anchor, gated behind a per-arm **engagement
+   verifier**; the previous `IMG_A_S0_ipc` number is retired as historical.
 
 4. **#3 — the actual Qwen3.5 transfer study (1–2 GPU days, parallelisable).**
    Confirm both frameworks can serve the same checkpoint and API semantics
@@ -1483,3 +1482,173 @@ given for each step. Detail in
 * Rewriting or repurposing the §7 Qwen3.5 close-out or the §4
   Qwen3-VL PCG capture-stream evidence.
 
+## 11. Issue #4 execution plan v3 (drafted 2026-09-03, not started)
+
+> Supersedes the arm design in
+> [`image_text_benchmarks/protocol.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/protocol.md)
+> §4–§6. The protocol's **goal, dataset, workload shapes, and artifact rules
+> still stand**; only the variant matrix, the flag surface, and the gating are
+> replaced. Written after the §3.5 upstream audit plus a second audit of the
+> multimodal-transport and benchmark-harness surfaces on `upstream/main`
+> @ `2da5802bfa`. **Nothing here has been executed.**
+
+### 11.1 Why v2 cannot simply be resumed
+
+Four upstream changes each independently break an assumption the v2 runner
+encodes. Together they mean the existing bracket would still *run* — and would
+silently measure the wrong thing.
+
+| # | Change | Consequence |
+|---|---|---|
+| A | `SGLANG_USE_CUDA_IPC_TRANSPORT` is **deprecated** → `--mm-feature-transport={cpu,cuda_ipc,cuda_vmm}` (`serving_hook.py:774`). Unset resolves to **`cpu`** for single-node multimodal CUDA. | The protocol's rule "the SGLang image headline **must** set IPC on" now describes a *non-default* configuration. The production default is CPU transport. |
+| B | GPU transports reserve `SGLANG_MM_FEATURE_CACHE_MB` (default **1024 MiB**) on the base GPU and, per the flag's own help text, **fall back to CPU transport when the pool is full**. | The IPC arm can degrade to CPU per-tensor mid-run. An "IPC-on" number is not evidence IPC was used. |
+| C | The `AssertionError: PCG capture stream is not set` that killed `S2_ipc_pcg` is **gone**. `cuda_piecewise_backend.py:165` now emits `print_warning_once` and **executes that subgraph eagerly**. | The PCG arm no longer crashes — it silently partially-degrades. This is *worse* for measurement than the crash was: a clean-looking result can be mostly eager. |
+| D | `sglang.bench_serving` is a deprecation shim; the implementation moved to **`sglang.benchmark.serving`**. Image flags survive unchanged (`--image-count/-resolution/-format/-content`); the generator now builds prompts via `processor.apply_chat_template`. | The runner's invocation path needs updating. The `<\|video_pad\|>` class of bug is structurally addressed by the chat-template path. |
+
+Plus §3.5: **BCG is the default prefill backend on CUDA**, Qwen3-VL is
+auto-disabled today, and **PR #33726 flips that on merge**.
+
+**The through-line: every lever in this experiment now has a silent-degradation
+path.** v2's design assumed levers either work or crash. That is no longer
+true for any of them, so v3's central obligation is *verifying engagement*
+rather than trusting flags.
+
+### 11.2 Redesigned variant matrix
+
+Two orthogonal levers, measured against the true production default rather
+than against a chosen non-default:
+
+**Transport** (`--mm-feature-transport`): `cpu` (default) · `cuda_ipc`
+**Prefill graph** (`--cuda-graph-backend-prefill`): resolved default · `disabled` · `tc_piecewise` · `breakable`
+
+Full cross is 8 cells; that is not affordable, and most cells answer nothing.
+The minimum matrix that answers all four questions is **6 SGLang arms + 1
+vLLM anchor**:
+
+| id | transport | prefill backend | answers |
+|---|---|---|---|
+| `A0_default` | unset (resolves `cpu`) | unset (**record what it resolves to**) | the real production baseline |
+| `A1_disabled` | unset | `disabled` | true no-prefill-graph floor |
+| `A2_tcp` | unset | `tc_piecewise` | does #2's PCG win transfer to images? |
+| `A3_bcg` | unset | `breakable` | what the default becomes once #33726 lands |
+| `A4_ipc` | `cuda_ipc` | unset | IPC transport benefit, isolated |
+| `A5_ipc_best` | `cuda_ipc` | winner of {A2, A3} | do the two levers compose or interfere? |
+| `V0_vllm` | — | — | cross-framework anchor |
+
+`A0` is re-run as `A0_repeat` at the end of the bracket for drift (≤5%).
+`A5` is chosen *after* A2/A3 report — it is the one adaptive cell, and the
+choice must be written down before A5 runs.
+
+**Every arm records its resolved configuration**, not its requested one:
+resolved prefill backend, resolved transport, and — for IPC arms — evidence
+the pool was actually used and never exhausted. An arm that cannot prove
+engagement is reported as `UNVERIFIED` and excluded from comparison, never
+quietly folded into the average.
+
+### 11.3 Step-by-step
+
+**Phase 0 — desk work, no GPU.**
+
+0.1 Re-pin the environment manifest: SGLang SHA, vLLM version, model revision,
+harness revision, CUDA/driver/torch/`sgl_kernel`, attention backend, and the
+exact launch flags per arm. The current container is ~771 commits behind and
+needs `LD_PRELOAD` + `SGLANG_SKIP_SGL_KERNEL_VERSION_CHECK=1`; **decide
+explicitly** whether to rebuild or to run stale-but-controlled, and record the
+choice. Every arm shares one stack or the comparison is void.
+
+0.2 Decide the **SGLang SHA policy** against #33726's merge state, and write
+the decision into the manifest before any run:
+  - *Not merged* → pin a pre-merge SHA. `A0_default` will resolve to
+    `disabled`; `A3_bcg` is the preview of the incoming default.
+  - *Merged* → pin post-merge. `A0_default` resolves to `breakable`, and
+    `A1_disabled` becomes the historical baseline.
+  Never straddle the merge inside one bracket.
+
+0.3 Port the runner (`scripts/run_image_text_imgA_fixed.py`, 649 lines) to the
+v3 surface: `sglang.benchmark.serving` invocation, `--mm-feature-transport`,
+`--cuda-graph-backend-prefill`, the 7-arm list, and the resolved-config
+capture in 0.4. This is an edit, not a rewrite — bracket ordering, drift
+checks, forbidden-token guards, and artifact layout are all reusable.
+
+0.4 Build the **engagement verifier** — the piece v2 did not have and the one
+thing that makes v3 trustworthy. For each arm, parse the server log and fail
+the arm loudly on:
+  - resolved prefill backend ≠ requested;
+  - **any** `PCG capture stream is not set` warning (`tc_piecewise` arms) —
+    that arm is partially eager, so its number is not a PCG number;
+  - any multimodal-transport CPU-fallback or pool-exhaustion signal
+    (`cuda_ipc` arms);
+  - any deprecation warning naming a flag we set — proof we are still on an
+    old surface.
+  Emit a one-line `engagement: VERIFIED|UNVERIFIED (<reason>)` per arm into
+  the summary. **No number is quotable without `VERIFIED`.**
+
+**Phase 1 — cheap gates, ~2 GPU-hours.** Serialized, one arm at a time.
+
+1.1 GPU idle check per the standing rules (all 8 GPUs were in use at drafting
+time — this plan is *blocked* until one frees).
+1.2 Phase-0 correctness parity: SGLang vs vLLM greedy agreement on a fixed
+text fixture.
+1.3 **vLLM image-anchor smoke** — `--backend sglang-oai-chat` against vLLM's
+chat endpoint with data-URI images. Still `UNVERIFIED` from v2 and it gates
+every cross-framework claim. If it fails, #4 degrades to an
+SGLang-internal study and that must be stated, not glossed.
+1.4 Tiny per-arm engagement smoke: ~20 requests on each of the 6 SGLang
+configurations purely to run the 0.4 verifier. **Cheapest possible discovery
+of a dead arm.** Any arm failing here is fixed or excluded *before* the
+expensive bracket.
+
+**Gate**: 1.2 + 1.3 pass, and ≥ `A0/A1/A2 or A3/A4` verify. Otherwise stop and
+report — do not run a headline bracket on unverified arms.
+
+**Phase 2 — IMG-A headline, ~1 GPU-day.** Workload unchanged from the
+protocol: 1×720p PNG + ~128 text tokens, 128 out, c=1, 400 prompts, 30 warmup,
+5 reps. Bracket order:
+
+`A0_default → A1_disabled → A2_tcp → A3_bcg → A4_ipc → A5_ipc_best → V0_vllm → A0_repeat`
+
+Drift gate `|A0_repeat − A0_default| ≤ 5%`; if it fails, the whole bracket is
+discarded — no partial rescue.
+
+**Phase 3 — analysis.** Report the four questions **separately**, each against
+its own baseline, each with its engagement verdict:
+Q1 gap = `A0` vs `V0`; Q2 PCG transfer = `A2` vs `A1`; Q3 IPC benefit =
+`A4` vs `A0`; Q4 BCG value = `A3` vs `A1`; composition = `A5` vs
+`max(A2, A3)`. A ≥5% delta with 5 reps and CV in band counts; anything less is
+reported as "no material difference", never as a trend.
+
+**Phase 4 — only then**, IMG-C (c=16, the Case-C shape analog) to test whether
+#2's batched boundary holds for images. **IMG-B and IMG-D stay deferred.**
+
+### 11.4 Disposition of existing artifacts
+
+- `IMG_A_S0_ipc` (5/5 reps, TTFT p50 64.8 ms) — **retired, not reused.** Its
+  stack predates changes A–D and its flag surface no longer exists. Keep as
+  historical provenance; it must not appear in a v3 comparison.
+- `IMG_A_S2_ipc_pcg` crash — **closed as obsolete.** The assertion it hit no
+  longer exists (change C). Cite it only as the reason the arm was absent.
+- The capture-stream sub-track (§4) — unchanged as history; its fix is
+  upstream and its failure mode is now a warning, not a crash.
+- Protocol §4–§6 — superseded by §11.2; the rest stands.
+
+### 11.5 Acceptance criteria for closing #4
+
+1. IMG-A reported with a vLLM anchor **and** an IPC ablation **and** a
+   prefill-backend sweep, every arm carrying `engagement: VERIFIED`.
+2. One frozen manifest covering every arm, with the #33726 merge-state
+   decision recorded.
+3. The four questions answered separately, PCG and BCG never conflated.
+4. Any excluded arm documented with its exact current-upstream failure.
+5. A residual gap after transport + graph coverage opens a **new** issue —
+   #4 does not expand to chase it.
+
+### 11.6 Risks
+
+1. **Silent degradation on every lever** (A–D) — the dominant risk, and the
+   reason Phase 1.4 exists. Mitigation is the verifier, not care.
+2. **The default moves under us** when #33726 merges — mitigated by 0.2.
+3. **vLLM anchor may not work** — gated at 1.3, before spend.
+4. **GPU contention** — all 8 GPUs busy at drafting time; the plan is
+   schedule-blocked, not technically blocked.
+5. **Stale container** — every arm shares the confound, so internal contrasts
+   hold but absolute numbers are not production claims. Say so in the report.
