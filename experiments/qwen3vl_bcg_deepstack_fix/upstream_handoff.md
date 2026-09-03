@@ -4,7 +4,7 @@
 > [`submission_package.md`](submission_package.md) and
 > [`pr_submission_manual.md`](pr_submission_manual.md), both of which were
 > written before the PR existed and describe an obsolete branch snapshot.
-> Last verified against the live GitHub API: **2026-08-29 UTC**.
+> Last verified against the live GitHub API: **2026-09-03 UTC**.
 
 ## Live PR state
 
@@ -14,10 +14,20 @@
 | Title | `fix(bcg): preserve Qwen3-VL DeepStack inputs during replay` |
 | Opened | 2026-08-05 |
 | State | open, not merged |
-| Head | `c31e6fe315` on `bowenwan6:fix/bcg-deepstack-replay-slot` |
-| Base | `sgl-project:main` @ `6afb5e1771` |
+| Head | `32dbab0bb1` on `bowenwan6:fix/bcg-deepstack-replay-slot` (2026-09-03) |
 | Mergeable | **true** (`mergeable_state: unstable` — CI in flight) |
-| Diff | **+294 / −12 across 7 files**, 20 commits |
+| Diff | **+293 / −12 across 7 files** |
+
+Two further `main` merges have landed since the 2026-08-29 conflict resolution
+— `d1cd8c583b` (2026-09-02) and `32dbab0bb1` (2026-09-03) — both clean. The net
+delta moved 294 → 293 lines purely from upstream churn under the merge; no hunk
+of the fix changed.
+
+CI on `32dbab0bb1` at 2026-09-03 18:40 UTC: 63/113 checks complete — 32 success,
+30 skipped, **1 failure**: `extra-a-test-1-gpu-small`, which failed **11 seconds**
+after start. That duration cannot reach any test body, so it is an
+infrastructure/runner abort, and it is an AMD lane — outside a CUDA-only
+change's blast radius. Re-run before reading anything into it.
 
 ### Review status
 

@@ -108,7 +108,7 @@ Clean validation focuses on **Case A** (the actionable gap) and **Case C** (the 
 | Track | Issue | Status |
 |---|---|---|
 | Default-overlap rebaseline | [#2](https://github.com/bowenwan6/sglang-vllm-profiler/issues/2) | ✅ Complete / PASS — closed |
-| Qwen3.5 DeepStack question | [#9](https://github.com/bowenwan6/sglang-vllm-profiler/issues/9) | ✅ Answered `NOT_APPLICABLE_QWEN35` — **ready to close on the tracker** |
+| Qwen3.5 DeepStack question | [#9](https://github.com/bowenwan6/sglang-vllm-profiler/issues/9) | ✅ **Closed 2026-09-03** — verdict `NOT_APPLICABLE_QWEN35` ([conclusion](experiments/qwen35_4b/issue9_conclusion.md)) |
 | Qwen3-VL BCG DeepStack fix | (spun out of #9) | ✅ Fixed + validated; upstream PR [#33726](https://github.com/sgl-project/sglang/pull/33726) open, approved, mergeable |
 | Qwen3-VL image+text + CUDA IPC | [#4](https://github.com/bowenwan6/sglang-vllm-profiler/issues/4) | ⚠️ **PARTIAL — the active profiling priority.** Only `IMG_A_S0_ipc` completed (5/5 reps, 2 000 requests, TTFT p50 64.8 ms). PCG arm crashed; repeat / vLLM / no-IPC controls unrun. |
 | Qwen3.5 SGLang-vs-vLLM transfer | [#3](https://github.com/bowenwan6/sglang-vllm-profiler/issues/3) | ❌ **Not run.** The DeepStack and GDN studies answer different questions. |
@@ -183,5 +183,13 @@ gates in [`reports/2026-08-28_profiling_resumption_audit.md`](reports/2026-08-28
    not be valid for Qwen3.5 — its supported route is BCG unless a source audit proves otherwise.
 3. **#5 — graph-enablement policy** (after #4): build the backend × modality × load matrix, and decide
    PCG vs BCG explicitly. **BCG must not silently replace the PCG arm** — different backends.
-4. **Tracker hygiene (no GPU):** close #9 as `NOT_APPLICABLE_QWEN35` with a cross-link to the
-   Qwen3-VL fix evidence; post a refreshed checklist on #1.
+4. **Tracker hygiene (no GPU):** ✅ #9 closed 2026-09-03 (`NOT_APPLICABLE_QWEN35`, write-up at
+   [`experiments/qwen35_4b/issue9_conclusion.md`](experiments/qwen35_4b/issue9_conclusion.md));
+   still to do — post a refreshed checklist on #1 and re-scope #5.
+
+> ⚠️ **Read [`plan.md` §3.5](plan.md) before running #4 or #5.** Upstream restructured the
+> CUDA-graph flags: `--enforce-piecewise-cuda-graph` is now a deprecated alias for
+> `--cuda-graph-backend-prefill=tc_piecewise`, **breakable (BCG) is the default prefill backend
+> on CUDA**, and PR #33726 adds Qwen3-VL to the breakable allowlist — so Qwen3-VL's default flips
+> from *no prefill graph* to *BCG-on* when it merges. The two-arm `default` vs `+PCG` design no
+> longer spans the space.

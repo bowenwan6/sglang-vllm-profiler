@@ -1,5 +1,16 @@
 # Protocol — Issue #4: Qwen3-VL image+text benchmarks with CUDA IPC transport
 
+> ⚠️ **Amendment pending (2026-09-03) — the arm matrix below is out of date.**
+> Upstream restructured the CUDA-graph flags: `--enforce-piecewise-cuda-graph`
+> is now a deprecated alias for `--cuda-graph-backend-prefill=tc_piecewise`,
+> **breakable (BCG) is the default prefill backend on CUDA**, and PR #33726 adds
+> Qwen3-VL to the breakable allowlist — so this protocol's `S0` "default" arm
+> flips meaning when that PR merges. The two-arm `S0` / `S2_ipc_pcg` design must
+> be widened to four (`default` / `disabled` / `tc_piecewise` / `breakable`) and
+> every arm must log its **resolved** backend, because an unsupported request is
+> silently downgraded to `disabled`. See [`plan.md` §3.5](../../../../plan.md).
+> The CUDA-IPC half of this protocol is unaffected.
+
 > **Status: protocol drafting / pending approval. No benchmark runs, no servers started, no SGLang source
 > changes.** Builds on #2 (text-only, complete). Clean only: never set `SGLANG_KERNEL_API_LOGLEVEL` /
 > `SGLANG_KERNEL_API_LOGDEST`; no profiler. SGLang image headline runs **must** set

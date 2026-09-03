@@ -106,6 +106,16 @@ Recovery plan: [`fixed_generator_plan.md`](image_text_benchmarks/fixed_generator
 different graph backend. It does not restore the PCG arm and must not be
 silently substituted for it here.
 
+⚠️ **Flag restructure (2026-09-03) — re-read before writing any runner.**
+`--enforce-piecewise-cuda-graph` is now a deprecated alias for
+`--cuda-graph-backend-prefill=tc_piecewise`; prefill backends are
+`full | breakable | tc_piecewise | disabled`; **breakable is the CUDA default**;
+and PR #33726 puts Qwen3-VL on the breakable allowlist, so its default prefill
+backend flips from *disabled* to *BCG* on merge. #4 therefore needs four SGLang
+arms, not two, and each must log its **resolved** backend — an unsupported
+request is silently downgraded to `disabled`, so flag acceptance proves nothing.
+Details and line references: [`plan.md` §3.5](../../../plan.md).
+
 ## 7. Artifact rules for #4
 
 - Protocol: `experiments/qwen3vl8b/v2/image_text_benchmarks/protocol.md`.

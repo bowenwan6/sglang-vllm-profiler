@@ -69,10 +69,82 @@ Status as of **2026-08-29** (verified against the live GitHub API):
 |---|---|---|---|
 | 1 | Tracking: next-round follow-ups | meta | open — post refreshed checklist, close last |
 | **2** | **Default-overlap Qwen3-VL rebaseline** | **P0** | ✅ COMPLETE / PASS (results under `v2/caseAC_rebaseline/results/`) — closed |
-| 9 | Qwen3.5 DeepStack under multimodal prefill BCG | P1 | ✅ ANSWERED `NOT_APPLICABLE_QWEN35` — **ready to close on the tracker.** Spun out the real Qwen3-VL bug → upstream PR [#33726](https://github.com/sgl-project/sglang/pull/33726), open/approved/mergeable (see `experiments/qwen3vl_bcg_deepstack_fix/upstream_handoff.md`). |
+| 9 | Qwen3.5 DeepStack under multimodal prefill BCG | P1 | ✅ **CLOSED 2026-09-03** (`completed`) — verdict `NOT_APPLICABLE_QWEN35`; conclusion write-up in [`experiments/qwen35_4b/issue9_conclusion.md`](experiments/qwen35_4b/issue9_conclusion.md). Spun out the real Qwen3-VL bug → upstream PR [#33726](https://github.com/sgl-project/sglang/pull/33726), open/approved/mergeable (see `experiments/qwen3vl_bcg_deepstack_fix/upstream_handoff.md`). |
 | **4** | **Qwen3-VL image+text + CUDA IPC** | **P0 — active** | ⚠️ PARTIAL. Only `IMG_A_S0_ipc` completed (5/5 reps, 2 000 requests, TTFT p50 64.8 ms); `S2_ipc_pcg` crashed on the capture-stream assertion; `S0_ipc_repeat` / `V0_vllm` / `S0_noipc` unrun. Capture-stream sub-track ✅ concluded 2026-07-29 (§4). Resume plan: `v2/image_text_benchmarks/fixed_generator_plan.md`. |
 | 3 | Qwen3.5 SGLang-vs-vLLM transfer check | P1 | ❌ **NOT RUN.** The DeepStack (§7) and GDN studies answered different correctness/mechanism questions; neither is the roadmap's cross-framework Case-A/Case-C comparison. Needs a freshly pinned, version-aligned environment. |
 | 5 | Selective / default-on graph-enablement policy | P2 | ❌ blocked on #4. **Must be re-scoped to distinguish PCG from BCG** — the fork now carries a BCG allowlist while this issue was written about PCG. Do not silently substitute one for the other. |
+
+## 3.5 Upstream drift audit (2026-09-03) — CUDA-graph flags were restructured
+
+Verified by reading `upstream/main` @ `2da5802bfa`. This changes how #4 and #5
+must be run and written; it does **not** invalidate #2's numbers.
+
+**1. The PCG flag was renamed, not removed.** `--enforce-piecewise-cuda-graph`
+is now a *deprecated alias* for `--cuda-graph-backend-prefill=tc_piecewise`
+(`server_args.py:3988`). The old flag still works and still emits a
+deprecation notice. `tc_piecewise` remains a first-class backend with its own
+compile path — it is **not** slated for removal.
+
+Prefill backends are now `full | breakable | tc_piecewise | disabled`, settable
+per phase via `--cuda-graph-backend-{decode,prefill}` or the
+`--cuda-graph-config` JSON. Other renames touching our scripts:
+`--disable-cuda-graph` → `--cuda-graph-backend-{decode,prefill}=disabled`;
+`--piecewise-cuda-graph-tokens` → `--cuda-graph-bs-prefill`;
+`--enable-breakable-cuda-graph` → `--cuda-graph-backend-prefill=breakable`.
+
+**2. BCG is now the default prefill backend on CUDA.**
+`default_prefill_backend()` returns `Backend.BREAKABLE` on CUDA and
+`TC_PIECEWISE` elsewhere (`cuda_graph_config.py:112`). The v1/v2-era premise
+"SGLang ships no prefill graph by default" is obsolete **for text models**.
+
+**3. For Qwen3-VL the auto-disable still fires — today.** There are now two
+multimodal opt-in allowlists in `configs/model_config.py`:
+`multimodal_piecewise_cuda_graph_supported_model_archs` (Kimi K2.5, MiniMax M3
+Sparse) and `multimodal_breakable_cuda_graph_supported_model_archs`. **Qwen3-VL
+is on neither in upstream `main`.** So the resolution walks: default
+`breakable` → `disable_breakable_cudagraph_if_incompatible` → rule
+`"multimodal model"` fires → prefill backend `disabled`. **The #2 root cause is
+intact on current upstream**, and #4's baseline premise still holds.
+
+**4. But PR #33726 flips exactly that — for Qwen3-VL specifically.** Our own PR
+adds `Qwen3VLForConditionalGeneration` and `Qwen3VLMoeForConditionalGeneration`
+to the *breakable* allowlist. On merge, Qwen3-VL's default prefill backend
+becomes **BCG-on**, not disabled. Consequences:
+
+- **#4's `S0` baseline is about to move.** A default-arm number taken before
+  the merge measures a default that will not exist after it. Either run #4
+  against the post-merge default, or pin the pre-merge SHA and label the arm as
+  historical — do not mix.
+- **#5 is largely pre-empted, and by BCG rather than PCG.** #5 was written to
+  prototype selective/default-on *piecewise* for Qwen3-VL; the arch-allowlist
+  mechanism it would have proposed already exists and is what #33726 uses. #5
+  should be re-scoped to "which backend should Qwen3-VL default to, and on what
+  evidence" — a three-way question (`breakable` / `tc_piecewise` / `disabled`),
+  not the original binary.
+
+**5. Explicitly selecting a backend still bypasses every auto-disable rule.**
+`apply_cuda_graph_compatibility` returns early when `(prefill, backend)` is in
+`server_args._cuda_graph_config_locked` (`cuda_graph_hook.py:115`), and the
+parser locks any key set from a non-default source. So the PCG arm is still
+runnable on Qwen3-VL, and the "explicit flag beats the cascade" contract that
+#2 relied on is preserved by design rather than by accident.
+
+### Consequence for the #4 arm matrix
+
+The two-arm SGLang design (`default` vs `+PCG`) no longer spans the space. The
+minimum honest matrix is now:
+
+| arm | flag | measures |
+|---|---|---|
+| `S0` | none | the real production default — **whichever backend that resolves to on the pinned SHA; record it, never assume** |
+| `S1` | `--cuda-graph-backend-prefill=disabled` | true no-prefill-graph floor |
+| `S2` | `--cuda-graph-backend-prefill=tc_piecewise` | the #2 PCG lever |
+| `S3` | `--cuda-graph-backend-prefill=breakable` | BCG, the incoming default |
+
+Every arm must log the **resolved** backend at startup. Under the new
+resolution cascade an unsupported request is silently downgraded to
+`disabled`, so a flag being accepted is not evidence the backend engaged.
+
 
 ## 4. Sub-track — Qwen3-VL PCG capture-stream investigation
 
