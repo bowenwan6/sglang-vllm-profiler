@@ -324,7 +324,8 @@ def run_arm(arm, backend_override, num_prompts, reps, raw_dir, warmup):
         # Engagement verdict is computed while the server is still alive so
         # /server_info is reachable; the log scan sees the full run.
         lf.flush()
-        verdict = verify_arm(arm, backend, transport, info, log_path)
+        verdict = verify_arm(arm, backend, transport, info, log_path,
+                             framework=fw)
         rec["engagement"] = verdict
         log(f"  {one_line(verdict)}")
     finally:

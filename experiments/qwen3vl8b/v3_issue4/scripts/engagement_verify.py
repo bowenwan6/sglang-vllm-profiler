@@ -194,6 +194,16 @@ def scan_server_log(path: Path) -> Dict[str, Any]:
     }
 
 
+# vLLM failure signatures. The vLLM arm is a cross-framework *anchor*: we set no
+# lever on it, so "did the lever engage" is not a question that applies. What must
+# still be true is that it served the workload without falling over.
+VLLM_FAILURE = re.compile(
+    r"(Traceback \(most recent call last\)|CUDA out of memory|"
+    r"Engine (?:core )?(?:process )?(?:failed|died|crashed)|"
+    r"AsyncEngineDeadError)", re.I
+)
+
+
 def verify_arm(
     arm_id: str,
     requested_backend: Optional[str],
@@ -201,6 +211,7 @@ def verify_arm(
     server_info: Optional[Dict[str, Any]],
     log_path: Path,
     graph_engagement_floor_pct: float = 99.0,
+    framework: str = "sglang",
 ) -> Dict[str, Any]:
     """Return the arm's engagement verdict.
 
@@ -208,6 +219,13 @@ def verify_arm(
     deliberately leave the flag unset; for those we only *record* what the
     default resolved to (that recording is the point of A0_default), and do not
     fail on a mismatch that cannot exist.
+
+    `framework="vllm"` switches to the anchor criteria. vLLM exposes no
+    `/server_info`, has no SGLang prefill-graph backend and no SGLang multimodal
+    transport, so every SGLang-specific check would fail on it vacuously and the
+    arm could never verify -- which would make Q1 unanswerable by construction
+    rather than by evidence. What is checked instead is that it served the
+    workload cleanly.
     """
     reasons: List[str] = []
     scan = scan_server_log(log_path)
@@ -217,6 +235,27 @@ def verify_arm(
             "arm": arm_id,
             "engagement": "UNVERIFIED",
             "reasons": [f"server log absent: {log_path}"],
+            "scan": scan,
+        }
+
+    if framework != "sglang":
+        text = log_path.read_text(errors="replace")
+        hits = VLLM_FAILURE.findall(text)
+        if hits:
+            reasons.append(
+                f"{len(hits)} failure signature(s) in the {framework} server log, "
+                f"first: {hits[0][:120]!r}"
+            )
+        return {
+            "arm": arm_id,
+            "engagement": "VERIFIED" if not reasons else "UNVERIFIED",
+            "reasons": reasons,
+            "framework": framework,
+            "anchor_only": True,
+            "requested_prefill_backend": None,
+            "resolved_prefill_backend": None,
+            "requested_mm_transport": None,
+            "resolved_mm_transport": None,
             "scan": scan,
         }
 
@@ -331,6 +370,14 @@ def verify_arm(
 
 
 def one_line(verdict: Dict[str, Any]) -> str:
+    if verdict.get("anchor_only"):
+        return (
+            f"engagement: {verdict['engagement']} (cross-framework anchor — no "
+            "SGLang lever set; checked for clean serving only"
+            + ("" if verdict["engagement"] == "VERIFIED"
+               else ": " + "; ".join(verdict["reasons"]))
+            + ")"
+        )
     if verdict["engagement"] == "VERIFIED":
         return (
             f"engagement: VERIFIED "
