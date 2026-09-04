@@ -200,4 +200,85 @@ engagement: VERIFIED (backend=breakable, transport=cpu, captured=breakable,
                       graph=100.0% of 21 bench prefill batches, 2 probes excluded)
 ```
 
-### 1.4 five-arm engagement smoke — *running*
+### 1.4 five-arm engagement smoke (pre-instrumentation, stack `48b0365bcc`) — **Accepted** as a gate, with one arm excluded
+
+20 prompts, 1 rep per arm — sized to run the 0.4 verifier, **not** to measure.
+No number below is quotable as a result; they are here because the spread is
+what motivated the phase-2 design.
+
+| arm | requested | resolved / captured | TTFT p50 | engagement |
+|---|---|---|---|---|
+| `A0_default` | — / — | breakable / breakable, cpu | 139.6 ms | **VERIFIED** |
+| `A1_disabled` | — / `disabled` | disabled / none captured, cpu | 142.4 ms | **VERIFIED** |
+| `A2_tcp` | — / `tc_piecewise` | tc_piecewise / tc_piecewise, cpu | 143.7 ms | **UNVERIFIED** |
+| `A3_bcg` | — / `breakable` | breakable / breakable, cpu | 138.5 ms | **VERIFIED** |
+| `A4_ipc` | `cuda_ipc` / — | breakable / breakable, **cuda_ipc** | **102.3 ms** | **VERIFIED** |
+
+All arms: 20/20 completed, 0 failures, no forbidden-token error.
+
+Plan gate ("1.2 + 1.3 pass, and ≥ A0/A1/A2 or A3/A4 verify"): 4 of 5 verify.
+
+Two things worth recording before phase 2 is designed around them:
+
+- **The four graph arms sit inside 138.5–143.7 ms — a 3.7% spread at n=20, one
+  rep.** That is noise, not a result, but it says the prefill-graph lever may
+  turn out immaterial for this workload, and phase 2 has to be able to report
+  "no material difference" credibly rather than hunt for a trend.
+- **`A4_ipc` is 102.3 ms, 26.7% below `A0_default`**, with `transport=cuda_ipc`
+  confirmed resolved and no pool-fallback signal. The *transport* lever, not the
+  graph lever, is where the image-path headroom appears to be. This is the
+  hypothesis phase 2 exists to test properly.
+
+### 1.4a `A2_tcp` — the change-C silent degradation, caught and then made measurable — **solvable**
+
+The verifier failed `A2_tcp` on `PCG capture stream is not set`. This is exactly
+the hazard plan §11.1 change C describes, and it is worth being precise about why
+it is worse than the crash it replaced:
+
+- **The batch-level indicator cannot see it.** All 21 benchmark prefill batches
+  reported `cuda graph: True`, and `/server_info` reported
+  `prefill.backend = tc_piecewise`, and the capture line reported
+  `backend=tc_piecewise`. Every configuration- and behaviour-level check passed.
+  Only the log-signal check caught the degradation, because the scheduler's flag
+  is per *batch* while the piecewise fallback is per *subgraph*.
+- **The warning fired mid-benchmark**, at 04:16:20, between decode batches —
+  not during warmup.
+- **The degradation is unbounded from the log.** `print_warning_once` is
+  `@functools.lru_cache(None)` on the message string
+  (`utils/common.py:2796-2799`), so the count is capped at 1 by construction —
+  "1×" means "at least once", never "once".
+- **And it is sticky.** The fallback branch `return`s *without capturing*
+  (`cuda_piecewise_backend.py:166-173`), so a subgraph that once missed the
+  capture stream runs eager for the remainder of the process. The comment's
+  reassurance that "subsequent matching shapes still use their captured graphs"
+  is true only for shapes that were captured at startup.
+
+Excluding the arm would have satisfied §11.5 criterion 4 but left #4's **Q2**
+("does #2's PCG win transfer to images?") permanently unanswerable. Instead the
+pinned stack now carries measurement-only instrumentation
+(`471e549959`, manifest §7): counters for graph-eligible calls, fallback
+occurrences and distinct fallback shapes, emitted as a parseable `PCG_STATS`
+line. Cost is one integer increment on the eligible path; nothing is logged
+unless a fallback happens, so the patch is inert for every other arm.
+
+The verifier reads those counters and now reports the magnitude instead of an
+unbounded suspicion — verified against a synthetic log:
+
+```
+engagement: UNVERIFIED (PCG eager fallback on 2.55% of graph-eligible calls
+                        (37/1450, 3 distinct shapes) — arm ran partially eager)
+```
+
+The verdict stays `UNVERIFIED` — the plan's rule that a partially-eager arm is
+not a PCG number is deliberate and I am not softening it — but the report can now
+state *how* degraded rather than only *that* it was.
+
+### 1.4b re-run on the pinned stack — *running*
+
+The instrumentation commit landed while `A4_ipc` was starting, so the smoke above
+straddles two SHAs (`A0`–`A3` on `48b0365bcc`, `A4` on `471e549959`). The patch is
+inert outside the piecewise fallback path, but "every arm shares one stack" is
+not a rule to argue around. The whole smoke is re-run on `471e549959` as
+`phase1_engagement_smoke_pinned`; the run above is kept as the pre-instrumentation
+record.
+

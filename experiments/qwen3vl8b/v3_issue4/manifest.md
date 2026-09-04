@@ -36,7 +36,7 @@ one bracket — by pinning **one** stack for all arms:
 
 | | |
 |---|---|
-| Stack | `/data/sglang-fork` branch `exp/issue4-v3` @ `48b0365bcc` |
+| Stack | `/data/sglang-fork` branch `exp/issue4-v3` @ `471e549959` (see §7) |
 | = | `upstream/main` @ `ff1285cc28` (2026-09-03 20:24 -0700) merged into `fix/bcg-deepstack-replay-slot` @ `d1cd8c583b` |
 | Merge result | clean, no conflicts |
 | PR under test | #33726 `fix(bcg): preserve Qwen3-VL DeepStack inputs during replay` |
@@ -77,7 +77,7 @@ confound identically, so *internal contrasts hold*. Repeated in the report per
 
 | Component | Value |
 |---|---|
-| SGLang source | `/data/sglang-fork` `exp/issue4-v3` @ `48b0365bcc` (via `PYTHONPATH=/data/sglang-fork/python`) |
+| SGLang source | `/data/sglang-fork` `exp/issue4-v3` @ `471e549959` (via `PYTHONPATH=/data/sglang-fork/python`) |
 | SGLang upstream base | `ff1285cc28d6b3e0ad19c45e8b14a5966bc95c78` |
 | Profiler repo | `/data/sglang-vllm-profiler` @ `156c4b7131` |
 | Installed sglang (**must never be imported**) | `0.0.0.dev1+gda802ddca` at `/sgl-workspace/sglang` — 3123 commits behind `upstream/main` |
@@ -154,3 +154,33 @@ deprecated surface (§11.1 change A); transport is selected with
 | vLLM importable | ✅ `0.21.0` in the profiling env |
 | Model weights local | ✅ 17 GB, pinned revision |
 | GPU 7 free | ✅ 212 MiB at Phase-0 time |
+
+## 7. Measurement-only instrumentation on the pinned stack
+
+`471e549959 instrument(pcg): count eager fallbacks for issue #4 v3 measurement`,
+applied on top of the clean merge `48b0365bcc`. **Never proposed upstream.**
+
+Added after the Phase-1.4 smoke returned `A2_tcp` as `UNVERIFIED` and the
+follow-up showed the failure could not be quantified from the log:
+
+- the eager fallback is announced with `print_warning_once`, which is
+  `@functools.lru_cache(None)` on the message string (`utils/common.py:2796`),
+  so it is logged **at most once** however often it fires;
+- the branch `return`s **without capturing** (`cuda_piecewise_backend.py:173`),
+  so a subgraph that once missed the capture stream stays eager for the rest of
+  the process.
+
+Together: the log proves degradation happened and says nothing about how much.
+A `tc_piecewise` latency number cannot be defended on that basis, and excluding
+the arm outright would leave #4's Q2 ("does #2's PCG win transfer to images?")
+permanently unanswered.
+
+The patch adds counters for graph-eligible calls, fallback occurrences and
+distinct fallback shapes, emitted as a parseable
+`PCG_STATS <tag> eligible=<n> eager_fallback=<n> eager_shapes=<n>` line. It costs
+one integer increment on the eligible path and logs nothing unless a fallback
+occurs, so it is inert for `A0`/`A1`/`A3`/`A4`/`A5` and for `V0`.
+
+**Consequence for the one-stack rule**: the smoke arms run before this commit
+were on `48b0365bcc`. Rather than argue the difference is immaterial, the whole
+Phase-1.4 smoke is **re-run on `471e549959`** so every arm shares one SHA.

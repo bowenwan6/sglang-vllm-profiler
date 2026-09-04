@@ -40,6 +40,11 @@ from typing import Any, Dict, List, Optional
 PCG_EAGER_FALLBACK = re.compile(r"PCG capture stream is not set", re.I)
 IPC_POOL_FALLBACK = re.compile(r"falling back to non-IPC transport", re.I)
 MM_POOL_EXHAUSTED = re.compile(r"MmItemMemoryPool has no free chunk", re.I)
+# Measurement instrumentation on the pinned stack (see ../manifest.md §7):
+# PCG_STATS <tag> eligible=<n> eager_fallback=<n> eager_shapes=<n>
+PCG_STATS = re.compile(
+    r"PCG_STATS \w+ eligible=(\d+) eager_fallback=(\d+) eager_shapes=(\d+)"
+)
 DEPRECATION = re.compile(
     r"(is deprecated|DeprecationWarning|FutureWarning).{0,200}", re.I | re.S
 )
@@ -160,6 +165,13 @@ def scan_server_log(path: Path) -> Dict[str, Any]:
     probes = [(n, f) for n, f in all_batches if n < BENCH_BATCH_MIN_TOKENS]
     n_true = sum(1 for _, f in bench if f)
     captures = CAPTURE_BEGIN.findall(text)
+    pcg_stats = PCG_STATS.findall(text)
+    pcg_last = (
+        {"eligible": int(pcg_stats[-1][0]),
+         "eager_fallback": int(pcg_stats[-1][1]),
+         "eager_shapes": int(pcg_stats[-1][2])}
+        if pcg_stats else None
+    )
     deprecations = [
         m.group(0)[:200]
         for m in DEPRECATION.finditer(text)
@@ -172,6 +184,7 @@ def scan_server_log(path: Path) -> Dict[str, Any]:
         "mm_pool_exhausted": len(MM_POOL_EXHAUSTED.findall(text)),
         "deprecations_naming_our_flags": deprecations[:5],
         "captured_prefill_backend": captures[-1].lower() if captures else None,
+        "pcg_stats_last": pcg_last,
         "prefill_batches_logged": len(bench),
         "prefill_graph_true": n_true,
         "prefill_graph_true_pct": (
@@ -252,10 +265,25 @@ def verify_arm(
 
     # Silent partial-eager on any piecewise arm: the number is not a PCG number.
     if scan["pcg_eager_fallback"] and effective_backend == "tc_piecewise":
-        reasons.append(
-            f"{scan['pcg_eager_fallback']}× 'PCG capture stream is not set' — "
-            "arm ran partially eager"
-        )
+        stats = scan.get("pcg_stats_last")
+        if stats:
+            # With the counters present the degradation is measurable, so report
+            # the fraction rather than an unbounded suspicion.
+            frac = (100.0 * stats["eager_fallback"] / stats["eligible"]
+                    if stats["eligible"] else 100.0)
+            reasons.append(
+                f"PCG eager fallback on {frac:.2f}% of graph-eligible calls "
+                f"({stats['eager_fallback']}/{stats['eligible']}, "
+                f"{stats['eager_shapes']} distinct shapes) — arm ran partially "
+                "eager"
+            )
+        else:
+            reasons.append(
+                "'PCG capture stream is not set' fired — arm ran partially eager. "
+                "The warning is print_warning_once (@lru_cache), so its count is "
+                "capped at 1 and the extent of the degradation is UNBOUNDED from "
+                "the log"
+            )
 
     # Silent CPU fallback on any GPU-transport arm.
     if (requested_transport or res_transport) in ("cuda_ipc", "cuda_vmm"):
