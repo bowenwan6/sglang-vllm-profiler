@@ -374,3 +374,18 @@ not a rule to argue around. The whole smoke is re-run on `471e549959` as
 `phase1_engagement_smoke_pinned`; the run above is kept as the pre-instrumentation
 record.
 
+
+### 1.4c orchestration defect in my own tooling — **solvable**
+
+The phase-1.2 parity run did not start when the smoke finished. Cause was mine,
+not the experiment's: the background waiters I used to sequence the runs polled
+with `pgrep -f "run_imgA_v3"`, and `pgrep -f` matches against **full command
+lines** — including the waiter shells' own, which contain that pattern. Seven
+waiters were therefore matching each other and looping forever, and the chain
+script waiting on the same predicate never saw the runner exit.
+
+No measurement was affected — GPU 7 sat idle at 212 MiB throughout, and every
+result above was already written — but it cost wall-clock time and would have
+silently stalled the phase-2 launch. Stuck shells killed; the sequencing now keys
+off artifacts (a results file appearing, a marker line in a log) rather than off
+process-name polling, which cannot self-match.
