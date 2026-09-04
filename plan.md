@@ -1680,3 +1680,126 @@ reported as "no material difference", never as a trend.
    schedule-blocked, not technically blocked.
 5. **Stale container** — every arm shares the confound, so internal contrasts
    hold but absolute numbers are not production claims. Say so in the report.
+
+
+---
+
+## 11.7 Correction: #4 specifies IPC-on as the standard condition
+
+Read against issue #4's own text (2026-09-04), the v3 matrix had the transport
+baseline inverted.
+
+#4 says, under **Environment requirement**:
+
+> For SGLang image runs, set `SGLANG_USE_CUDA_IPC_TRANSPORT=1`.
+> If time allows, keep a without-IPC ablation so the report can separate IPC
+> benefit from PCG benefit.
+
+So **IPC-on is the standard condition for SGLang image runs, and CPU transport is
+the optional ablation.** §11.2 made the opposite choice — CPU transport as
+`A0_default`, IPC as the ablation — on the reasoning that the matrix should be
+anchored to what upstream actually resolves to today (`cpu`, per §11.1 change A).
+That reasoning is sound on its own terms but it answers a different question than
+the one #4 asks.
+
+**No re-run is needed.** The bracket measures a full 2×2 over
+{cpu, cuda_ipc} × {disabled, breakable}, so #4's framing is already in the data;
+what changes is which row is the headline. Under #4's framing:
+
+- the SGLang image baseline is `A5_ipc_nograph` (IPC-on, no prefill graph);
+- the graph lever is `A4_ipc` (IPC-on, breakable);
+- the `cpu` row (`A1_disabled`, `A0_default`) is the without-IPC ablation #4
+  asks for "if time allows".
+
+The phase-3 report leads with the IPC row and reports the CPU row as the
+ablation. The 2×2 and its interaction term are reported as before, and the
+`A0_default` label is kept but described as "today's upstream default transport",
+not as "the baseline #4 asks for".
+
+## 11.8 IMG-R — finding the regime where the prefill graph pays
+
+**Motivation.** #4's stated hypothesis is "image workloads may behave
+differently and PCG could help more there". The IMG-A bracket says the opposite
+at that one operating point: with IPC on, the graph *costs* +3.66%
+(`A4_ipc` 105.91 ms vs `A5_ipc_nograph` 102.17 ms), and the same sign appears in
+the CPU row (+3.24%) and against the explicit-flag arm (+4.4%). Three
+independent estimates, all positive, CV ≈ 1.5%.
+
+One operating point is not an answer to "does the graph ever pay on images". This
+sweep looks for the regime where it does, and it is designed around a mechanism
+rather than a fishing expedition.
+
+**Mechanism and prediction.** A prefill CUDA graph replaces per-kernel launches
+with one replay, so its saving is roughly a **constant per forward** — the launch
+overhead avoided. On Qwen3-VL under BCG it also *pays* a cost that scales with
+sequence length: the DeepStack replay bridge copies `input_embeds` and
+`input_deepstack_embeds` into registered stable slots, i.e. `N × hidden ×
+(1 + num_deepstack)` = `N × 4096 × 4` on 8B, plus padding waste to the captured
+bucket. Net benefit ≈ `C − k·N`, **positive only for small N**.
+
+That reframes the question. It is not "images versus text" — it is **N, the
+total token count entering the LM prefill**, and images inflate N enormously:
+
+| workload | vision tok | text tok | N | graph effect |
+|---|---|---|---|---|
+| #2 Case A, text-only | 0 | 128 | ~128 | **−36%** (PCG win) |
+| v3 IMG-A | 882 | 128 | ~1010 | **+3.4%** (cost) |
+
+Qwen3-VL covers 32×32 pixels per visual token, so vision tokens are
+`(W/32)×(H/32)`: 720p → ~900 (measured 882), 360p → ~225, 256×256 → ~64,
+1080p → ~1980. A 256×256 image plus 128 text tokens is ~192 tokens — back inside
+the regime where #2 measured a large win.
+
+**Prediction, recorded before the run**: the graph effect is monotonic in N and
+changes sign somewhere below N ≈ 400. If instead the effect is flat in N, or the
+crossover is driven by the *image/text ratio* at fixed N, the mechanism above is
+wrong and must be stated as refuted.
+
+**Design.** Transport fixed at `cuda_ipc` for every arm (§11.7 — this is #4's
+standard condition, and holding it fixed removes it as a variable). Two arms per
+workload, `--cuda-graph-backend-prefill disabled` vs `breakable`, run
+back-to-back so each pair is its own comparison.
+
+| id | image | est. vision tok | text tok | est. N | tests |
+|---|---|---|---|---|---|
+| `R0_text` | none (`--dataset-name random`) | 0 | 128 | ~128 | does the graph win at all in this harness? |
+| `R1_tiny` | 256×256 | ~64 | 128 | ~192 | smallest real image |
+| `R2_360p` | 360p | ~225 | 128 | ~353 | expected crossover region |
+| `R3_720p` | 720p | ~882 | 128 | ~1010 | = IMG-A, the known negative |
+| `R4_720p_longtext` | 720p | ~882 | 1024 | ~1906 | **falsification**: more *text* at the same image. The ratio moves toward text while N grows. Mechanism says worse; a ratio-driven story says better. |
+| `R5_1080p` | 1080p | ~1980 | 128 | ~2108 | confirms monotonicity at large N |
+
+`R0_text` uses the `random` dataset rather than `image`, so it is not
+prompt-construction-comparable to R1–R5. That does not matter: its role is the
+*within-workload* disabled-vs-breakable contrast, which shares a generator.
+
+`R3_720p` repeats at the end of the bracket as the drift gate (≤5%).
+
+**Sizing.** 300 prompts, 20 warmup, 3 reps, c=1 — ~20 min per arm, 13 runs
+≈ 4.3 GPU-hours. Fewer reps than IMG-A, justified because the quantity of
+interest is a **sign change across workloads**, not a 3% difference within one.
+
+**`tc_piecewise` is excluded, and why.** Onset of the capture-stream eager
+fallback is deterministic at graph-eligible call ~6402 (§2.3 of the execution
+log), which is ~160 requests at this workload's ~40 calls/request. Any run long
+enough to give a stable p50 is past it, so a `tc_piecewise` arm here would
+measure eager execution wearing a PCG label. §11.9 gives the protocol that can
+measure it honestly.
+
+## 11.9 Optional: measuring `tc_piecewise` inside the sub-onset window
+
+#4's hypothesis names PCG specifically, so declaring it unmeasurable is a real
+loss. It is measurable, with care.
+
+The fallback counter resets per process, and onset is at ~6402 graph-eligible
+calls ≈ ~160 requests. So a **single rep of ≤150 prompts on a freshly started
+server** stays entirely pre-onset. Three such reps, each with its own server
+restart, give three independent clean samples — at the cost of 3 server startups
+per arm instead of one.
+
+Every such rep must be verified pre-onset by asserting `eager_fallback == 0` in
+the `PCG_STATS` trace, not assumed. Reps that show any fallback are discarded,
+not averaged.
+
+Run this only for the workloads where §11.8 finds the graph pays, since that is
+where #4's PCG claim actually matters.
