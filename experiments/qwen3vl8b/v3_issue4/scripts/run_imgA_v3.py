@@ -198,6 +198,10 @@ def run_rep(arm, port, rep, env, raw_dir, num_prompts):
     t0 = time.time()
     res = subprocess.run(cmd, capture_output=True, text=True, env=env)
     elapsed = round(time.time() - t0, 1)
+    # Keep client stderr: the engagement verifier scans the *server* log, so a
+    # deprecation warning raised on the client side would otherwise be invisible.
+    if res.stderr.strip():
+        (raw_dir / f"{arm}_rep{rep}.stderr").write_text(res.stderr)
     if res.returncode != 0:
         tail = (res.stdout + res.stderr)[-600:]
         log(f"    rep{rep} FAILED rc={res.returncode}: {tail}")
