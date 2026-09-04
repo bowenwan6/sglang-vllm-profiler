@@ -184,3 +184,9 @@ occurs, so it is inert for `A0`/`A1`/`A3`/`A4`/`A5` and for `V0`.
 **Consequence for the one-stack rule**: the smoke arms run before this commit
 were on `48b0365bcc`. Rather than argue the difference is immaterial, the whole
 Phase-1.4 smoke is **re-run on `471e549959`** so every arm shares one SHA.
+
+**Not pushed.** `exp/issue4-v3` stays a local branch in `/data/sglang-fork`.
+Pushing it would put a measurement-only patch next to PR #33726's branch on the
+same fork, where it could be mistaken for part of the submission. The SHA and the
+patch's full content are recorded here; the branch can be published later if the
+work needs to be reproduced elsewhere.
