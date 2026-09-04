@@ -1,0 +1,42 @@
+[
+  {
+    "arm": "A1_disabled",
+    "status": "OK",
+    "outputs": {
+      "text_primes": "The first four prime numbers are:\n\n**2, 3, 5, 7**\n\n### Explanation:\nA **prime number** is a natural number greater than 1 that has no positive divisors other than 1 and itself.\n\n",
+      "text_capital": "Paris",
+      "image_colors": "The colors in the image, from left to right, are:\n\n1. Red\n2. Green\n3. Blue\n4. Yellow\n5. Red\n6. Green\n7. Blue\n8. Yellow",
+      "image_count": "Looking at the image, we can see a series of vertical stripes of different colors.\n\nLet's count them from left to right:\n\n1.  Red\n2.  Green\n3.  Blue\n4.  Yellow\n5."
+    }
+  },
+  {
+    "arm": "A0_default",
+    "status": "OK",
+    "outputs": {
+      "text_primes": "The first four prime numbers are:\n\n**2, 3, 5, 7**\n\n### Explanation:\nA **prime number** is a natural number greater than 1 that has no positive divisors other than 1 and itself.\n\n",
+      "text_capital": "Paris",
+      "image_colors": "The colors in the image, from left to right, are:\n\n1. Red\n2. Green\n3. Blue\n4. Yellow\n5. Red\n6. Green\n7. Blue\n8. Yellow",
+      "image_count": "Looking at the image, we can see a series of vertical stripes of different colors.\n\nLet's count them from left to right:\n\n1.  Red\n2.  Green\n3.  Blue\n4.  Yellow\n5."
+    }
+  },
+  {
+    "arm": "A3_bcg",
+    "status": "OK",
+    "outputs": {
+      "text_primes": "The first four prime numbers are:\n\n**2, 3, 5, 7**\n\n### Explanation:\nA **prime number** is a natural number greater than 1 that has no positive divisors other than 1 and itself.\n\n",
+      "text_capital": "Paris",
+      "image_colors": "The colors in the image, from left to right, are:\n\n1. Red\n2. Green\n3. Blue\n4. Yellow\n5. Red\n6. Green\n7. Blue\n8. Yellow",
+      "image_count": "Looking at the image, we can see a series of vertical stripes of different colors.\n\nLet's count them from left to right:\n\n1.  Red\n2.  Green\n3.  Blue\n4.  Yellow\n5."
+    }
+  },
+  {
+    "arm": "V0_vllm",
+    "status": "OK",
+    "outputs": {
+      "text_primes": "The first four prime numbers are:\n\n**2, 3, 5, 7**\n\n### Explanation:\nA **prime number** is a natural number greater than 1 that has no positive divisors other than 1 and itself.\n\n",
+      "text_capital": "Paris",
+      "image_colors": "From left to right, the colors in the image are:\n\n1. Red\n2. Green\n3. Blue\n4. Yellow\n5. Red\n6. Green\n7. Blue\n8. Yellow\n\nThe pattern repeats every",
+      "image_count": "Looking at the image, we can see a series of vertical stripes. Let's count them and identify the distinct colors.\n\nThe stripes, from left to right, are:\n\n1. Red\n2. Green\n3. Blue\n4."
+    }
+  }
+]

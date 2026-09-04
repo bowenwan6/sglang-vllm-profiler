@@ -1,0 +1,35 @@
+{
+  "timestamp_utc": "2026-09-04T04:33:26.891070+00:00",
+  "reference": "A1_disabled",
+  "comparisons": [
+    {
+      "arm": "A0_default",
+      "identical": true,
+      "n_fixtures": 4,
+      "diffs": []
+    },
+    {
+      "arm": "A3_bcg",
+      "identical": true,
+      "n_fixtures": 4,
+      "diffs": []
+    },
+    {
+      "arm": "V0_vllm",
+      "identical": false,
+      "n_fixtures": 4,
+      "diffs": [
+        {
+          "fixture": "image_colors",
+          "reference": "The colors in the image, from left to right, are:\n\n1. Red\n2. Green\n3. Blue\n4. Yellow\n5. Red\n6. Green\n7. Blue\n8. Yellow",
+          "other": "From left to right, the colors in the image are:\n\n1. Red\n2. Green\n3. Blue\n4. Yellow\n5. Red\n6. Green\n7. Blue\n8. Yellow\n\nThe pattern repeats every"
+        },
+        {
+          "fixture": "image_count",
+          "reference": "Looking at the image, we can see a series of vertical stripes of different colors.\n\nLet's count them from left to right:\n\n1.  Red\n2.  Green\n3.  Blue\n4.  Yellow\n5.",
+          "other": "Looking at the image, we can see a series of vertical stripes. Let's count them and identify the distinct colors.\n\nThe stripes, from left to right, are:\n\n1. Red\n2. Green\n3. Blue\n4."
+        }
+      ]
+    }
+  ]
+}

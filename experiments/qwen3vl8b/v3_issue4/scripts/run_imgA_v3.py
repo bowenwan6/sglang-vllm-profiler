@@ -268,7 +268,14 @@ def run_arm(arm, backend_override, num_prompts, reps, raw_dir, warmup):
         cmd = ["python3", "-m", "sglang.launch_server",
                "--model-path", SNAPSHOT, "--dtype", "bfloat16",
                "--port", str(port), "--tp", "1",
-               "--attention-backend", "flashinfer"]
+               "--attention-backend", "flashinfer",
+               # Prefix caching MUST be off. Every rep replays the identical
+               # prompt set (fixed seed), so with the radix cache on, reps 2..N
+               # are served from cache: they measure cache lookup, not prefill,
+               # and the prefill-graph lever under test barely executes. Carried
+               # over from the v2 protocol and the M10 smoke, both of which set
+               # it; omitting it invalidated the first headline attempt.
+               "--disable-radix-cache"]
         if transport is not None:
             cmd += ["--mm-feature-transport", transport]
         if backend is not None:
@@ -276,7 +283,10 @@ def run_arm(arm, backend_override, num_prompts, reps, raw_dir, warmup):
     else:
         cmd = [VLLM_PYTHON, "-m", "vllm.entrypoints.openai.api_server",
                "--model", SNAPSHOT, "--dtype", "bfloat16",
-               "--port", str(port), "--tensor-parallel-size", "1"]
+               "--port", str(port), "--tensor-parallel-size", "1",
+               # vLLM V1 enables prefix caching by default; the anchor must be
+               # measured under the same no-cache condition as the SGLang arms.
+               "--no-enable-prefix-caching"]
 
     LOGS.mkdir(parents=True, exist_ok=True)
     raw_dir.mkdir(parents=True, exist_ok=True)

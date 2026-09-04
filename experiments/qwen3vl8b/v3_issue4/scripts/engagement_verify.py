@@ -53,7 +53,8 @@ DEPRECATION = re.compile(
 # they are not benchmark work and they never run under a graph, so counting them
 # drags a perfectly healthy arm toward the failure floor.
 PREFILL_GRAPH = re.compile(
-    r"Prefill batch.*?#new-token: (\d+).*?cuda graph: (True|False)", re.I
+    r"Prefill batch.*?#new-token: (\d+), #cached-token: (\d+).*?"
+    r"cuda graph: (True|False)", re.I
 )
 # Smallest captured prefill bucket is 4 tokens; 8 keeps a clear margin above the
 # 1-token probes without excluding any real request.
@@ -160,10 +161,16 @@ def scan_server_log(path: Path) -> Dict[str, Any]:
     if not path.exists():
         return {"log_missing": True}
     text = path.read_text(errors="replace")
-    all_batches = [(int(n), f.lower() == "true") for n, f in PREFILL_GRAPH.findall(text)]
-    bench = [(n, f) for n, f in all_batches if n >= BENCH_BATCH_MIN_TOKENS]
-    probes = [(n, f) for n, f in all_batches if n < BENCH_BATCH_MIN_TOKENS]
-    n_true = sum(1 for _, f in bench if f)
+    all_batches = [
+        (int(n), int(c), f.lower() == "true")
+        for n, c, f in PREFILL_GRAPH.findall(text)
+    ]
+    bench = [(n, c, f) for n, c, f in all_batches if n >= BENCH_BATCH_MIN_TOKENS]
+    probes = [(n, c, f) for n, c, f in all_batches if n < BENCH_BATCH_MIN_TOKENS]
+    n_true = sum(1 for _, _, f in bench if f)
+    cache_hit_batches = sum(1 for _, c, _ in all_batches if c > 0)
+    tok_new = sum(n for n, _, _ in all_batches)
+    tok_cached = sum(c for _, c, _ in all_batches)
     captures = CAPTURE_BEGIN.findall(text)
     pcg_stats = PCG_STATS.findall(text)
     pcg_last = (
@@ -191,6 +198,14 @@ def scan_server_log(path: Path) -> Dict[str, Any]:
             round(100.0 * n_true / len(bench), 1) if bench else None
         ),
         "probe_batches_excluded": len(probes),
+        "total_prefill_batches": len(all_batches),
+        "batches_with_cached_tokens": cache_hit_batches,
+        "tokens_new": tok_new,
+        "tokens_cached": tok_cached,
+        "cached_token_share_pct": (
+            round(100.0 * tok_cached / (tok_new + tok_cached), 1)
+            if (tok_new + tok_cached) else None
+        ),
     }
 
 
@@ -338,6 +353,35 @@ def verify_arm(
         reasons.append(
             "deprecation warning names a flag we set: "
             + scan["deprecations_naming_our_flags"][0]
+        )
+
+    # Workload integrity: a prefix cache serving the repeated prompt set turns
+    # most reps into cache lookups, so the lever under test barely executes. The
+    # sub-threshold batches get filed as "probes" and the arm still reads as
+    # healthy -- which is exactly how the first headline attempt passed while
+    # measuring almost no prefill. Two independent signals for it.
+    total = scan.get("total_prefill_batches") or 0
+    probes_n = scan.get("probe_batches_excluded") or 0
+    bench_n = scan.get("prefill_batches_logged") or 0
+    cached_n = scan.get("batches_with_cached_tokens") or 0
+    if total and probes_n > max(10, 0.25 * bench_n):
+        reasons.append(
+            f"{probes_n} of {total} prefill batches carried < "
+            f"{BENCH_BATCH_MIN_TOKENS} new tokens against {bench_n} benchmark "
+            "batches — the workload was largely served without prefill "
+            "(prefix cache still on?)"
+        )
+    # Counted in *tokens*, not batches: a few tokens of shared chat-template
+    # prefix appear on nearly every batch and are harmless, so a batch-count rule
+    # would fire on a perfectly good run. What matters is how much of the
+    # prompt work was skipped.
+    cached_share = scan.get("cached_token_share_pct")
+    if cached_share is not None and cached_share > 20.0:
+        reasons.append(
+            f"{cached_share}% of prefill tokens came from cache "
+            f"({scan['tokens_cached']} cached vs {scan['tokens_new']} new) — "
+            "prefix caching is serving the repeated prompt set, so the reps are "
+            "not independent measurements of prefill"
         )
 
     # Behavioural check: a graph-on arm whose prefill batches ran without a graph.

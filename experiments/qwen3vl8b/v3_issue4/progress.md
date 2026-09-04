@@ -515,7 +515,62 @@ bracket at **~5.3 GPU-hours**, not the ~1 GPU-day the plan estimated.
 The report generator computes the 2×2 and its interaction term when all four
 cells verify, and says so explicitly when they do not.
 
-### 2.1 bracket — *running* (restarted 05:13 UTC)
+### 2.1 first headline attempt was measuring the prefix cache — **solvable**
+
+Caught on `A0_default`'s completion, from two numbers that did not look right:
+
+```
+A0_default: ttft_p50_median=125.485ms cv=8.2%
+engagement: VERIFIED (... graph=100.0% of 401 bench prefill batches, 1637 probes excluded)
+```
+
+**CV 8.2%** is far above the ≤5% band, and **401 benchmark batches out of 2030
+requests** is impossible if every request does a real prefill. The per-rep series
+settles it — this is not scatter, it is a monotonic slide:
+
+| rep | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|
+| TTFT p50 | 147.5 ms | 126.8 ms | 125.5 ms | 118.8 ms | 119.6 ms |
+
+**Cause: the runner never passed `--disable-radix-cache`.** With a fixed seed
+every rep replays the identical prompt set, so reps 2–5 were served from the
+prefix cache. Measured after the fact with the fixed verifier: **80.3% of prefill
+tokens came from cache** (1 676 835 cached vs 410 100 new). Reps 2–5 were
+measuring cache lookup, and the prefill-graph lever — the entire object of the
+experiment — barely executed.
+
+The v2 protocol and the M10 smoke both set the flag. I dropped it while porting
+the runner.
+
+Three fixes, and the second one matters more than the first:
+
+1. **`--disable-radix-cache`** on every SGLang arm, and
+   **`--no-enable-prefix-caching`** on the vLLM anchor (vLLM V1 enables prefix
+   caching by default, so the anchor needs the same condition or the comparison
+   is not like-for-like).
+2. **The verifier was complicit and is now not.** It filed all 1637 cache-served
+   batches under "probes" — the exclusion I added in 1.4-pre-fix for the server's
+   1-token readiness probes — and reported `VERIFIED, 100% of 401 batches`. That
+   was *technically true and substantively misleading*: 80% of the workload was
+   not doing prefill and the verdict said nothing. Two checks added:
+   - probe batches greatly outnumbering benchmark batches;
+   - **cached tokens as a share of prefill tokens above 20%** — counted in
+     *tokens*, not batches, because a few tokens of shared chat-template prefix
+     appear on nearly every batch and a batch-count rule would fire on a healthy
+     run.
+3. Retro-validated both ways. The invalid run now fails loudly
+   (`80.3% of prefill tokens came from cache`); a healthy phase-1 log reads
+   **5.1%** cached — the legitimate shared prefix — and passes.
+
+**Phase 1's conclusions are unaffected**: at 1 rep × 20 unique prompts there was
+no repeated prompt set to cache, and its measured cached share is 5.1%.
+
+The invalid bracket is kept as
+`results/phase2_imgA_headline_invalid_prefixcache_20260904T051344Z/`. An orphaned
+`A1_disabled` server outlived the killed runner and had to be reaped by PID before
+the GPU freed — worth remembering for any future abort.
+
+### 2.2 bracket — *running* (restarted 05:57 UTC, prefix caching off)
 
 Order: `A0_default → A1_disabled → A2_tcp → A3_bcg → A4_ipc → A5_ipc_nograph →
 V0_vllm → A0_repeat`, 400 prompts, 30 warmup, 5 reps, c=1.
