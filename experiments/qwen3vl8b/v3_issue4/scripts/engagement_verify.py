@@ -43,7 +43,22 @@ MM_POOL_EXHAUSTED = re.compile(r"MmItemMemoryPool has no free chunk", re.I)
 DEPRECATION = re.compile(
     r"(is deprecated|DeprecationWarning|FutureWarning).{0,200}", re.I | re.S
 )
-PREFILL_GRAPH = re.compile(r"Prefill batch.*?cuda graph: (True|False)", re.I)
+# Prefill stats line (metrics_reporter.py:625-656). `#new-token` is captured so
+# the server's own 1-token readiness probes can be excluded from the denominator:
+# they are not benchmark work and they never run under a graph, so counting them
+# drags a perfectly healthy arm toward the failure floor.
+PREFILL_GRAPH = re.compile(
+    r"Prefill batch.*?#new-token: (\d+).*?cuda graph: (True|False)", re.I
+)
+# Smallest captured prefill bucket is 4 tokens; 8 keeps a clear margin above the
+# 1-token probes without excluding any real request.
+BENCH_BATCH_MIN_TOKENS = 8
+
+# Direct proof of what was actually captured, independent of /server_info
+# (cuda_graph_runner: "Capture target prefill CUDA graph begin. backend=<x>").
+CAPTURE_BEGIN = re.compile(
+    r"Capture target prefill CUDA graph begin\. backend=(\w+)", re.I
+)
 
 # Flags whose deprecation would prove we are still driving an old surface.
 FLAGS_WE_SET = (
@@ -140,8 +155,11 @@ def scan_server_log(path: Path) -> Dict[str, Any]:
     if not path.exists():
         return {"log_missing": True}
     text = path.read_text(errors="replace")
-    graph_flags = PREFILL_GRAPH.findall(text)
-    n_true = sum(1 for g in graph_flags if g.lower() == "true")
+    all_batches = [(int(n), f.lower() == "true") for n, f in PREFILL_GRAPH.findall(text)]
+    bench = [(n, f) for n, f in all_batches if n >= BENCH_BATCH_MIN_TOKENS]
+    probes = [(n, f) for n, f in all_batches if n < BENCH_BATCH_MIN_TOKENS]
+    n_true = sum(1 for _, f in bench if f)
+    captures = CAPTURE_BEGIN.findall(text)
     deprecations = [
         m.group(0)[:200]
         for m in DEPRECATION.finditer(text)
@@ -153,11 +171,13 @@ def scan_server_log(path: Path) -> Dict[str, Any]:
         "ipc_pool_fallback": len(IPC_POOL_FALLBACK.findall(text)),
         "mm_pool_exhausted": len(MM_POOL_EXHAUSTED.findall(text)),
         "deprecations_naming_our_flags": deprecations[:5],
-        "prefill_batches_logged": len(graph_flags),
+        "captured_prefill_backend": captures[-1].lower() if captures else None,
+        "prefill_batches_logged": len(bench),
         "prefill_graph_true": n_true,
         "prefill_graph_true_pct": (
-            round(100.0 * n_true / len(graph_flags), 1) if graph_flags else None
+            round(100.0 * n_true / len(bench), 1) if bench else None
         ),
+        "probe_batches_excluded": len(probes),
     }
 
 
@@ -167,7 +187,7 @@ def verify_arm(
     requested_transport: Optional[str],
     server_info: Optional[Dict[str, Any]],
     log_path: Path,
-    graph_engagement_floor_pct: float = 90.0,
+    graph_engagement_floor_pct: float = 99.0,
 ) -> Dict[str, Any]:
     """Return the arm's engagement verdict.
 
@@ -209,6 +229,26 @@ def verify_arm(
             )
 
     effective_backend = requested_backend or res_backend
+
+    # Independent capture-time evidence. `/server_info` reports the resolution;
+    # this reports what the runner actually captured. They must agree.
+    captured = scan.get("captured_prefill_backend")
+    if effective_backend in ("breakable", "tc_piecewise", "full"):
+        if captured is None:
+            reasons.append(
+                "no 'Capture target prefill CUDA graph begin' line — the prefill "
+                "graph was never captured"
+            )
+        elif captured != effective_backend:
+            reasons.append(
+                f"captured prefill backend {captured!r} != effective "
+                f"{effective_backend!r}"
+            )
+    elif effective_backend == "disabled" and captured is not None:
+        reasons.append(
+            f"a prefill graph was captured (backend={captured!r}) on a "
+            "'disabled' arm"
+        )
 
     # Silent partial-eager on any piecewise arm: the number is not a PCG number.
     if scan["pcg_eager_fallback"] and effective_backend == "tc_piecewise":
@@ -268,8 +308,11 @@ def one_line(verdict: Dict[str, Any]) -> str:
             f"engagement: VERIFIED "
             f"(backend={verdict.get('resolved_prefill_backend')}, "
             f"transport={verdict.get('resolved_mm_transport')}, "
+            f"captured={verdict['scan'].get('captured_prefill_backend')}, "
             f"graph={verdict['scan'].get('prefill_graph_true_pct')}% of "
-            f"{verdict['scan'].get('prefill_batches_logged')} prefill batches)"
+            f"{verdict['scan'].get('prefill_batches_logged')} bench prefill "
+            f"batches, {verdict['scan'].get('probe_batches_excluded')} probes "
+            f"excluded)"
         )
     return "engagement: UNVERIFIED (" + "; ".join(verdict["reasons"]) + ")"
 

@@ -1,0 +1,69 @@
+[
+  {
+    "arm": "A0_default",
+    "framework": "sglang",
+    "requested_transport": null,
+    "requested_prefill_backend": null,
+    "port": 30000,
+    "gpu": "7",
+    "snapshot": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+    "num_prompts": 20,
+    "warmup": 0,
+    "reps_planned": 1,
+    "concurrency": 1,
+    "seed": 1,
+    "timestamp_utc": "2026-09-04T04:09:40.949371+00:00",
+    "reps": [
+      {
+        "completed": 20,
+        "failures": 0,
+        "forbidden_token_error_present": false,
+        "ttft_p50": 141.24508225359023,
+        "ttft_p95": null,
+        "ttft_p99": 240.4679474979639,
+        "tpot_p50": 5.649911826403121,
+        "tpot_p99": 5.702113361156538,
+        "e2e_p50": 858.3647694904357,
+        "out_tok_s": 146.64354289050442,
+        "req_s": 1.1456526788320658,
+        "total_input_vision_tokens": 17640,
+        "total_input_text_tokens": 2860,
+        "errors_sample": [],
+        "elapsed_s": 34.3
+      }
+    ],
+    "status": "OK",
+    "engagement": {
+      "arm": "A0_default",
+      "engagement": "VERIFIED",
+      "reasons": [],
+      "requested_prefill_backend": null,
+      "resolved_prefill_backend": "breakable",
+      "requested_mm_transport": null,
+      "resolved_mm_transport": "cpu",
+      "scan": {
+        "log_missing": false,
+        "pcg_eager_fallback": 0,
+        "ipc_pool_fallback": 0,
+        "mm_pool_exhausted": 0,
+        "deprecations_naming_our_flags": [],
+        "prefill_batches_logged": 23,
+        "prefill_graph_true": 21,
+        "prefill_graph_true_pct": 91.3
+      }
+    },
+    "ttft_p50_reps": [
+      141.24508225359023
+    ],
+    "ttft_p50_median": 141.245,
+    "ttft_p50_cv_pct": 0.0,
+    "ttft_p95_median": null,
+    "ttft_p99_median": 240.468,
+    "tpot_p50_median": 5.65,
+    "tpot_p99_median": 5.702,
+    "e2e_p50_median": 858.365,
+    "out_tok_s_median": 146.644,
+    "vision_tok_per_req": 882,
+    "text_tok_per_req": 143
+  }
+]

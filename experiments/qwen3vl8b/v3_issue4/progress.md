@@ -111,3 +111,93 @@ stack rather than to a guess about log wording:
 
 Arms that leave a flag unset (`A0_default`) are only *recorded*, not asserted —
 recording what the default resolves to is the arm's purpose.
+
+---
+
+## Phase 1 — cheap gates
+
+### 1.1 GPU idle check — **Accepted**
+
+GPU 7 at 212 MiB, no stale `sglang.launch_server` / `vllm.entrypoints`
+processes. (The plan was drafted while all 8 GPUs were busy at 43–124 GB; that
+schedule block has cleared.)
+
+### 1.3-pre vLLM Qwen3-VL support — **Accepted**
+
+Checked before spending any GPU time, because the whole cross-framework half of
+#4 rests on it:
+
+```
+vLLM 0.21.0 ModelRegistry → ['Qwen3VLNemotronEmbedModel',
+                             'Qwen3VLForConditionalGeneration',
+                             'Qwen3VLMoeForConditionalGeneration']
+```
+
+The anchor's premise holds. The live image-anchor run is still 1.3 proper.
+
+### 1.4-pre stack bring-up (A0_default, 20 prompts) — **Accepted**
+
+First GPU contact for the v3 stack. Purpose: prove that latest-upstream SGLang
+source runs at all on this box's torch 2.11 before spending anything on a
+matrix.
+
+| | |
+|---|---|
+| Server up | 48 s (04:09:40 → 04:10:28) |
+| Completed | 20/20, 0 failures, no forbidden-token error |
+| TTFT p50 | 141.2 ms |
+| TPOT p50 | 5.65 ms |
+| Vision tokens/req | 882 |
+| Text tokens/req | 143 |
+| Verdict | `engagement: VERIFIED` |
+
+**The manifest §1 prediction is confirmed empirically.** With the prefill flag
+left unset, the server resolved to:
+
+```
+Capture target prefill CUDA graph begin. backend=breakable, num_tokens=[4 … 8192]
+/server_info → cuda_graph_config.prefill.backend = "breakable"
+/server_info → mm_feature_transport = "cpu"
+```
+
+So on the merged-preview stack `A0_default` **is** the post-merge default, and
+`--mm-feature-transport` unset **does** resolve to `cpu` — both assumptions the
+matrix rests on, now measured rather than argued.
+
+### 1.4-pre-fix verifier defect found by the bring-up — **solvable**
+
+The bring-up scored `graph=91.3% of 23 prefill batches` against a 90% floor — a
+healthy arm nearly failing. Investigating the denominator rather than raising
+the floor found a real defect in my own step-0.4 verifier:
+
+```
+#new-token:    1  ×2  cuda graph: False   ← server's own readiness probes
+#new-token:   78  ×1  cuda graph: True
+#new-token: ~1015-1032 ×20 cuda graph: True   ← the 20 benchmark requests
+```
+
+The two `False` rows are the server's 1-token internal probes. They are not
+benchmark work, they never run under a graph, and on a 20-prompt smoke they are
+8.7% of the denominator — enough to fail a perfect arm. On a 400-prompt bracket
+they would have been invisible, which is exactly the kind of scale-dependent
+threshold that produces an inconsistent verdict between smoke and headline.
+
+Two fixes, both making the check stricter rather than looser:
+
+1. Denominator is now benchmark-sized batches only (`#new-token ≥ 8`; the
+   smallest captured bucket is 4). Probes are counted and reported separately.
+   Floor raised **90% → 99%**, since real batches should be ~100%.
+2. Added an independent capture-time signal:
+   `Capture target prefill CUDA graph begin. backend=<x>`. `/server_info`
+   reports what the config *resolved to*; this reports what was *actually
+   captured*. The verifier now requires them to agree, and treats a captured
+   graph on a `disabled` arm as a failure in the other direction.
+
+Re-verdict on the same run, unchanged data:
+
+```
+engagement: VERIFIED (backend=breakable, transport=cpu, captured=breakable,
+                      graph=100.0% of 21 bench prefill batches, 2 probes excluded)
+```
+
+### 1.4 five-arm engagement smoke — *running*
