@@ -657,3 +657,54 @@ written before any of this ran. The two-point fit puts it at **425**.
 saving of **2.5 ms → breakable ≈ 61.5 ms, effect ≈ −3.9%**. Recorded here before
 the arm finished so the test is genuinely out of sample. A materially different
 result refutes `C − k·N` and the model must be replaced, not patched.
+
+### The `C − k·N` model is refuted
+
+`R2_360p__breakable` came in at **55.033 ms**, a saving of **8.97 ms**. The fit
+predicted 61.5 ms and a saving of 2.5 ms. That is not a near miss; the model is
+wrong and is discarded rather than patched.
+
+Savings at fixed `cuda_ipc` transport:
+
+| workload | N | disabled | breakable | saving | effect |
+|---|---|---|---|---|---|
+| `R0_text` | 128 | 27.48 ms | 15.16 ms | **12.32 ms** | −44.8% |
+| `R1_tiny` | 208 | 55.23 ms | 46.23 ms | **9.00 ms** | −16.3% |
+| `R2_360p` | 364 | 64.01 ms | 55.03 ms | **8.97 ms** | −14.0% |
+| IMG-A (from the phase-2 IPC row) | ~1010 | 102.17 ms | 105.91 ms | **−3.74 ms** | +3.66% |
+
+**N nearly doubled from 208 to 364 and the saving did not move** (9.00 → 8.97 ms).
+A cost proportional to N would have removed ~6.5 ms over that span. Whatever
+erodes the graph's benefit, it is not a per-token copy cost in this range.
+
+The shape that the data actually shows is a **step, then a plateau, then a
+collapse**:
+
+- text-only → any image costs ~3.3 ms of the saving (12.32 → 9.00), a step
+  associated with *the presence of an image*, not its size;
+- across 208 → 364 tokens the saving is **flat**;
+- by ~1010 tokens it has gone negative.
+
+The percentage effect falls from −44.8% to −14.0% mostly because the
+**denominator grows** — the vision encoder and preprocessing add a large fixed
+cost that the prefill graph cannot touch (measured directly: R0 → R1 adds only
+80 tokens but 28 ms). The numerator barely changes.
+
+**A comparison error of mine, corrected here.** The earlier running table put
+IMG-A's `+3.24%` (measured at **cpu** transport) on the same curve as this sweep
+(**cuda_ipc** throughout). They are not comparable. The IPC-row figure is
+`A5_ipc_nograph` 102.17 vs `A4_ipc` 105.91 → **−3.74 ms**, which is what appears
+above.
+
+**Design gap this exposes.** The sign change lies between N = 364 and N ≈ 1010,
+and the sweep has no sampling point in that interval: `R3_720p` is at 1024 and
+`R4`/`R5` are both above it. An intermediate point is needed —
+`512x512` (~256 visual tokens) is too low; `896x896` (~784 + 128 ≈ 912) and
+`640x640` (~400 + 128 ≈ 528) bracket it usefully. To be added once the sweep
+finishes rather than by interrupting it.
+
+**None of this changes the answer to the question that prompted the sweep.** Two
+genuine image+text points show a double-digit graph win — `R1_tiny` −16.3% at
+N=208 and `R2_360p` −14.0% at N=364, every arm independently verified. What
+changed is the explanation for where the win disappears, and the old explanation
+is withdrawn rather than reshaped to fit.
