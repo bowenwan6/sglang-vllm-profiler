@@ -65,6 +65,22 @@ WORKLOADS = {
                   "--image-resolution", "1080p", "--image-format", "png",
                   "--image-content", "random"], 1980, 128,
                  "confirms monotonicity at large N"),
+    # Added after R2/R3 showed the saving plateaus to N=364 and has crossed zero
+    # by N=1024, leaving the sign change inside an interval the original design
+    # never sampled. Square images so height/width order is moot; Qwen3-VL spends
+    # one visual token per 32x32 pixels.
+    "R6_640": (["--dataset-name", "image", "--image-count", "1",
+                "--image-resolution", "640x640", "--image-format", "png",
+                "--image-content", "random"], 400, 128,
+               "fills the 364->1024 gap (low)"),
+    "R7_768": (["--dataset-name", "image", "--image-count", "1",
+                "--image-resolution", "768x768", "--image-format", "png",
+                "--image-content", "random"], 576, 128,
+               "fills the 364->1024 gap (mid)"),
+    "R8_896": (["--dataset-name", "image", "--image-count", "1",
+                "--image-resolution", "896x896", "--image-format", "png",
+                "--image-content", "random"], 784, 128,
+               "fills the 364->1024 gap (high)"),
 }
 
 # Pairs run back-to-back so each comparison is its own bracket.
