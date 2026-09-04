@@ -574,3 +574,20 @@ the GPU freed — worth remembering for any future abort.
 
 Order: `A0_default → A1_disabled → A2_tcp → A3_bcg → A4_ipc → A5_ipc_nograph →
 V0_vllm → A0_repeat`, 400 prompts, 30 warmup, 5 reps, c=1.
+
+`A0_default` confirms the fix, side by side with the invalid run:
+
+| | invalid (cache on) | valid (cache off) |
+|---|---|---|
+| benchmark prefill batches | 401 of 2030 requests | **2037** |
+| probe batches excluded | 1637 | **1** |
+| cached token share | **80.3%** | **0.0%** |
+| TTFT p50 median | 125.5 ms | **146.9 ms** |
+| CV over 5 reps | **8.2%** | **1.7%** |
+| per-rep series | 147.5 → 126.8 → 125.5 → 118.8 → 119.6 (monotonic) | 148.4, 143.8, 146.9, 144.6, 150.5 (scattered) |
+
+The cache was inflating apparent performance by ~15% *and* destroying rep
+independence — the reps were a warming curve, not five samples. 2 086 935 new
+tokens over 2037 batches, 100% of them under the prefill CUDA graph, 0 cached.
+
+Measured cost: **40.5 min/arm**, so the 8-arm bracket lands around 11:20 UTC.
