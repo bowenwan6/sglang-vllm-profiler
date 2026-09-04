@@ -399,3 +399,74 @@ upstream**, since opening an issue is an outward-facing action and is the owner'
 call. It carries the mechanism, the measured magnitude, the reason the batch-level
 indicator cannot see it, a reproduction, and three suggested directions offered as
 options rather than a preferred design.
+
+---
+
+### 1.2 / 1.3 correctness parity — **Accepted**, with one caveat that must travel with Q1
+
+Four fixed fixtures (two text, two image), greedy (`temperature=0`, `top_p=1`,
+`seed=0`, 48 tokens). The image fixture is generated in-process — fixed RGB
+vertical stripes — so every arm sees byte-identical input.
+Reference arm: `A1_disabled` (no prefill CUDA graph, eager).
+
+| comparison | verdict |
+|---|---|
+| `A1_disabled` vs `A0_default` (default → breakable) | **IDENTICAL**, 4/4 |
+| `A1_disabled` vs `A3_bcg` (explicit breakable) | **IDENTICAL**, 4/4 |
+| `A1_disabled` vs `V0_vllm` | 2/4 identical — both text fixtures exact, both image fixtures diverge in wording |
+
+#### Cross-backend (the check engagement verification cannot make)
+
+Both graph arms reproduce the eager reference **token for token**, on image
+fixtures included. On Qwen3-VL-8B — `deepstack_visual_indexes = [8, 16, 24]`,
+replay width 12288 — that is the DeepStack replay path PR #33726 fixes,
+exercised and numerically correct.
+
+This is the failure mode engagement verification is structurally blind to: an arm
+can resolve to exactly the requested backend, capture the graph, run 100% of its
+prefill batches under it, and still compute the wrong thing. `A0`/`A3` pass both
+checks independently.
+
+Worth noting for the PR: M10 established this on Qwen3-VL-**4B**
+(`[5, 11, 17]`). This is the same property on **8B**, the model whose
+`FAIL_BCG_DEEPSTACK` reproduction motivated the fix.
+
+Sanity that the fixture is actually perceived rather than confabulated: every arm
+reads the stripe order back correctly as
+`Red, Green, Blue, Yellow, Red, Green, Blue, Yellow`.
+
+#### Cross-framework
+
+The divergence is confined to the two image fixtures and is **phrasing only,
+with identical content**:
+
+```
+image_colors  SGLang: "The colors in the image, from left to right, are:"  + Red, Green, Blue, Yellow, Red, Green, Blue, Yellow
+              vLLM  : "From left to right, the colors in the image are:"   + Red, Green, Blue, Yellow, Red, Green, Blue, Yellow
+```
+
+Both text fixtures are exact across all four arms, vLLM included. **Text exact +
+image divergent localises the difference to the vision path** — image
+preprocessing kernels, vision-encoder numerics, feature projection — not to the
+language model or to sampling. Small numeric differences there shift the greedy
+argmax at some token; neither framework is wrong.
+
+The anchor itself is healthy: no crash signature in the vLLM server log, so it
+passes the anchor criteria.
+
+**Gate: PASS, with a caveat that must be carried into the report.** `V0_vllm`
+remains a valid latency anchor — same model, same revision, same fixture, same
+greedy settings, same token budget — but SGLang and vLLM do **not** produce
+token-identical output on images. Q1 is therefore a framework-to-framework
+comparison, **not** a strict like-for-like equivalence, and must be reported that
+way. #4 does not degrade to an SGLang-internal study; the anchor works.
+
+### Phase 1 gate — **PASSED**
+
+- 1.1 GPU idle ✅
+- 1.2 correctness parity ✅ (cross-backend exact; cross-framework anchor valid with the caveat above)
+- 1.3 vLLM image anchor ✅ (serves the image workload cleanly)
+- 1.4 engagement ✅ 4 of 5 arms VERIFIED; `A2_tcp` excluded with its exact, now-quantified upstream failure
+
+Plan's gate wording — "1.2 + 1.3 pass, and ≥ A0/A1/A2 or A3/A4 verify" — is met
+by `A0`, `A1`, `A3`, `A4`. Proceeding to phase 2.
