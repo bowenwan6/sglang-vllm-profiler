@@ -110,7 +110,7 @@ Clean validation focuses on **Case A** (the actionable gap) and **Case C** (the 
 | Default-overlap rebaseline | [#2](https://github.com/bowenwan6/sglang-vllm-profiler/issues/2) | ✅ Complete / PASS — closed |
 | Qwen3.5 DeepStack question | [#9](https://github.com/bowenwan6/sglang-vllm-profiler/issues/9) | ✅ **Closed 2026-09-03** — verdict `NOT_APPLICABLE_QWEN35` ([conclusion](experiments/qwen35_4b/issue9_conclusion.md)) |
 | Qwen3-VL BCG DeepStack fix | (spun out of #9) | ✅ Fixed + validated; upstream PR [#33726](https://github.com/sgl-project/sglang/pull/33726) open, approved, mergeable |
-| Qwen3-VL image+text + CUDA IPC | [#4](https://github.com/bowenwan6/sglang-vllm-profiler/issues/4) | ⚠️ **PARTIAL — the active profiling priority.** Only `IMG_A_S0_ipc` completed (5/5 reps, 2 000 requests, TTFT p50 64.8 ms). PCG arm crashed; repeat / vLLM / no-IPC controls unrun. |
+| Qwen3-VL image+text + CUDA IPC | [#4](https://github.com/bowenwan6/sglang-vllm-profiler/issues/4) | 🔄 **v3 running (started 2026-09-04).** Phases 0–1 complete, gate passed; phase-2 bracket in flight. Log: [`v3_issue4/progress.md`](experiments/qwen3vl8b/v3_issue4/progress.md), stack: [`manifest.md`](experiments/qwen3vl8b/v3_issue4/manifest.md), design: [`plan.md` §11](plan.md). The v2 `IMG_A_S0_ipc` result (64.8 ms) is **retired**, not reused — its flag surface no longer exists. |
 | Qwen3.5 SGLang-vs-vLLM transfer | [#3](https://github.com/bowenwan6/sglang-vllm-profiler/issues/3) | ❌ **Not run.** The DeepStack and GDN studies answer different questions. |
 | Selective / default-on graph policy | [#5](https://github.com/bowenwan6/sglang-vllm-profiler/issues/5) | ❌ Blocked on #4. Must now distinguish **PCG** from **BCG** — they are different backends. |
 
@@ -129,6 +129,7 @@ Every data directory has one `qwen3vl8b/` subtree (the single experiment):
 | `configs/qwen3vl8b/` | reserved for Phase 5 sweep configs |
 | `plan.md` | **active v2 source of truth** (short; current mainline + Round 2 roadmap). Full v1 plan archived at `experiments/qwen3vl8b/v1_archive_plan.md` |
 | `experiments/qwen3vl8b/v2/` | Round 2 (v2) experiments: `caseAC_rebaseline/` (#2, ✅ complete) and `image_text_benchmarks/` (#4, ⚠️ partial — the active priority) |
+| `experiments/qwen3vl8b/v3_issue4/` | Round 3 (v3) — the live #4 bracket: `manifest.md` (frozen stack), `progress.md` (step-by-step log with Accepted/solvable/Fail status), `scripts/` (runner, engagement verifier, parity check, report generator), `pcg_eager_fallback_finding.md` (drafted for a separate upstream issue) |
 | `experiments/qwen35_4b/` | **Qwen3.5-4B correctness sub-track — concluded.** DeepStack verdict `NOT_APPLICABLE_QWEN35`; GDN verdict `PASS_BCG_GDN_NOTABLE_GAP` (`gdn/final_report.md`). Unrelated to the Qwen3-VL-8B PCG capture-stream sub-track under `experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/`. |
 | `experiments/qwen3vl_bcg_deepstack_fix/` | **Qwen3-VL BCG DeepStack replay-slot fix** — upstream PR [#33726](https://github.com/sgl-project/sglang/pull/33726). Start at [`upstream_handoff.md`](experiments/qwen3vl_bcg_deepstack_fix/upstream_handoff.md); `results/m*/` hold the milestone evidence (M10 = post-merge smoke). The two `*submission*.md` files are superseded historical snapshots. |
 

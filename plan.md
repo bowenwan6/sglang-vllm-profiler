@@ -1482,7 +1482,34 @@ given for each step. Detail in
 * Rewriting or repurposing the §7 Qwen3.5 close-out or the §4
   Qwen3-VL PCG capture-stream evidence.
 
-## 11. Issue #4 execution plan v3 (drafted 2026-09-03, not started)
+## 11. Issue #4 execution plan v3 (drafted 2026-09-03; execution started 2026-09-04)
+
+> **Execution status.** Phases 0 and 1 are complete and the phase-1 gate passed;
+> phase 2 is running. The live log, with a status per step, is
+> [`experiments/qwen3vl8b/v3_issue4/progress.md`](experiments/qwen3vl8b/v3_issue4/progress.md);
+> the frozen stack is
+> [`experiments/qwen3vl8b/v3_issue4/manifest.md`](experiments/qwen3vl8b/v3_issue4/manifest.md).
+>
+> Three places where execution departed from what is written below, each recorded
+> with its reasoning at the link above:
+>
+> 1. **Step 0.2** prescribed pinning a *pre-merge* SHA while #33726 is open. Doing
+>    so would have made `A3_bcg` run the very DeepStack replay bug the PR fixes,
+>    producing a plausible latency number attached to numerically wrong output.
+>    One merged-preview stack is pinned instead, and both worlds are reached by
+>    explicit flags: `A0_default` resolves to `breakable` (post-merge default),
+>    `A1_disabled` is today's actual behaviour for this arch. 0.2's intent — never
+>    straddle the merge inside one bracket — is preserved.
+> 2. **The pinned stack carries measurement-only instrumentation** (manifest §7).
+>    Without it the `tc_piecewise` eager fallback is unbounded from the log, since
+>    `print_warning_once` is `@lru_cache`d; with it the degradation is quantified
+>    (measured at 600/7038 graph-eligible calls, 94.2% of calls after onset).
+> 3. **Step 1.2 was extended** with cross-*backend* image parity, not just the
+>    cross-framework text parity written below. Engagement verification is
+>    structurally blind to an arm that uses the right backend and computes the
+>    wrong thing; on Qwen3-VL-8B that is exactly the DeepStack replay path.
+>
+> Risk 4 below (GPU contention) has cleared — GPU 7 freed on 2026-09-04.
 
 > Supersedes the arm design in
 > [`image_text_benchmarks/protocol.md`](experiments/qwen3vl8b/v2/image_text_benchmarks/protocol.md)
@@ -1490,7 +1517,8 @@ given for each step. Detail in
 > still stand**; only the variant matrix, the flag surface, and the gating are
 > replaced. Written after the §3.5 upstream audit plus a second audit of the
 > multimodal-transport and benchmark-harness surfaces on `upstream/main`
-> @ `2da5802bfa`. **Nothing here has been executed.**
+> @ `2da5802bfa`. The design below stands as written; the execution status above
+> records where reality departed from it and why.
 
 ### 11.1 Why v2 cannot simply be resumed
 
