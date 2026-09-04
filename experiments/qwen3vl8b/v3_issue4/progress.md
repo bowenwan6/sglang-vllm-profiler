@@ -313,10 +313,11 @@ Three facts follow, none of which were available from the log before:
    sticky mechanism confirmed by measurement: the branch returns *without*
    capturing, so a shape that once missed the capture stream runs eager for the
    remainder of the process.
-3. **It is nondeterministic across runs.** The pre-instrumentation smoke fired
-   the warning; this run showed `eager_fallback=0` at eligible=2000 and only
-   began at 6402. Whether an arm degrades at all depends on when Dynamo meets a
-   previously-unseen guard.
+3. **Onset is at a fixed call index, and the observed share is an artefact of
+   run length.** *(Corrected in 2.3 — the smoke's 8.53% initially looked like
+   run-to-run nondeterminism. The headline run put onset at exactly the same
+   call index, 6402, so it is deterministic; the smoke simply ended at 7038
+   calls, shortly after onset.)*
 
 And the reason this matters for the whole experiment: **every other check
 passed.** `/server_info` reported `prefill.backend = tc_piecewise`; the capture
@@ -591,3 +592,42 @@ independence — the reps were a warming curve, not five samples. 2 086 935 new
 tokens over 2037 batches, 100% of them under the prefill CUDA graph, 0 cached.
 
 Measured cost: **40.5 min/arm**, so the 8-arm bracket lands around 11:20 UTC.
+
+### 2.3 `A2_tcp` at full length — the design premise, vindicated
+
+```
+engagement: UNVERIFIED (PCG eager fallback on 92.11% of graph-eligible calls
+                        (75200/81638, 2 distinct shapes) — arm ran partially eager)
+TTFT p50 = 147.02 ms, CV 0.7%
+```
+
+The trace corrects what phase 1 could not see:
+
+```
+eligible=1000 … 6000   eager_fallback=0
+eligible=6402          eager_fallback=1     ← onset
+eligible=81638         eager_fallback=75200, 2 shapes
+```
+
+**Onset lands on call 6402 — the same index as the pinned smoke.** It is not
+nondeterministic, as the smoke's single data point suggested; it is
+*deterministic in call count*. The smoke's 8.53% was purely an artefact of that
+run ending at 7038 calls, 636 calls after onset. Past onset the degradation is
+**99.95%** (75 200 of 75 237 calls), which is the sticky mechanism running to its
+conclusion: the branch returns without capturing, so the two affected shapes are
+eager forever.
+
+Two things follow that are worth stating plainly.
+
+**A2_tcp's 147.02 ms is an eager number, not a tc_piecewise number.** It sits
+between `A1_disabled` (142.3 ms) and `A0_default` (146.9 ms), exactly where a
+mostly-eager arm should.
+
+**And it has the lowest CV in the bracket — 0.7%.** The most degraded arm looks
+like the cleanest measurement. Low variance is not evidence of health; it is
+evidence of consistency, and an arm that is consistently eager is consistently
+eager. Anyone ranking these arms by CV would have picked the broken one as the
+most trustworthy.
+
+Without the counters this arm reports one suppressed warning and a tight, tidy
+147.02 ms. That is the whole case for the v3 design in one number.
