@@ -765,3 +765,39 @@ rather than adjusted.
 The gap-filling workloads (N ≈ 528, 704, 912) test the other half: the model
 predicts a smooth monotone decline from ~9 ms toward ~0 across them, with no
 sharp cliff.
+
+### `R5` outcome and the gap-fill prediction
+
+`R5_1080p__breakable` came in at **206.008 ms** against `disabled` 203.92 ms —
+**+1.02%**, saving −2.09 ms.
+
+By the pre-registered refutation criterion (≥210 ms would refute), the model
+stands: the result is neutral, not clearly negative. But the tighter bands I also
+quoted were each missed by a hair — predicted 202–206 ms (got 206.008), saving
+0 ± 2 ms (got −2.09), effect within ±1% (got +1.02%). Three near-misses in the
+same direction, and the arm's CV is 1.6%, so **the bands I quoted were tighter
+than the data can support**. That is a fault in how I stated the prediction, not
+a success of the model.
+
+**And the sweep's own drift makes the large-N cells unresolvable anyway.** The
+reference cell repeat moved 104.51 → 100.74 ms, **3.60%**. Every effect at
+N ≥ 1024 (+0.21% to +1.02%) is smaller than that. The only defensible statement
+there is "not resolvable at this bracket's precision" — not "neutral", and
+certainly not "a small cost". My earlier phrasing of "hovering around −1 ms"
+overstated what the bracket can see, and the report generator now enforces this
+as a rule rather than leaving it to prose.
+
+The N = 128–364 effects (14–45%) are an order of magnitude above both drift and
+CV, so those stand.
+
+**Gap-fill prediction, recorded before `R6_640__breakable` finished.** With
+`R6_640__disabled` at 69.992 ms (N=544), linear interpolation between (364,
++8.97 ms) and (1024, −0.84 ms) gives a saving of **6.3 ms → breakable ≈ 63.7 ms,
+effect ≈ −9%**. Stated as a band this time: **saving 4–8 ms, effect −6% to −11%**.
+
+The discriminating test is the *shape* across all three gap-fill points, not this
+one number: the hypothesis predicts N = 544, 704, 912 fall **monotonically**
+between ~9 ms and ~0. **A cliff refutes it** — if R6 is still ~9 ms and R7 drops
+straight to ~0, the cause is a threshold (graph bucket sizing, a chunked-prefill
+switch) rather than launch overhead being progressively overlapped away, and the
+model gets withdrawn like the last one.
