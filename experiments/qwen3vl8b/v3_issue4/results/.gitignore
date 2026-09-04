@@ -1,0 +1,4 @@
+# Generated experiment outputs are not committed (CLAUDE.md staging rules).
+# Findings are transcribed into ../progress.md and the phase report md files.
+*/raw/
+*/results.json
