@@ -335,16 +335,36 @@ in a **new issue**, not in #4's scope. Recorded as a follow-up.
 
 Same configuration, two runs:
 
-| arm | smoke-1 | pinned | Δ |
-|---|---|---|---|
-| `A0_default` | 139.6 ms | 143.2 ms | +2.6% |
-| `A1_disabled` | 142.4 ms | 133.8 ms | −6.1% |
+Same configuration, two independent runs (smoke-1 on `48b0365bcc`, pinned on
+`471e549959`; the instrumentation is inert for every arm but `A2_tcp`):
 
-**Repeat noise reaches 6.1%, larger than the entire 3.7% spread between the four
-graph arms in smoke-1.** The smoke cannot discriminate between prefill backends
-and was never meant to — this is the quantitative justification for the phase-2
-sizing (400 prompts × 5 reps), and for the reporting rule that a delta under 5%
-is "no material difference" rather than a trend.
+| arm | transport | smoke-1 | pinned | Δ | engagement |
+|---|---|---|---|---|---|
+| `A0_default` | cpu | 139.6 ms | 143.2 ms | +2.6% | VERIFIED |
+| `A1_disabled` | cpu | 142.4 ms | 133.8 ms | **−6.1%** | VERIFIED |
+| `A2_tcp` | cpu | 143.7 ms | 144.8 ms | +0.8% | UNVERIFIED |
+| `A3_bcg` | cpu | 138.5 ms | 149.1 ms | **+7.6%** | VERIFIED |
+| `A4_ipc` | **cuda_ipc** | 102.3 ms | 102.0 ms | **−0.3%** | VERIFIED |
+
+**Repeat noise on the CPU-transport arms reaches 7.6% — twice the entire 3.7%
+spread between the four graph arms within smoke-1.** The smoke cannot
+discriminate between prefill backends and was never meant to. This is the
+quantitative justification for the phase-2 sizing (400 prompts × 5 reps) and for
+the reporting rule that a delta under 5% is "no material difference" rather than
+a trend.
+
+The line that does *not* fit that pattern is the interesting one. **`A4_ipc`
+reproduces to within 0.3% across two independent runs on two different SHAs**,
+while every CPU-transport arm scatters by 2.6–7.6%. So the `cuda_ipc` arm is not
+only 28.8% below `A0_default` on the pinned run — it is also far more stable.
+
+That suggests the run-to-run variance in this workload lives in the **host-side
+multimodal feature path**, not in the prefill graph, which would also explain why
+the graph lever looks immaterial here: the graph is optimising a part of the
+timeline that the CPU feature copy dominates. Stated as a hypothesis, not a
+result — two points per arm cannot establish it. Phase 2's five reps per arm can,
+and the phase-3 report reports CV per arm precisely so this is checkable rather
+than asserted.
 
 
 The instrumentation commit landed while `A4_ipc` was starting, so the smoke above
