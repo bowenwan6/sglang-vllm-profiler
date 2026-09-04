@@ -271,7 +271,14 @@ def run_arm(arm, backend_override, num_prompts, reps, raw_dir, warmup):
     lf = open(log_path, "w")
     log(f"  launching {fw} port={port} wait≤{wait_s}s")
     log(f"  cmd: {' '.join(cmd[2:] if fw=='sglang' else cmd[1:])}")
-    proc = subprocess.Popen(cmd, env=env, stdout=lf, stderr=subprocess.STDOUT)
+    # The vLLM server must not inherit PYTHONPATH pointing at the SGLang source
+    # tree -- it would shadow same-named modules inside vLLM's own interpreter.
+    # The bench *client* keeps it, because the client is SGLang's.
+    server_env = {**env}
+    if fw == "vllm":
+        server_env.pop("PYTHONPATH", None)
+        server_env.pop("SGLANG_SKIP_SGL_KERNEL_VERSION_CHECK", None)
+    proc = subprocess.Popen(cmd, env=server_env, stdout=lf, stderr=subprocess.STDOUT)
 
     rec = {"arm": arm, "framework": fw, "requested_transport": transport,
            "requested_prefill_backend": backend,
