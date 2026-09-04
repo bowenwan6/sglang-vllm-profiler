@@ -62,6 +62,52 @@ Also settled here, all verified rather than assumed:
 
 Manifest: [`manifest.md`](manifest.md).
 
-### 0.3 — port the runner to the v3 flag surface — *pending*
+### 0.3 — port the runner to the v3 flag surface — **Accepted**
 
-### 0.4 — engagement verifier — *pending*
+[`scripts/run_imgA_v3.py`](scripts/run_imgA_v3.py). An edit of the v2 runner, as
+the plan intended: bracket ordering, drift gating, forbidden-token guards, GPU
+idle checks and artifact layout carried over; variant matrix, flag surface and
+engagement capture replaced.
+
+Every v3 flag was verified to exist on the pinned stack before being written into
+the runner, rather than assumed from the audit:
+
+| Surface | Verified at |
+|---|---|
+| `--mm-feature-transport` (`Optional[Literal["cpu","cuda_ipc","cuda_vmm"]] = None`) | `server_args.py:2954` |
+| unset ⇒ `cpu` coercion | `multimodal/processors/base_processor.py:247-252` |
+| `--cuda-graph-backend-prefill` | `arg_groups/cuda_graph_hook.py:75-76` |
+| `sglang.benchmark.serving` is the real module; `sglang.bench_serving` is a `FutureWarning` shim | `python/sglang/benchmark/serving.py`, `python/sglang/bench_serving.py:1-21` |
+| image flags survive (`--image-count/-resolution/-format/-content`, `720p` preset) | `benchmark/serving.py:2342-2375` |
+| `--num-prompts`, `--max-concurrency`, `--random-range-ratio`, `--output-file` | `benchmark/serving.py` |
+
+`SGLANG_USE_CUDA_IPC_TRANSPORT` is now actively **stripped** from the runner's
+base environment, so a stale export cannot silently re-enter an arm.
+
+### 0.4 — engagement verifier — **Accepted**
+
+[`scripts/engagement_verify.py`](scripts/engagement_verify.py). Emits
+`engagement: VERIFIED|UNVERIFIED (<reason>)` per arm; no number is quotable
+without `VERIFIED`.
+
+Three independent classes of evidence, each anchored to a line on the pinned
+stack rather than to a guess about log wording:
+
+1. **Resolved configuration** — `GET /server_info`, documented upstream
+   (`http_server.py:811-820`) as "the resolution result: what the launcher was
+   given, with every decision resolution made applied over it". Compared against
+   what the arm requested. Unreadable ⇒ `UNVERIFIED`, never assumed-agreeing.
+2. **Behavioural graph engagement** — the scheduler's per-prefill line ends with
+   `cuda graph: True|False` (`metrics_reporter.py:655`, label from `:186-190`).
+   A graph-on arm below 90% True is `UNVERIFIED`; a `disabled` arm above 0% is
+   too, because the flag then did not take effect. This is the check that
+   catches a config that reads right but did not run.
+3. **Degradation signals** in the server log:
+   - `PCG capture stream is not set` — `compilation/cuda_piecewise_backend.py:168`
+     (change C: warn-once + eager fallback, no longer a crash);
+   - `falling back to non-IPC transport` / `MmItemMemoryPool has no free chunk`
+     — `multimodal/transport/cuda_ipc.py:167-176` (change B);
+   - any deprecation warning naming a flag we set (change A/D detector).
+
+Arms that leave a flag unset (`A0_default`) are only *recorded*, not asserted —
+recording what the default resolves to is the arm's purpose.
