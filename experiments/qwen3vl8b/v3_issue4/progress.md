@@ -389,3 +389,13 @@ result above was already written — but it cost wall-clock time and would have
 silently stalled the phase-2 launch. Stuck shells killed; the sequencing now keys
 off artifacts (a results file appearing, a marker line in a log) rather than off
 process-name polling, which cannot self-match.
+
+### Follow-up drafted, not filed
+
+[`pcg_eager_fallback_finding.md`](pcg_eager_fallback_finding.md) — the
+capture-stream eager fallback written up for a **separate** upstream issue, per
+§11.5 criterion 5. It is a draft in this repo only; **nothing has been filed
+upstream**, since opening an issue is an outward-facing action and is the owner's
+call. It carries the mechanism, the measured magnitude, the reason the batch-level
+indicator cannot see it, a reproduction, and three suggested directions offered as
+options rather than a preferred design.
