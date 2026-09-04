@@ -470,3 +470,52 @@ way. #4 does not degrade to an SGLang-internal study; the anchor works.
 
 Plan's gate wording — "1.2 + 1.3 pass, and ≥ A0/A1/A2 or A3/A4 verify" — is met
 by `A0`, `A1`, `A3`, `A4`. Proceeding to phase 2.
+
+---
+
+## Phase 2 — IMG-A headline
+
+### 2.0 `A5` would have measured a duplicate — **solvable**
+
+Caught 20 minutes into the first bracket launch, and it is the same class of
+mistake as everything else in this experiment: a rule that was correct when
+written and stopped being correct when the stack moved.
+
+Plan §11.2 defines `A5_ipc_best` as "`cuda_ipc` + winner of {A2, A3}". `A2_tcp`
+does not verify, so the winner is `A3_bcg` → `breakable`. But **on this stack the
+default prefill backend already *is* `breakable`**, and `A4_ipc` is
+`cuda_ipc` + default. `A5` would therefore have re-measured `A4`'s exact resolved
+configuration — 40 minutes spent on a duplicate, and the composition question
+left unanswered.
+
+The plan's *stated purpose* for the cell is "do the two levers compose or
+interfere?". The cell that answers it is the missing corner of the factorial:
+
+| prefill graph | cpu transport | cuda_ipc transport |
+|---|---|---|
+| `disabled` | `A1_disabled` | **`A5_ipc_nograph`** ← was missing |
+| `breakable` | `A0_default` | `A4_ipc` |
+
+`A5` is redefined as `cuda_ipc` + `disabled`, completing a full 2×2 over the two
+levers inside one bracket, under one drift gate. That is strictly stronger than
+the plan's pairwise rule: it yields the **interaction** (does the graph pay the
+same amount under IPC as under CPU transport?), not just a single composed point.
+The adaptive-selection code is deleted — the cell is now fixed, so there is no
+mid-bracket choice to record.
+
+The bracket was restarted rather than patched in flight (the running process had
+already imported the old arm table). Cost: ~20 min of `A0_default`. The aborted
+run is kept as `results/phase2_imgA_headline_aborted_20260904T043425Z/`.
+
+Its one useful datum, from the pre-abort `A0_default`: **400/400 completed, 0
+failures, TTFT p50 138.3 ms over 441.8 s**, warmup 30 in 45.5 s. That sets the
+real cost per arm at ~40 min (5 reps + warmup + start/stop) and the full 8-arm
+bracket at **~5.3 GPU-hours**, not the ~1 GPU-day the plan estimated.
+
+The report generator computes the 2×2 and its interaction term when all four
+cells verify, and says so explicitly when they do not.
+
+### 2.1 bracket — *running* (restarted 05:13 UTC)
+
+Order: `A0_default → A1_disabled → A2_tcp → A3_bcg → A4_ipc → A5_ipc_nograph →
+V0_vllm → A0_repeat`, 400 prompts, 30 warmup, 5 reps, c=1.

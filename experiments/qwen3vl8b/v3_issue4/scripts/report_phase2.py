@@ -10,7 +10,8 @@ verdicts; PCG and BCG are never conflated.
     Q2  PCG transfer          A2_tcp      vs A1_disabled
     Q3  IPC transport benefit A4_ipc      vs A0_default
     Q4  BCG value             A3_bcg      vs A1_disabled
-    Qc  composition           A5_ipc_best vs max(A2_tcp, A3_bcg)
+    Qc  composition           the 2x2 interaction over {cpu, cuda_ipc}
+                              x {disabled, breakable}
 
 Reporting rules, applied mechanically rather than by judgement:
 
@@ -150,16 +151,10 @@ def main():
     # ---- Questions --------------------------------------------------------
     L.append("## The four questions, answered separately\n")
     rows = list(QUESTIONS)
-    best_graph = None
-    for cand in ("A2_tcp", "A3_bcg"):
-        r = arms.get(cand)
-        if verified(r) and r.get("ttft_p50_median") is not None:
-            if best_graph is None or r["ttft_p50_median"] < arms[best_graph]["ttft_p50_median"]:
-                best_graph = cand
-    if best_graph:
-        rows.append(("Qc", "Do the two levers compose?", "A5_ipc_best", best_graph,
-                     "Transport and graph coverage are orthogonal knobs; this asks "
-                     "whether stacking them adds up or interferes."))
+    rows.append(("Qc", "Do the two levers compose?", "A5_ipc_nograph", "A1_disabled",
+                 "The IPC transport gain measured with the prefill graph OFF. "
+                 "Read together with Q3 (the same gain with the graph ON), this is "
+                 "the 2x2 interaction — see the factorial table below."))
 
     for qid, title, arm_id, base_id, why in rows:
         arm, base = arms.get(arm_id), arms.get(base_id)
@@ -172,6 +167,34 @@ def main():
         d, verdict = compare(arm, base)
         L.append(f"`{arm_id}` {fmt_ms(arm['ttft_p50_median'])} vs `{base_id}` "
                  f"{fmt_ms(base['ttft_p50_median'])} → **{d:+.2f}%** — {verdict}.\n")
+    # ---- 2x2 factorial over the two levers --------------------------------
+    cells = {("cpu", "disabled"): "A1_disabled",
+             ("cpu", "breakable"): "A0_default",
+             ("cuda_ipc", "disabled"): "A5_ipc_nograph",
+             ("cuda_ipc", "breakable"): "A4_ipc"}
+    if all(verified(arms.get(v)) for v in cells.values()):
+        g = {k: arms[v]["ttft_p50_median"] for k, v in cells.items()}
+        L.append("## The two levers as a 2×2\n")
+        L.append("TTFT p50, median of 5 reps.\n")
+        L.append("| prefill graph | cpu transport | cuda_ipc transport | IPC effect |")
+        L.append("|---|---|---|---|")
+        for gr in ("disabled", "breakable"):
+            c, i = g[("cpu", gr)], g[("cuda_ipc", gr)]
+            L.append(f"| `{gr}` | {fmt_ms(c)} | {fmt_ms(i)} | **{100*(i-c)/c:+.2f}%** |")
+        eff_cpu = 100 * (g[("cpu", "breakable")] - g[("cpu", "disabled")]) / g[("cpu", "disabled")]
+        eff_ipc = 100 * (g[("cuda_ipc", "breakable")] - g[("cuda_ipc", "disabled")]) / g[("cuda_ipc", "disabled")]
+        L.append(f"| **graph effect** | **{eff_cpu:+.2f}%** | **{eff_ipc:+.2f}%** | |\n")
+        interaction = eff_ipc - eff_cpu
+        L.append(f"Interaction (graph effect under IPC minus graph effect under CPU): "
+                 f"**{interaction:+.2f} pp**. A value near zero means the levers are "
+                 f"independent — each pays the same regardless of the other. A large "
+                 f"value means one lever's benefit depends on the other's setting.\n")
+    else:
+        missing = [v for v in cells.values() if not verified(arms.get(v))]
+        L.append("## The two levers as a 2×2\n")
+        L.append(f"Incomplete — {', '.join('`'+m+'`' for m in missing)} did not verify, "
+                 f"so the interaction cannot be computed.\n")
+
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text("\n".join(L) + "\n")
     print(f"wrote {a.out}")

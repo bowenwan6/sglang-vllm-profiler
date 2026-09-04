@@ -80,14 +80,23 @@ ARMS = {
     "A2_tcp":      ("sglang", None,       "tc_piecewise", 1200),
     "A3_bcg":      ("sglang", None,       "breakable",    900),
     "A4_ipc":      ("sglang", "cuda_ipc", None,           480),
-    "A5_ipc_best": ("sglang", "cuda_ipc", None,           900),  # backend filled at runtime
+    # Completes the 2x2 over the two levers. The plan's rule was "compose IPC with
+    # the winner of {A2, A3}", but on this stack the *default* prefill backend is
+    # already `breakable`, so `cuda_ipc + breakable` is exactly `A4_ipc` -- the arm
+    # would have measured a duplicate. The plan's stated purpose for this cell is
+    # "do the two levers compose or interfere?", and the cell that answers it is
+    # the missing corner of the factorial:
+    #     transport x prefill graph = {cpu, cuda_ipc} x {disabled, breakable}
+    #     A1_disabled = cpu+disabled   A0_default = cpu+breakable
+    #     A5_ipc_nograph = ipc+disabled   A4_ipc = ipc+breakable
+    "A5_ipc_nograph": ("sglang", "cuda_ipc", "disabled",   480),
     "V0_vllm":     ("vllm",   None,       None,           900),
     "A0_repeat":   ("sglang", None,       None,           480),
 }
 
 SMOKE_ORDER = ["A0_default", "A1_disabled", "A2_tcp", "A3_bcg", "A4_ipc"]
 HEADLINE_ORDER = ["A0_default", "A1_disabled", "A2_tcp", "A3_bcg",
-                  "A4_ipc", "A5_ipc_best", "V0_vllm", "A0_repeat"]
+                  "A4_ipc", "A5_ipc_nograph", "V0_vllm", "A0_repeat"]
 
 
 def _base_env():
@@ -378,26 +387,9 @@ def main():
     log(f"mode={a.mode} arms={order} n={num_prompts} reps={reps} warmup={warmup}")
     log(f"out={outdir}")
 
-    results, backend_override_for_a5 = [], None
+    results = []
     for arm in order:
-        override = backend_override_for_a5 if arm == "A5_ipc_best" else None
-        if arm == "A5_ipc_best" and override is None:
-            # Choose the winner of {A2_tcp, A3_bcg} among VERIFIED arms only.
-            cands = [r for r in results
-                     if r["arm"] in ("A2_tcp", "A3_bcg")
-                     and r.get("status") == "OK"
-                     and r.get("engagement", {}).get("engagement") == "VERIFIED"
-                     and r.get("ttft_p50_median") is not None]
-            if not cands:
-                log("  A5_ipc_best SKIPPED: neither A2 nor A3 produced a "
-                    "VERIFIED number to compose with")
-                results.append({"arm": arm, "status": "SKIPPED_NO_VERIFIED_BASE"})
-                continue
-            best = min(cands, key=lambda r: r["ttft_p50_median"])
-            override = ARMS[best["arm"]][2]
-            log(f"  A5_ipc_best composes with {best['arm']} "
-                f"(backend={override}, ttft_p50={best['ttft_p50_median']}ms)")
-        rec = run_arm(arm, override, num_prompts, reps, raw, warmup)
+        rec = run_arm(arm, None, num_prompts, reps, raw, warmup)
         results.append(rec)
         (outdir / "results.json").write_text(json.dumps(results, indent=2))
 
