@@ -273,7 +273,79 @@ The verdict stays `UNVERIFIED` — the plan's rule that a partially-eager arm is
 not a PCG number is deliberate and I am not softening it — but the report can now
 state *how* degraded rather than only *that* it was.
 
-### 1.4b re-run on the pinned stack — *running*
+### 1.4b re-run on the pinned stack `471e549959` — **Accepted**, and it produced the strongest result of phase 1
+
+The instrumentation commit landed while `A4_ipc` was starting, so the first smoke
+straddles two SHAs (`A0`–`A3` on `48b0365bcc`, `A4` on `471e549959`). The patch is
+inert outside the piecewise fallback path, but "every arm shares one stack" is not
+a rule to argue around, so the whole smoke was re-run on `471e549959`. The first
+run is kept as the pre-instrumentation record.
+
+#### The `tc_piecewise` degradation, now measured
+
+`A2_tcp` on the pinned stack:
+
+```
+engagement: UNVERIFIED (PCG eager fallback on 8.53% of graph-eligible calls
+                        (600/7038, 2 distinct shapes) — arm ran partially eager)
+TTFT p50 = 144.8 ms
+```
+
+The `PCG_STATS` trace is more informative than the headline percentage:
+
+| eligible calls | eager fallbacks | distinct shapes |
+|---|---|---|
+| 1000 | 0 | 0 |
+| 2000 | 0 | 0 |
+| **6402** | **1** | 1 |
+| 6538 | 100 | 1 |
+| 6638 | 200 | 2 |
+| 7000 | 561 | 2 |
+| 7038 | 600 | 2 |
+
+Three facts follow, none of which were available from the log before:
+
+1. **The degradation has a late onset.** Nothing at all for the first 6401
+   graph-eligible calls, then the first fallback at 04:24:38 — deep inside the
+   benchmark, long past warmup.
+2. **After onset it is essentially total for the affected shapes.** 600
+   fallbacks in the 637 eligible calls following onset — **94.2%**. This is the
+   sticky mechanism confirmed by measurement: the branch returns *without*
+   capturing, so a shape that once missed the capture stream runs eager for the
+   remainder of the process.
+3. **It is nondeterministic across runs.** The pre-instrumentation smoke fired
+   the warning; this run showed `eager_fallback=0` at eligible=2000 and only
+   began at 6402. Whether an arm degrades at all depends on when Dynamo meets a
+   previously-unseen guard.
+
+And the reason this matters for the whole experiment: **every other check
+passed.** `/server_info` reported `prefill.backend = tc_piecewise`; the capture
+line reported `backend=tc_piecewise`; all 21 benchmark prefill batches reported
+`cuda graph: True`; TTFT p50 came back at a perfectly ordinary 144.8 ms. Without
+the log-signal check the arm looks healthy, and without the counters "1×
+warning" is indistinguishable from "600 fallbacks on 94% of post-onset calls".
+Anyone reading only the batch-level indicator would have published 144.8 ms as
+"the tc_piecewise number".
+
+This is a genuine upstream finding — the capture-stream eager fallback is not a
+rare transient on Qwen3-VL image serving — but per §11.5 criterion 5 it belongs
+in a **new issue**, not in #4's scope. Recorded as a follow-up.
+
+#### Run-to-run noise at smoke size
+
+Same configuration, two runs:
+
+| arm | smoke-1 | pinned | Δ |
+|---|---|---|---|
+| `A0_default` | 139.6 ms | 143.2 ms | +2.6% |
+| `A1_disabled` | 142.4 ms | 133.8 ms | −6.1% |
+
+**Repeat noise reaches 6.1%, larger than the entire 3.7% spread between the four
+graph arms in smoke-1.** The smoke cannot discriminate between prefill backends
+and was never meant to — this is the quantitative justification for the phase-2
+sizing (400 prompts × 5 reps), and for the reporting rule that a delta under 5%
+is "no material difference" rather than a trend.
+
 
 The instrumentation commit landed while `A4_ipc` was starting, so the smoke above
 straddles two SHAs (`A0`–`A3` on `48b0365bcc`, `A4` on `471e549959`). The patch is
