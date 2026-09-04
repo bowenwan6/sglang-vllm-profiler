@@ -6,10 +6,11 @@ Reads a bracket's results.json and writes the report. Four questions, each
 answered **against its own baseline** and each carrying its arms' engagement
 verdicts; PCG and BCG are never conflated.
 
-    Q1  cross-framework gap   A0_default  vs V0_vllm
-    Q2  PCG transfer          A2_tcp      vs A1_disabled
-    Q3  IPC transport benefit A4_ipc      vs A0_default
-    Q4  BCG value             A3_bcg      vs A1_disabled
+    Q1  cross-framework gap   A5_ipc_nograph vs V0_vllm   (#4's standard condition)
+    Q1b same, upstream default A0_default     vs V0_vllm
+    Q2  PCG transfer          A2_tcp         vs A1_disabled
+    Q3  IPC transport benefit A5_ipc_nograph vs A1_disabled (graph off both sides)
+    Q4  prefill graph value   A4_ipc         vs A5_ipc_nograph (IPC on both sides)
     Qc  composition           the 2x2 interaction over {cpu, cuda_ipc}
                               x {disabled, breakable}
 
@@ -33,19 +34,33 @@ DELTA_THRESHOLD_PCT = 5.0
 CV_BAND_PCT = 5.0
 DRIFT_GATE_PCT = 5.0
 
+# Ordered to match issue #4's own framing: #4 names
+# SGLANG_USE_CUDA_IPC_TRANSPORT=1 as the standard condition for SGLang image runs
+# and the without-IPC case as the optional ablation, so the IPC row leads and the
+# cpu row is reported as the ablation (plan.md §11.7).
 QUESTIONS = [
-    ("Q1", "Cross-framework gap (image path)", "A0_default", "V0_vllm",
-     "How far is SGLang's production default from vLLM on image+text? "
-     "This is #2's Case-A question moved to the image path."),
+    ("Q1", "Cross-framework gap, #4's standard condition",
+     "A5_ipc_nograph", "V0_vllm",
+     "#4's SGLang image baseline is IPC-on. How far is it from vLLM on "
+     "image+text? This is #2's Case-A question moved to the image path."),
+    ("Q1b", "Cross-framework gap, today's upstream default transport",
+     "A0_default", "V0_vllm",
+     "The same comparison from the transport a user gets without setting "
+     "anything on current upstream (`cpu`). Reported alongside Q1 because the "
+     "two answer different questions: what #4 specifies versus what ships."),
     ("Q2", "Does #2's PCG win transfer to images?", "A2_tcp", "A1_disabled",
      "#2 showed tc_piecewise took text-only Case A from 21.94 ms to 14.04 ms. "
      "Against the no-prefill-graph floor, does the same lever pay on images?"),
-    ("Q3", "CUDA IPC feature transport, isolated", "A4_ipc", "A0_default",
-     "Transport is orthogonal to graph coverage. Measured against the real "
-     "production default (cpu transport), not against a chosen non-default."),
-    ("Q4", "Breakable prefill CUDA graph value", "A3_bcg", "A1_disabled",
-     "What PR #33726 buys once Qwen3-VL is on the breakable allowlist, against "
-     "the floor that upstream gives the arch today."),
+    ("Q3", "CUDA IPC feature transport, isolated",
+     "A5_ipc_nograph", "A1_disabled",
+     "The transport lever with the graph held OFF on both sides — #4's "
+     "\"separate IPC benefit from PCG benefit\" requirement. The graph-ON "
+     "counterpart is `A4_ipc` vs `A0_default`; both appear in the 2×2."),
+    ("Q4", "Prefill CUDA graph value under #4's standard condition",
+     "A4_ipc", "A5_ipc_nograph",
+     "What the breakable prefill graph buys with IPC on, which is the "
+     "configuration #4 specifies. The cpu-row counterpart (`A0_default` vs "
+     "`A1_disabled`) is the ablation, and both appear in the 2×2."),
 ]
 
 
@@ -150,11 +165,9 @@ def main():
 
     # ---- Questions --------------------------------------------------------
     L.append("## The four questions, answered separately\n")
+    # The composition question is answered by the 2x2's interaction term below,
+    # not by another pairwise row -- a pairwise "Qc" would just restate Q3.
     rows = list(QUESTIONS)
-    rows.append(("Qc", "Do the two levers compose?", "A5_ipc_nograph", "A1_disabled",
-                 "The IPC transport gain measured with the prefill graph OFF. "
-                 "Read together with Q3 (the same gain with the graph ON), this is "
-                 "the 2x2 interaction — see the factorial table below."))
 
     for qid, title, arm_id, base_id, why in rows:
         arm, base = arms.get(arm_id), arms.get(base_id)
