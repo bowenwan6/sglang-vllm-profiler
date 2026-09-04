@@ -631,3 +631,29 @@ most trustworthy.
 
 Without the counters this arm reports one suppressed warning and a tight, tidy
 147.02 ms. That is the whole case for the v3 design in one number.
+
+---
+
+## Phase 2b — IMG-R ratio sweep (plan.md §11.8)
+
+Started 11:08 UTC. Transport pinned to `cuda_ipc` (issue #4's standard
+condition), two prefill-graph arms per workload run back to back, 300 prompts /
+20 warmup / 3 reps, c=1.
+
+### Out-of-sample prediction, recorded before `R2_360p__breakable` ran
+
+After the first two workloads the mechanism from §11.8 (`saving ≈ C − k·N`) has
+two points to fit:
+
+```
+N=128  saving 12.32 ms      N=208  saving 9.00 ms
+⇒ k = 3.32 / 80 = 0.0415 ms/token,  C = 17.63 ms,  sign change at N ≈ 425
+```
+
+The pre-registered prediction in §11.8 was "sign change somewhere below N ≈ 400",
+written before any of this ran. The two-point fit puts it at **425**.
+
+`R2_360p` measured `N = 364` with `disabled` at 64.005 ms, so the fit predicts a
+saving of **2.5 ms → breakable ≈ 61.5 ms, effect ≈ −3.9%**. Recorded here before
+the arm finished so the test is genuinely out of sample. A materially different
+result refutes `C − k·N` and the model must be replaced, not patched.
