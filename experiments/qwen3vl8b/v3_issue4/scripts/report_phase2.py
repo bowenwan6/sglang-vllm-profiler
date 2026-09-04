@@ -123,7 +123,7 @@ def main():
     L.append("| arm | transport | prefill backend | TTFT p50 | CV | TPOT p50 | engagement |")
     L.append("|---|---|---|---|---|---|---|")
     for arm_id in ("A0_default", "A1_disabled", "A2_tcp", "A3_bcg", "A4_ipc",
-                   "A5_ipc_best", "V0_vllm", "A0_repeat"):
+                   "A5_ipc_nograph", "V0_vllm", "A0_repeat"):
         r = arms.get(arm_id)
         if r is None:
             L.append(f"| `{arm_id}` | — | — | — | — | — | *not run* |")
@@ -142,7 +142,7 @@ def main():
              "Their numbers are shown only so the exclusion can be audited.\n")
 
     for arm_id in ("A0_default", "A1_disabled", "A2_tcp", "A3_bcg", "A4_ipc",
-                   "A5_ipc_best", "V0_vllm", "A0_repeat"):
+                   "A5_ipc_nograph", "V0_vllm", "A0_repeat"):
         r = arms.get(arm_id)
         if r is not None and not verified(r):
             L.append(f"- `{arm_id}` — {eng_reason(r)}")
