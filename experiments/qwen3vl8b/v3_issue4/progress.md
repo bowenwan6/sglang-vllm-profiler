@@ -708,3 +708,60 @@ genuine image+text points show a double-digit graph win — `R1_tiny` −16.3% a
 N=208 and `R2_360p` −14.0% at N=364, every arm independently verified. What
 changed is the explanation for where the win disappears, and the old explanation
 is withdrawn rather than reshaped to fit.
+
+### `R4` refutes both candidate explanations; a third hypothesis, recorded before `R5`
+
+`R4_720p_longtext` was built to separate two stories. It separated them by
+falsifying both.
+
+| | | |
+|---|---|---|
+| `R4_720p_longtext__disabled` | 135.709 ms | N = 1969 (882 vision + 1087 text) |
+| `R4_720p_longtext__breakable` | 135.994 ms | |
+| graph effect | **+0.21%** | saving −0.29 ms |
+
+- A **ratio**-driven story predicted improvement: text share rises from 13% to
+  55%. It did not improve.
+- An **N**-driven story predicted deterioration: N grows 1024 → 1969. It did not
+  deteriorate.
+
+The effect is simply flat near zero: +0.80% at N=1024, +0.21% at N=1969.
+
+Full series at fixed `cuda_ipc` transport:
+
+| N | vision | text | saving |
+|---|---|---|---|
+| 128 | 0 | 128 | **+12.32 ms** |
+| 208 | 80 | 128 | +9.00 ms |
+| 364 | 236 | 128 | +8.97 ms |
+| 1024 | 896 | 128 | −0.84 ms |
+| 1969 | 882 | 1087 | −0.29 ms |
+
+The saving plateaus around +9 ms, transitions, and **settles at ~0 rather than
+going increasingly negative**. At large N the prefill graph is *neutral*, not
+harmful — which also suggests IMG-A's +3.66% overstated the cost.
+
+**Third hypothesis — explicitly a hypothesis, after one refutation.** The graph
+does not save a constant and pay a per-token cost. It saves **the portion of
+kernel-launch overhead that is not already hidden behind GPU execution**. When
+per-kernel GPU work is small, launch overhead is exposed and lands in TTFT; as
+sequence length grows, each kernel does more work and the launch cost overlaps
+away, so the recoverable amount falls toward zero on its own.
+
+This accounts for three things the discarded model could not:
+
+- the saving **asymptotes to 0** instead of turning sharply negative;
+- **the presence of an image is a step** (12.32 → 9.00 ms) — the vision encoder
+  adds GPU work that provides overlap;
+- **`R4` changes nothing** — at N=1024 the recoverable overhead is already spent,
+  so another 1087 text tokens have nothing left to take.
+
+**Falsifiable prediction, written before `R5_1080p__breakable` ran:** with
+`R5_1080p__disabled` at 203.92 ms (N=2184), the model predicts **saving ≈ 0 ± 2 ms,
+breakable ≈ 202–206 ms, effect within ±1% — neutral, not negative.** A clearly
+negative result (say ≥ 210 ms) refutes this model too, and it will be withdrawn
+rather than adjusted.
+
+The gap-filling workloads (N ≈ 528, 704, 912) test the other half: the model
+predicts a smooth monotone decline from ~9 ms toward ~0 across them, with no
+sharp cliff.
