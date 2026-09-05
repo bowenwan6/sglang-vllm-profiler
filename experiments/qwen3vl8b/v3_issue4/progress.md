@@ -867,3 +867,49 @@ Two bench clients against one server at fixed total arrival rate, per-class TTFT
 reported separately, staged: `f ∈ {0, 0.2, 1.0}` first, and `{0.05, 0.5}` only if
 stage 1 shows text-class degradation under `breakable` that `disabled` does not
 show.
+
+### Q1 first pair (N=208) — token type is **not** irrelevant
+
+Block 1 of 3, both cells `VERIFIED` (`captured=None` / `captured=breakable`,
+graph 0.0% / 100.0% of 323 benchmark prefill batches).
+
+| N=208, identical token count | disabled | breakable | saving | effect |
+|---|---|---|---|---|
+| **text-only** (208 text) | 31.62 ms | **18.74 ms** | **+12.88 ms** | **−40.74%** |
+| **with an image** (66 visual + 142 text, v3) | 55.23 ms | 46.23 ms | +9.00 ms | −16.30% |
+
+**Both pre-registered predictions fail.** Conserved-effect predicted −16.3% and
+conserved-saving predicted −28%; the measurement is −40.74% with a saving of
+12.88 ms. The outcome is a third one: at the same token count, **a visual token
+erodes the graph's benefit more than a text token does**, in the numerator as
+well as the denominator.
+
+**Exact decomposition of the 24.45 pp gap:**
+
+| component | size | share |
+|---|---|---|
+| **denominator** — the image adds 23.61 ms of fixed cost (preprocessing + vision encoder) that the graph cannot touch | 17.41 pp | **71%** |
+| **numerator** — recoverable overhead genuinely shrinks, 12.88 → 9.00 ms | 7.03 pp | **29%** |
+
+(The counterfactual "same saving, image denominator" is −23.33%; the distance
+from −40.74% to there is the denominator's work, and from there to −16.30% is
+the numerator's.)
+
+The split matters for the deployment claim, because the two components mean
+different things. **Roughly seven tenths of "the graph looks useless on images"
+is the percentage being diluted by a cost that has nothing to do with CUDA
+graphs**, not the graph failing. Its absolute contribution survives; it is
+simply buried under vision-encoder time.
+
+Consistent with both prior observations and with the surviving hypothesis: text-
+only saving is flat across 128 → 208 tokens (12.32 → 12.88 ms), and the drop
+that appears with an image is what the encoder's extra GPU work overlaps away.
+
+**This contradicts a sentence in the published report.**
+[`issue4_v3_report.pdf`](issue4_v3_report.pdf) states that "the controlling
+variable is the number of prefill tokens, not the image-to-text ratio". At
+matched N the two compositions give −40.74% and −16.30%, so as written that is
+wrong: token count alone does not fix the effect. The claim narrows to the visual
+axis — *along the visual axis, benefit falls as visual tokens grow* — and the
+report and PDF are corrected once the remaining blocks land and the within-pair
+drift gate is applied.
