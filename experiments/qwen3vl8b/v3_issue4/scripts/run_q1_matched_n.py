@@ -63,8 +63,14 @@ WORKLOADS = {
     "text-208":  (None,      208,  "R1_tiny", -16.30),
     "text-544":  (None,      544,  "R6_640",   -4.54),
     "text-1024": (None,      1024, "R3_720p",  +0.80),
+    # The client's --random-input-len excludes the chat template, which adds ~8
+    # tokens server-side. `text-1024` therefore arrives as 1032 tokens and pads
+    # to the 1280 bucket -- 24% waste -- while its partner `R3_720p` lands on
+    # 1024 exactly (882 visual + 142 text) with none. That is not a matched
+    # comparison, it is a comparison of padding. 1016 makes the server see 1024.
+    "text-1016": (None,      1016, "R3_720p",  +0.80),
 }
-ORDER = ["text-208", "text-544", "text-1024"]
+ORDER = ["text-208", "text-544", "text-1016"]
 
 
 def bench_args(resolution, text_tokens):
@@ -222,14 +228,24 @@ def main():
             R.log(f"  {wid:<11} insufficient verified blocks "
                   f"(disabled={len(d)}, breakable={len(b)})")
             continue
-        drift = 100 * (max(d) - min(d)) / statistics.median(d)
+        # Gate the *paired effects*, not the absolute levels. The levels carry
+        # the common-mode drift that A/B/A/B pairing exists to cancel -- a cold
+        # first block can move them 19% while every paired effect agrees to
+        # 3 pp. Gating on levels throws away exactly the data the design saved.
+        n = min(len(d), len(b))
+        effs = [100 * (b[i] - d[i]) / d[i] for i in range(n)]
+        eff = statistics.median(effs)
+        spread = max(effs) - min(effs)
+        level_drift = 100 * (max(d) - min(d)) / statistics.median(d)
         dv, bv = statistics.median(d), statistics.median(b)
-        eff = 100 * (bv - dv) / dv
         _, _, partner, partner_eff = WORKLOADS[wid]
-        gate = "PASS" if drift <= WITHIN_PAIR_DRIFT_GATE else "FAIL — discard"
+        gate = ("PASS" if spread <= abs(eff) / 2 or spread <= WITHIN_PAIR_DRIFT_GATE
+                else "WEAK — spread comparable to effect")
         R.log(f"  {wid:<11} disabled={dv:>7.2f}ms breakable={bv:>7.2f}ms "
-              f"effect={eff:+6.2f}%  | {partner} (with image) was "
-              f"{partner_eff:+6.2f}%  | within-pair drift {drift:.2f}% [{gate}]")
+              f"effect={eff:+6.2f}% (blocks {', '.join(f'{e:+.2f}' for e in effs)})"
+              f"  | {partner} was {partner_eff:+6.2f}%"
+              f"  | paired spread {spread:.2f} pp [{gate}]"
+              f"  | level drift {level_drift:.2f}% (cancelled by pairing)")
 
 
 if __name__ == "__main__":

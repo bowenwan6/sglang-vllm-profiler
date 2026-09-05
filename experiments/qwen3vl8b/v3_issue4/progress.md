@@ -913,3 +913,82 @@ wrong: token count alone does not fix the effect. The claim narrows to the visua
 axis — *along the visual axis, benefit falls as visual tokens grow* — and the
 report and PDF are corrected once the remaining blocks land and the within-pair
 drift gate is applied.
+
+### Q1 complete — two errors of mine, one real result
+
+The 18 blocks all ran clean: every cell `VERIFIED`, 300/300 completed, no
+failures. The runner then declared all three workloads FAILED. Both of those
+verdicts were wrong, for two different reasons, and the diagnosis is the useful
+part.
+
+#### Error 1 — I gated on the quantity the design exists to cancel
+
+| workload | `disabled` blocks | paired effects | level spread | paired spread |
+|---|---|---|---|---|
+| `text-208` | 31.62 → 27.30 → 26.32 | −40.74, −39.77, −37.76 | **19.4%** | **2.98 pp** |
+| `text-544` | 27.16 → 27.60 → 28.73 | −15.94, −15.54, −18.54 | 5.7% | 3.00 pp |
+| `text-1024` | 36.05 → 35.06 → 34.88 | +7.87, +10.09, +13.89 | 3.3% | 6.02 pp |
+
+`text-208`'s levels fall 19.4% across the bracket — a cold-start ramp, since the
+GPU had been idle and the per-block warmup is only 20 prompts. But the **paired**
+effects agree to 3 pp. That is A/B/A/B blocking working exactly as designed: the
+common-mode drift cancels in the ratio.
+
+My gate then measured the level spread and discarded everything. **I built the
+right instrument and read the wrong dial.** Fixed: the gate now reads paired
+effects, and reports level drift separately as the quantity pairing removed.
+
+#### Error 2 — and an alarm I raised and must withdraw
+
+`text-1024` returned **+10.09%** — the graph appearing to *cost* 10% on a long
+text prompt. The mechanism is not long prompts:
+
+| cell | client asks | **server sees** | bucket | padding |
+|---|---|---|---|---|
+| `text-208` | 208 | 216 | 224 | 3.7% |
+| `text-544` | 544 | 552 | 576 | 4.3% |
+| `text-1024` | 1024 | **1032** | **1280** | **24.0%** |
+
+`--random-input-len` excludes the chat template, which adds ~8 tokens. The
+capture ladder is dense below 1024 and steps by 256 above it, so 1032 tokens
+overshoot the 1024 bucket by eight and pad to 1280. The graph arm does **24% more
+prefill compute than it needs**; the +10.09% is that, not a property of long
+prompts.
+
+**The alarm I raised — that this might also confound IMG-A — was wrong, and I
+withdraw it.** Checked across every v3 workload:
+
+```
+IMG-A (A0/A4/A5)   mode 1024 -> bucket 1024   padding  0.0%
+R3_720p            mode 1024 -> bucket 1024   padding  0.0%
+R0 R1 R2 R6 R7 R8 R4 R5      padding 0.0-6.7%
+```
+
+The image workloads land on 1024 exactly (882 visual + 142 text), so **v3 is
+unaffected**. Only the text-only cell I added last night mis-lands.
+
+Consequence: the N=208 and N=544 pairs are valid (both members land within
+~6% padding, and at 544 both are in the same 576 bucket). **The N=1024 pair is
+not a matched comparison at all** — it compares 24% padding against 0% — and is
+discarded. `text-1016` is running now: 1016 requested makes the server see 1024,
+landing on the same bucket as its partner.
+
+#### The result that survives
+
+| N | text-only | with an image (v3) | difference |
+|---|---|---|---|
+| 208 | **−39.77%** (+10.86 ms) | −16.30% (+9.00 ms) | 23.5 pp |
+| 544 | **−15.94%** (+4.33 ms) | −4.54% (+3.18 ms) | 11.4 pp |
+
+Token type is **not** irrelevant: at matched token count the text-only workload
+gains far more. But the refinement matters — the *saving in milliseconds* is
+close between compositions (10.86 vs 9.00; 4.33 vs 3.18), while the *percentage*
+differs two- to three-fold. So the graph recovers a similar absolute amount
+either way, and the image simply buries it under vision-encoder time that the
+graph cannot touch.
+
+That narrows rather than refutes the v3 claim. **N sets where the benefit
+crosses zero; composition sets how large the percentage looks.** The published
+sentence "the controlling variable is the number of prefill tokens, not the
+image-to-text ratio" is right about the crossover and wrong about the magnitude,
+and will be corrected to say so.
