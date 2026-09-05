@@ -90,7 +90,7 @@ confound identically, so *internal contrasts hold*. Repeated in the report per
 | CUDA toolkit | `13.0` V13.0.88 |
 | Driver | `595.71.05` |
 | Runtime libcuda | `LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libcuda.so.595.71.05` (overrides `cuda-compat-13-0` loader precedence) |
-| GPU | **7 only** — NVIDIA H200, 143771 MiB (user-specified, never auto-switch) |
+| GPU | **7** for the v3 brackets (IMG-A, IMG-R). **5** for the §12 follow-on — GPU 7 was occupied by another tenant on the host; both are H200s of the same model and the owner's call is that the difference is immaterial, so no cross-GPU calibration was run. Every record carries its own `gpu` field. |
 | Python | 3.12.3 |
 | Attention backend | `flashinfer` (unchanged from v2) |
 

@@ -801,3 +801,49 @@ between ~9 ms and ~0. **A cliff refutes it** — if R6 is still ~9 ms and R7 dro
 straight to ~0, the cause is a threshold (graph bucket sizing, a chunked-prefill
 switch) rather than launch overhead being progressively overlapped away, and the
 model gets withdrawn like the last one.
+
+---
+
+## Phase 3 — issue #4 follow-on (plan.md §12)
+
+Re-organised around three questions rather than bracket IDs. **Q0 (transport)**
+is answered and closed at −28.2%. **Q1** and **Q2** are what remain.
+
+### Q1 — is a text token equivalent to a visual token? — *running*
+
+Started 22:10 UTC 2026-09-05 on **GPU 5** (GPU 7 held 122 GB by another tenant).
+
+The v3 sweep moved visual tokens across seven points but moved text tokens
+exactly once, at 720p, where both cells sat inside the ±3.60% resolution floor.
+So "the controlling variable is total prefill tokens, not the image/text ratio"
+was never tested where token *type* could show a difference — and the
+load-bearing −44.83% is a measurement at **128 text tokens**, while real prompts
+carry system context and retrieved passages.
+
+Three text-only cells, chosen so their token counts match workloads v3 already
+measured with images:
+
+| cell | text tok | matches | that cell's composition | its measured effect |
+|---|---|---|---|---|
+| `text-208` | 208 | `R1_tiny` | 66 visual + 142 text | −16.30% |
+| `text-544` | 544 | `R6_640` | 402 visual + 142 text | −4.54% |
+| `text-1024` | 1024 | `R3_720p` | 882 visual + 142 text | +0.80% |
+
+`text-1024` doubles as the realistic-prompt-length answer.
+
+**Method change — paired A/B/A/B blocking.** v3's floor was set by drift across a
+bracket spanning hours, while per-cell CV was only 0.2–1.8%: drift, not variance,
+was binding. The arms now alternate in short blocks (one rep each) instead of
+running all of one arm then all of the other, so a comparison spans minutes.
+Gate: the three `disabled` blocks of a workload must agree within **2%** or the
+workload is discarded rather than averaged. `--chunked-prefill-size` is pinned at
+8192 rather than left to resolution.
+
+18 blocks, ~2 GPU-hours.
+
+### Q2 — the request-stream mix — *not started*
+
+Two bench clients against one server at fixed total arrival rate, per-class TTFT
+reported separately, staged: `f ∈ {0, 0.2, 1.0}` first, and `{0.05, 0.5}` only if
+stage 1 shows text-class degradation under `breakable` that `disabled` does not
+show.
