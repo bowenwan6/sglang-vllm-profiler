@@ -1803,3 +1803,167 @@ not averaged.
 
 Run this only for the workloads where §11.8 finds the graph pays, since that is
 where #4's PCG claim actually matters.
+
+
+
+---
+
+# 12. Issue #4 follow-on — organised by question (planned 2026-09-05, **not started**)
+
+The v3 work is organised by bracket (`A0`…`A5`, `R0`…`R8`) because that is how it
+was executed. That is the wrong organising axis for anyone reading it: the IDs
+have to be learned before the result can be understood. This section is
+structured by **question**, and every experiment below exists to close one named
+gap in one question. Anything that did not close a gap has been cut — see §12.4.
+
+## 12.0 The three questions
+
+| # | question | status |
+|---|---|---|
+| **Q0** | **Transport** — how the multimodal features reach the LM | ✅ **answered, closed.** `cuda_ipc` is worth **−28.2%** of TTFT, independent of the graph (2×2 interaction +0.42 pp). Not a CUDA-graph question at all, and the largest single effect found. |
+| **Q1** | **Within one request** — at what image-to-text composition does the prefill graph pay? | ⚠️ **半答.** The *visual* axis is swept across seven points and the boundary is located. The *text* axis was never varied where a difference could be resolved. |
+| **Q2** | **Across a request stream** — at what image arrival fraction is enabling the graph still worth it? | ❌ **not started, and v3 structurally cannot answer it.** |
+
+Q0 needs nothing further. The plan below is Q1's missing axis and Q2.
+
+## 12.1 Q1 — the composition inside one request
+
+**Answered.** With text held at ~142 tokens, the graph's benefit falls with
+visual-token count and the material-win boundary sits between N=364 and N=544:
+−44.8% at text-only, −16.3% at 256×256, −14.0% at 360p, −4.5% at 640×640, and
+nothing resolvable at 720p and beyond.
+
+**The gap.** Visual tokens were swept; **text tokens were varied exactly once**
+(720p at 142 vs 1087 text tokens), and both of those cells sit inside the ±3.60%
+resolution floor. So "the controlling variable is total prefill tokens, not the
+image/text ratio" is established against a *strong* ratio model — which predicts
+~−20% where 0 was measured — but the **equivalence of a text token to a visual
+token has never been measured where a difference would show**. It matters
+practically: the single number the whole "text-heavy deployments benefit"
+argument rests on is **−44.8% at 128 text tokens**, and real prompts carry system
+context, RAG passages and chat history at 500–4000 tokens.
+
+**The fix — three points, not a new experiment family.** Text-only cells chosen
+so their token counts *match* workloads already measured with images. Half of
+each comparison therefore already exists:
+
+| new cell | text tok | matches | that cell's composition | its measured effect |
+|---|---|---|---|---|
+| `text-208` | 208 | `R1_tiny` | 66 visual + 142 text | −16.30% |
+| `text-544` | 544 | `R6_640` | 402 visual + 142 text | −4.54% |
+| `text-1024` | 1024 | `R3_720p` | 882 visual + 142 text | +0.80% |
+
+Same N, different composition. If the pairs agree, token type is irrelevant and
+Q1 is closed on both axes with one sentence. If they diverge, the v3 conclusion
+narrows to the visual axis and the report is corrected.
+
+`text-1024` doubles as the realistic-prompt-length answer, so no separate long-
+prompt cell is needed.
+
+**Cost.** 6 cells (3 workloads × 2 arms), c=1, transport `cuda_ipc`,
+`--disable-radix-cache`, 300 prompts / 20 warmup / 3 reps ≈ **2 GPU-hours**.
+
+## 12.2 Q2 — the composition of the request stream
+
+**Why v3 cannot answer it.** Graph eligibility is decided **per batch on the
+batch's summed token count** (`prefill_cuda_graph_runner.py:1231-1240`), and the
+scheduler applies no image/text separation when forming a prefill batch. All 926
+of v3's measured prefill batches carried `#new-seq: 1` — concurrency 1, one
+request per batch — so **co-batching never occurred in any v3 measurement**. In a
+real mixed stream a text request that shares a batch with an image request sits
+in a large-N batch and loses the benefit it would have had alone, which means the
+weighted average of v3's homogeneous points would **overestimate** the aggregate.
+
+Two competing mechanisms were checked in source and ruled out, so this is the one
+that remains: embed-carrying rejection applies to the client-supplied-embeddings
+API, not to normal image serving (which is why v3 measured 100% graph usage on
+image batches), and padding rejection cannot fire given the observed bucket
+ladder (`_MAX_PREFILL_CUDA_GRAPH_PADDING_FACTOR = 2`, widest gap 25%).
+
+**Design.** One server per arm; **two bench clients run against it at once** —
+one text-only, one image — each with its own Poisson `--request-rate`, so the
+arrival fraction is `f = r_image / (r_text + r_image)`. No harness surgery, and
+**per-class TTFT comes for free**, which is the point: an aggregate number hides
+exactly the interference being looked for.
+
+**Staged, because the effect may not exist.** Stage 1 is three arrival fractions;
+stage 2 only runs if stage 1 shows something.
+
+| stage | f (image share of arrivals) | cells | purpose |
+|---|---|---|---|
+| 1 | 0 · 0.20 · 1.00 | 6 | control, realistic mix, image-only bound |
+| 2 *(conditional)* | 0.05 · 0.50 | 4 | locate the break-even, only if stage 1 shows text-class degradation under `breakable` that `disabled` does not show |
+
+Image class = 720p + 128 text. Text class = 512 tokens. Total arrival rate fixed
+across all cells, calibrated by a short pilot to a mean of ~8 in flight — enough
+that batches actually hold more than one request, without saturating.
+
+**Reading.** Three quantities, reported separately, never merged:
+
+1. **text-class TTFT vs f.** Under `disabled` this is queueing alone. Under
+   `breakable`, any *extra* degradation as f rises is the co-batching
+   interference — the effect v3 could not see.
+2. **image-class TTFT vs f** — expected flat; a control that catches confounds.
+3. **aggregate vs f**, derived, giving the **break-even image fraction**.
+
+**Cost.** Stage 1 + pilot ≈ **2.5 GPU-hours**; stage 2, if triggered, ≈ 1.5 more.
+
+## 12.3 The one method change both depend on
+
+v3's resolution floor was **3.60%**, set by repeating a reference cell across a
+bracket spanning hours and twelve server restarts. Every effect at N ≥ 720 fell
+inside it — which is exactly why no break-even fraction can be stated today.
+Per-cell CV was 0.2–1.8%, so **drift, not variance, is the binding constraint**,
+and the fix is design rather than more repetitions.
+
+Both experiments run **A/B/A/B in short blocks per workload** — one rep each,
+alternating — instead of all of A then all of B. The comparison then spans
+minutes instead of hours. **Gate: the two `disabled` blocks of a pair must agree
+within 2%**, or that workload is discarded and re-run. This is the condition
+under which a 3–4% effect becomes claimable at all.
+
+## 12.4 What was cut
+
+- **A separate long-prompt experiment** — folded into `text-1024`, which answers
+  it as a by-product of the matched-N design.
+- **A `text-2048` cell** — redundant once `text-1024` lands on the flat part of
+  the curve. Reinstate only if `text-1024` is still showing benefit.
+- **A full text × image grid** (9–18 cells) — replaced by 3 matched-N points
+  that reuse v3's existing measurements as the other half of each comparison.
+- **Batch-composition instrumentation** — a measurement-only counter of
+  mm-carrying requests per batch would explain a Q2 effect, but nothing needs
+  explaining until §12.2 stage 1 finds one. Deferred, not designed in.
+- **A second concurrency level for Q2** — one operating point (~8 in flight) is
+  enough to establish whether co-batching interference exists. Sweeping
+  concurrency is a different question and belongs to issue #5.
+- **`tc_piecewise` everywhere** — unmeasurable at these run lengths on current
+  upstream (§11.9). Its absence is already documented; re-testing it here would
+  only re-derive the same failure.
+
+Total: **12 cells across two experiments, ≈4.5 GPU-hours**, against ~30 cells and
+~10 hours in the first draft of this section.
+
+## 12.5 Acceptance and risks
+
+**Done when:**
+
+1. Q1's three matched-N pairs are reported side by side, and the v3 claim
+   "N is the variable" is confirmed, narrowed to the visual axis, or withdrawn.
+2. Q2 stage 1 reports text-class and image-class TTFT **separately** at each f;
+   an aggregate-only result does not satisfy this.
+3. A **break-even image fraction with an uncertainty band** is stated, or it is
+   stated explicitly that it lies outside the tested range and why.
+4. Every cell carries `engagement: VERIFIED`; the prefix-cache and
+   probe-denominator checks stay in force; every pair reports its within-pair
+   drift.
+
+**Risks:**
+
+1. **Q2 may find nothing** — a negative result, still worth having, because the
+   weighted average is currently an assumption rather than a measurement.
+2. **Two concurrent bench clients may contend for CPU.** The pilot must show the
+   client is not the bottleneck before any cell is believed.
+3. **Poisson arrivals make in-flight count a mean, not a bound** — report the
+   observed distribution rather than the target.
+4. **Q1 may invalidate part of the v3 report.** If the text axis behaves
+   differently, the published conclusion narrows. That is the experiment working.
