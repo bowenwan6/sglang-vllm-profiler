@@ -841,6 +841,26 @@ workload is discarded rather than averaged. `--chunked-prefill-size` is pinned a
 
 18 blocks, ~2 GPU-hours.
 
+**Discriminating criterion, recorded before the first `breakable` block finished.**
+`text-208__disabled` came in at **31.62 ms**, against `R1_tiny__disabled`
+(66 visual + 142 text, same N=208) at **55.23 ms** — a 23.6 ms gap at *identical*
+token count, which is the image's fixed preprocessing and vision-encoder cost
+confirmed on matched N rather than inferred.
+
+That gap makes the matched-N test sharper, because "token type is irrelevant" has
+two incompatible readings:
+
+| if the quantity fixed by N is… | predicted `text-208` graph effect |
+|---|---|
+| the **absolute saving** (~9 ms, as at `R1_tiny`) | −9 / 31.6 ≈ **−28%** |
+| the **percentage effect** | **−16.3%**, matching `R1_tiny` |
+
+They cannot both hold: the denominators differ by 43%. Which one holds matters
+for the deployment claim — if the saving is what is conserved, then the graph's
+value on text requests is *systematically understated* by percentages measured on
+image workloads, and a text-heavy deployment gains more than those percentages
+suggest.
+
 ### Q2 — the request-stream mix — *not started*
 
 Two bench clients against one server at fixed total arrival rate, per-class TTFT
