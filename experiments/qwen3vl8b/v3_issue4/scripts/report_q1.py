@@ -26,19 +26,23 @@ from pathlib import Path
 
 # v3 partners, measured on the image axis: (composition, N, effect %, disabled ms)
 PARTNERS = {
-    "text-208":  ("R1_tiny  (66 visual + 142 text)",   208,  -16.30, 55.23),
-    "text-544":  ("R6_640   (402 visual + 142 text)",  544,   -4.54, 69.99),
-    "text-1024": ("R3_720p  (882 visual + 142 text)", 1024,   +0.80, 104.51),
+    "text-208":  ("R1_tiny  (66 visual + 142 text)",   208,  -16.30, 55.231),
+    "text-544":  ("R6_640   (402 visual + 142 text)",  544,   -4.54, 69.992),
+    # `text-1016`, not `text-1024`: the client's --random-input-len excludes the
+    # chat template's ~8 tokens, so 1024 arrives as 1032 and pads to the 1280
+    # bucket (24% waste) while the partner lands on 1024 exactly. 1016 makes the
+    # server see 1024 and the comparison genuinely matched.
+    "text-1016": ("R3_720p  (882 visual + 142 text)", 1024,   +0.80, 104.507),
 }
 GATE = 2.0
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--results", required=True, type=Path)
+    ap.add_argument("--results", required=True, nargs="+", type=Path)
     ap.add_argument("--out", required=True, type=Path)
     a = ap.parse_args()
-    recs = json.loads(a.results.read_text())
+    recs = [r for f in a.results for r in json.loads(f.read_text())]
 
     by = {}
     for r in recs:
@@ -46,11 +50,11 @@ def main():
             continue
         if (r.get("engagement") or {}).get("engagement") != "VERIFIED":
             continue
-        by.setdefault((r["workload"], r["backend"]), []).append(r["ttft_p50"])
+        by[(r["workload"], r["backend"], r["block"])] = r["ttft_p50"]
 
     L = ["# Issue #4 follow-on — Q1: is a text token equivalent to a visual token?\n",
          f"Generated {datetime.now(timezone.utc):%Y-%m-%d %H:%M UTC} from "
-         f"`{a.results.name}`. Design: [`plan.md` §12.1](../../../plan.md).\n",
+         f"`{', '.join(f.name for f in a.results)}`. Design: [`plan.md` §12.1](../../../plan.md).\n",
          "Three text-only workloads whose total prefill token count matches an "
          "image workload already measured in v3, so half of each comparison "
          "already exists. Paired A/B/A/B blocking, transport `cuda_ipc`, c=1.\n"]
@@ -61,27 +65,39 @@ def main():
     L.append("|---|---|---|---|---|---|---|")
     rows = []
     for wid, (partner, N, p_eff, p_dis) in PARTNERS.items():
-        d = by.get((wid, "disabled"), [])
-        b = by.get((wid, "breakable"), [])
-        if len(d) < 2 or len(b) < 2:
+        blocks = [k[2] for k in by if k[0] == wid and k[1] == "disabled"]
+        pairs = [(by[(wid, "disabled", i)], by[(wid, "breakable", i)])
+                 for i in sorted(blocks)
+                 if (wid, "breakable", i) in by]
+        if len(pairs) < 2:
             L.append(f"| {N} | `{wid}` | {partner} | *unanswered — "
-                     f"{len(d)} disabled / {len(b)} breakable verified blocks* | | | |")
+                     f"{len(pairs)} paired blocks* | | | |")
             continue
-        dv, bv = statistics.median(d), statistics.median(b)
-        drift = 100 * (max(d) - min(d)) / dv
-        eff = 100 * (bv - dv) / dv
+        # Effects are computed *within* each A/B pair, then summarised. The
+        # absolute levels carry common-mode drift that the pairing exists to
+        # cancel; summarising the levels first would put it straight back in.
+        effs = [100 * (bv - dv) / dv for dv, bv in pairs]
+        savs = [dv - bv for dv, bv in pairs]
+        dv = statistics.median([p[0] for p in pairs])
+        bv = statistics.median([p[1] for p in pairs])
+        eff = statistics.median(effs)
+        drift = max(effs) - min(effs)
         diff = eff - p_eff
-        note = "" if drift <= GATE else " ⚠"
+        note = "" if drift <= max(GATE, abs(eff) / 2) else " ⚠"
         L.append(f"| {N} | {dv:.2f} → {bv:.2f} ms | {p_dis:.2f} ms (v3) | "
                  f"**{eff:+.2f}%** | {p_eff:+.2f}% | {diff:+.2f} pp | "
                  f"{drift:.2f}%{note} |")
         rows.append({"wid": wid, "N": N, "dv": dv, "bv": bv, "eff": eff,
                      "p_eff": p_eff, "p_dis": p_dis, "drift": drift,
-                     "saving": dv - bv})
+                     "saving": statistics.median(savs)})
     L.append("")
-    L.append(f"Drift is the spread of the three `disabled` blocks, and is this "
-             f"workload's resolution floor. Gate {GATE}%; ⚠ marks a workload that "
-             "exceeded it and whose effect should not be given a sign.\n")
+    L.append("Drift here is the spread of the **paired** effects — the "
+             "resolution floor after A/B/A/B blocking has removed common-mode "
+             "drift. (Gating the absolute levels instead would reinstate exactly "
+             "what the pairing removed: `text-208`'s levels move 19.4% across "
+             "the bracket on a cold-start ramp while its paired effects agree to "
+             "3 pp.) ⚠ marks a workload whose spread is comparable to its own "
+             "effect, which should therefore not be given a sign.\n")
 
     if rows:
         L.append("## Absolute saving vs percentage effect\n")
