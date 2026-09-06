@@ -1138,3 +1138,40 @@ first-token experience does get worse for image requests. Both go in the report.
 
 This is the check I flagged as owed two steps earlier — "只报一个会误导" — and
 it turned out to matter.
+
+---
+
+## Phase 3 complete — what shipped, and what it opened
+
+| deliverable | |
+|---|---|
+| [`issue4_v3_report.pdf`](issue4_v3_report.pdf) | 7 pages, every number read from the results JSON by the generator |
+| [`q1_report.md`](q1_report.md) | matched-N composition test |
+| [`q2_report.md`](q2_report.md) | mixed arrival stream, both metrics, confound stated |
+| [`pcg_eager_fallback_finding.md`](pcg_eager_fallback_finding.md) | drafted for a separate upstream issue, **not filed** |
+
+**Answers.** Transport is the large lever (−28.2%). The prefill graph's recovery
+in milliseconds tracks prefill token count almost regardless of composition; the
+percentage tracks composition, because an image buries the same recovery under
+vision-encoder time. On a mixed stream at 5–20% images the graph pays on both
+TTFT and end-to-end.
+
+**Five claims of mine were withdrawn during execution**, each recorded with the
+measurement that killed it: the `C − k·N` model, the ratio hypothesis, a drift
+gate that read absolute levels instead of paired effects, a 24% bucket-padding
+artifact mistaken for a result, and "no break-even on end-to-end" stated from one
+operating point and contradicted by the next.
+
+**Open, none started:**
+
+1. **Load-matched rerun of Q2** — tune the arrival rate per fraction so in-flight
+   requests match, separating image fraction from concurrency. Without it the
+   f = 1 end-to-end sign flip cannot be attributed.
+2. **A high-load bracket** where prefill batches routinely combine, to test
+   co-batching rather than record its absence.
+3. **The decode-side effect** — TPOT consistently better under a prefill graph at
+   ~4.7 in flight and worse at ~7.2, which a prefill graph should not cause. The
+   end-to-end conclusions lean on it.
+4. **`tc_piecewise` inside the sub-onset window** (§11.9) — #4's hypothesis names
+   PCG and it remains unmeasured on current upstream.
+5. **Filing the PCG fallback finding upstream** — owner's call.

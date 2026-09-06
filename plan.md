@@ -1808,7 +1808,31 @@ where #4's PCG claim actually matters.
 
 ---
 
-# 12. Issue #4 follow-on — organised by question (planned 2026-09-05, **not started**)
+# 12. Issue #4 follow-on — organised by question (planned 2026-09-05, **Q1 and Q2 complete 2026-09-06**)
+
+> **Status.** Q1 and Q2 both ran on GPU 5 and are reported in
+> [`q1_report.md`](experiments/qwen3vl8b/v3_issue4/q1_report.md),
+> [`q2_report.md`](experiments/qwen3vl8b/v3_issue4/q2_report.md) and §7–§8 of
+> [`issue4_v3_report.pdf`](experiments/qwen3vl8b/v3_issue4/issue4_v3_report.pdf).
+>
+> - **Q1** — token type is not irrelevant, but less than it looks: the saving in
+>   *milliseconds* is nearly composition-independent (differing by a constant
+>   1.2–1.9 ms across a 5× token range) while the *percentage* differs 2–3.5×,
+>   because an image adds 23.6 ms of vision-encoder time to the denominator.
+> - **Q2** — at matched load, a 20% image share does not erode the graph's
+>   benefit to text requests; 97.7% of prefill batches carry one request, so
+>   co-batching is too rare to matter *at this load*. Break-even is **f ≈ 0.54 on
+>   TTFT** and **none on end-to-end latency**.
+>
+> Two limitations found in execution, both recorded rather than papered over:
+> the arrival *rate* was fixed instead of the *load*, so image fraction and
+> concurrency are confounded at f = 1; and a consistent decode-side effect
+> appears that a prefill graph should not cause.
+>
+> Three follow-ups this opens, none started: a load-matched rerun to separate
+> fraction from concurrency; a high-load bracket where batches routinely combine,
+> to test co-batching rather than observe its absence; and the decode-side
+> effect's mechanism.
 
 The v3 work is organised by bracket (`A0`…`A5`, `R0`…`R8`) because that is how it
 was executed. That is the wrong organising axis for anyone reading it: the IDs
