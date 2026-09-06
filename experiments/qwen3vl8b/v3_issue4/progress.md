@@ -1047,3 +1047,52 @@ prefill tokens while every check passed, and the engagement verifier filing
 cache-served batches as probes. **The tool reports success while the thing under
 test never runs.** Checking it is not optional diligence here; it is the third
 time it would have changed a conclusion.
+
+### Q2 — mixed stream at f = 0.2 complete: the deployment number
+
+| block | text | image | break-even f |
+|---|---|---|---|
+| b1 | −13.84% (save 4.92 ms) | +3.86% (cost 4.20 ms) | 0.539 |
+| b2 | −16.40% (save 5.97 ms) | +1.29% (cost 1.41 ms) | 0.809 |
+| b3 | −13.30% (save 4.76 ms) | +4.53% (cost 4.87 ms) | 0.494 |
+| **median** | **−13.84%** (spread 3.10 pp) | **+3.86%** (spread 3.24 pp) | **0.539** |
+
+Net saving per request as the image share of arrivals rises:
+
+| f | 0.05 | 0.10 | 0.20 | 0.30 | 0.50 |
+|---|---|---|---|---|---|
+| net | **+4.46 ms** | **+4.01 ms** | **+3.10 ms** | +2.18 ms | +0.36 ms |
+
+**At any realistic image fraction the prefill graph pays.** The scenario that
+prompted this — occasional image attachments, f ≈ 0.05–0.2 — nets 3–4.5 ms per
+request and sits far from the break-even.
+
+**Break-even is f ≈ 0.54, but the block range is 0.49–0.81 and that width is
+honest, not cosmetic.** It comes from the image-side cost being small and noisy
+(1.4–4.9 ms, i.e. +1.3% to +4.5%), which is the same magnitude v3 could not
+resolve at all. The `f = 1.0` cells measure that cost on 600 image requests
+rather than 120 and should tighten it.
+
+The image-class cost measured here (+3.86% median) matches v3's independent
+IMG-A measurement (+3.66%) — two different brackets, different concurrency,
+same number.
+
+#### Co-batching: present, but too rare to matter at this load
+
+Corrected from the earlier note, which read the `disabled` arm only:
+
+| cell | multi-request batches | of which cross-class | share of all batches |
+|---|---|---|---|
+| `f=0.2 disabled` b1 | 14 (2.3%) | 0 | 0.0% |
+| `f=0.2 breakable` b1 | 9 (1.5%) | 4 | **0.7%** |
+| `f=0.2 breakable` b2 | 12 (2.0%) | 1 | **0.2%** |
+
+So co-batching does happen — the graph arm mixes a little more, plausibly because
+faster prefill shifts the scheduler's cadence — but at 0.2–0.7% of batches it
+cannot move a median even if those requests were badly hurt.
+
+The precise claim is therefore **"co-batching is too rare to matter at this
+load"**, not "co-batching does not occur". The distinction is the whole point:
+the first is a statement about this operating point, the second would be a
+statement about the mechanism, and only a load where batches routinely combine
+can support the second. A rate ladder to find that load is the follow-on.
