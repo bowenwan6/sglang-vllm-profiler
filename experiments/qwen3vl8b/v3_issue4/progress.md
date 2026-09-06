@@ -1063,9 +1063,10 @@ Net saving per request as the image share of arrivals rises:
 |---|---|---|---|---|---|
 | net | **+4.46 ms** | **+4.01 ms** | **+3.10 ms** | +2.18 ms | +0.36 ms |
 
-**At any realistic image fraction the prefill graph pays.** The scenario that
-prompted this — occasional image attachments, f ≈ 0.05–0.2 — nets 3–4.5 ms per
-request and sits far from the break-even.
+**The net stays positive up to a 43–59% image share on TTFT** (the range is the
+load confound, not noise). *(Superseded framing: this originally read "at any
+realistic image fraction the graph pays… f ≈ 0.05–0.2 nets 3–4.5 ms" — that
+fraction was invented and is withdrawn; see the workload-realism entry below.)*
 
 **Break-even is f ≈ 0.54, but the block range is 0.49–0.81 and that width is
 honest, not cosmetic.** It comes from the image-side cost being small and noisy
@@ -1153,8 +1154,8 @@ it turned out to matter.
 **Answers.** Transport is the large lever (−28.2%). The prefill graph's recovery
 in milliseconds tracks prefill token count almost regardless of composition; the
 percentage tracks composition, because an image buries the same recovery under
-vision-encoder time. On a mixed stream at 5–20% images the graph pays on both
-TTFT and end-to-end.
+vision-encoder time. On a mixed stream the net stays positive to a 43–59% image
+share on TTFT and further on end-to-end.
 
 **Five claims of mine were withdrawn during execution**, each recorded with the
 measurement that killed it: the `C − k·N` model, the ratio hypothesis, a drift
@@ -1175,3 +1176,45 @@ operating point and contradicted by the next.
 4. **`tc_piecewise` inside the sub-onset window** (§11.9) — #4's hypothesis names
    PCG and it remains unmeasured on current upstream.
 5. **Filing the PCG fallback finding upstream** — owner's call.
+
+---
+
+## Correction: the assumed workload was never checked
+
+The Q2 analysis, the reports and the PDF were all framed around an image arrival
+fraction of **5–20%**. **That range was invented.** The brief was qualitative —
+users attach an image now and then — and the numbers were mine, with no source,
+carried through every deliverable until they were questioned.
+
+Checking them changed two things.
+
+**The fraction cannot be sourced, and the question has no single answer.** The
+best public production data is Microsoft's Azure LMM inference trace (one week,
+1M requests, image count per request). Its modality mix is balanced by
+construction — exactly 500 000 of each — so it cannot supply the number, and the
+accompanying paper describes the cluster as serving *image-heavy* and
+*text-heavy* services whose behaviour is opposite. The image share is a property
+of a deployment. WildChat, LMSYS-Chat-1M and published provider material carry no
+modality breakdown either.
+
+**The trace's size distribution is real, and it undercuts the framing.** This
+study's own result is that the graph's benefit is set by request size. Real
+medians are **792 prefill tokens text-only and 1422 with an image**, against
+benchmark prompts of 512. Only **15.2%** of real requests land where a material
+win was measured; **75.3%** sit above it. Re-weighting the measured curve over
+the trace gives **+3.96 ms** per text-only request and **+0.07 ms** per image
+request, against the +4.0–4.5 ms previously quoted — direction intact, magnitude
+roughly halved.
+
+**What replaced it.** Every deliverable is now descriptive rather than
+prescriptive, and the output is two figures instead of a threshold:
+[`fig_mix.png`](figures/fig_mix.png) — net saving against image share, both
+metrics, with the load band — and
+[`fig_sizes_traffic.png`](figures/fig_sizes_traffic.png) — saving by request
+size with the million-request distribution drawn above it. Full note:
+[`workload_realism.md`](workload_realism.md).
+
+The lesson is the same shape as the measurement failures earlier in this study:
+**a number that was never checked propagated into every conclusion**. Here it was
+not a tool reporting false success but an assumption I supplied myself and then
+stopped seeing.

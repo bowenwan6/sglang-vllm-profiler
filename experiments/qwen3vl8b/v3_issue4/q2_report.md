@@ -103,12 +103,19 @@ end-to-end would hide that image requests genuinely wait longer for their first
 token.** Both belong in the recommendation.
 
 **On the arrival fraction itself** — the `f ≈ 0.05–0.2` range this analysis was
-framed around was invented and is withdrawn. See
-[`workload_realism.md`](workload_realism.md): no public figure exists, the best
-production trace is balanced by construction, and the source paper describes the
-mix as a per-service property. What governs the decision is **prompt size**, and
-by that measure only 15.2% of real requests fall where a material win was
-measured.
+originally framed around was invented and is withdrawn. No public figure exists,
+the best production trace is balanced by construction, and the source paper
+describes the mix as a per-service property
+([`workload_realism.md`](workload_realism.md)).
+
+So the output is the curve, not a threshold. Net saving against image share, with
+both metrics and the load band:
+
+![net saving vs image share](figures/fig_mix.png)
+
+The net stays positive to a **43–59% image share on TTFT** and further on
+end-to-end; the width is the load confound below, not measurement noise. Where a
+deployment falls on that line is a property of the deployment.
 
 ### What this bracket cannot say
 

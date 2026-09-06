@@ -100,14 +100,23 @@ distribution supports.
 4. The "all" row uses the trace's synthetic 50/50 mix and is therefore not a
    production-weighted number either. It is shown to bracket, not to claim.
 
-## What the recommendation should have been
+## What replaces the recommendation
 
-Not "at 5–20% images, enable it" — a claim about a mix nobody has measured — but:
+Not "at 5–20% images, enable it" — a claim about a mix nobody has measured — but
+two curves, and the reader's own workload placed on them.
 
-> The prefill graph's value depends on your **prompt sizes**, not on how often
-> images appear. It pays clearly below ~400 prefill tokens, marginally to ~550,
-> and is not measurable above that. Break-even against image requests is a ~54%
-> image share on TTFT and none on end-to-end at the load tested. Plug in your own
-> distribution.
+**Where the graph pays as a stream mixes the two request types:**
 
-The reports and the PDF are corrected to that form.
+![net saving vs image share](figures/fig_mix.png)
+
+**What it saves by request size, against where real traffic actually sits:**
+
+![saving by size with real traffic](figures/fig_sizes_traffic.png)
+
+The top panel of the second figure is the million-request trace; the bottom is
+this study's measurements. The gap between them is the point — **the measured
+win lives to the left of where most real requests are**.
+
+Both the size distribution and the image share are properties of a deployment.
+This study can supply the curves; it cannot supply the operating point, and the
+earlier attempt to do so was the error this note records.

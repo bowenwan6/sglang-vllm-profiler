@@ -181,12 +181,12 @@ def build():
         "<b>The piecewise backend could not be measured honestly.</b> On current "
         "upstream it silently falls back to eager execution for 92% of its "
         "graph-eligible calls while every configuration check still reports success.",
-        "<b>Whether to enable the prefill graph is governed by prompt size, not "
-        "by how often images appear.</b> Break-even against image requests is a "
-        "~54% image share on TTFT and none on end-to-end at the load tested (§8). "
-        "Weighted by a real production size distribution the graph is worth "
-        "<b>+3.96 ms</b> per text-only request and <b>+0.07 ms</b> per image "
-        "request (§9).",
+        "<b>The graph's value is governed by request size, not by how often "
+        "images appear.</b> On a stream mixing text-only and image requests it "
+        "stays net positive up to a <b>43–59% image share</b> on time to first "
+        "token, and further on end-to-end latency (§8) — but that boundary moves "
+        "with prompt size, and against a real production size distribution most "
+        "traffic already sits past the sizes where the win was measurable (§9).",
     ])
     F += [Spacer(1, 3),
           P("Two candidate explanations for the graph result were tested against the "
@@ -375,23 +375,24 @@ def build():
         "the practical rule is about the image's token count rather than its file "
         "size.")]
     F += [table([
-        ["regime", "prefill tokens", "recommendation"],
+        ["regime", "prefill tokens", "measured effect on TTFT"],
         ["text-only, short prompts", "~128",
-         Paragraph("<b><font color='#1f6f4a'>enable the prefill graph</font></b> "
-                   "— 45% of TTFT", S["cell"])],
+         Paragraph("<b><font color='#1f6f4a'>−45%</font></b> — the graph's best "
+                   "case here", S["cell"])],
         ["small image (≤ ~360p) + short text", "208–364",
-         Paragraph("<b><font color='#1f6f4a'>enable it</font></b> — 14–16% "
-                   "of TTFT", S["cell"])],
+         Paragraph("<b><font color='#1f6f4a'>−14 to −16%</font></b>", S["cell"])],
         ["~640×640 + short text", "544",
-         "marginal: 4.5%, resolvable but under the 5% bar"],
+         "−4.5%: above the noise floor, under the 5% bar"],
         ["720p and above, any text length", "≥ 720",
          "no measurable effect either way"],
     ], [52 * mm, 26 * mm, W - 78 * mm], highlight=[1, 2])]
-    F += [P("Table 5 — the operating guidance this study supports.", "cap")]
+    F += [P("Table 5 — measured effect by regime. Section 9 places real traffic "
+            "on this scale.", "cap")]
     F += [P(
-        "<b>Under roughly 250 visual tokens the graph is clearly worth enabling; past "
-        "about 600 it stops mattering.</b> The material-win boundary falls between "
-        "N = 364 and N = 544.")]
+        "<b>The material-win boundary falls between 364 and 544 prefill tokens</b> "
+        "— roughly, under 250 visual tokens the effect is clear and past about 600 "
+        "it is not measurable. Whether a given deployment sits there is settled in "
+        "§9, not here.")]
 
     # ---------------------------------------------------------- 4 pcg -------
     F += [P("4 · The arm that could not be measured", "h1")]
@@ -450,19 +451,29 @@ def build():
     ], [62 * mm, W - 62 * mm])]
     F += [P("Table 6 — issue #4's questions against what was measured.", "cap")]
 
-    F += [P("Recommendations", "h2")]
+    F += [P("What the numbers support", "h2")]
+    F += [P(
+        "Stated as findings rather than instructions — the two variables that "
+        "decide the prefill-graph question, request size and image share, are "
+        "properties of a deployment, and §9 explains why no benchmark can supply "
+        "them.", "body")]
     F += bullets([
-        "<b>Set the transport explicitly.</b> On this workload "
+        "<b>The transport is the large, unconditional effect.</b> "
         "<font face='Courier' size='8.4'>--mm-feature-transport=cuda_ipc</font> is "
-        "worth 28% of TTFT, and it is not the default.",
-        "<b>Enable the prefill graph for small-image workloads</b> — under "
-        "roughly 250 visual tokens — and do not expect anything from it at 720p "
-        "and above.",
-        "<b>Do not rank configurations by variance.</b> The most degraded arm in this "
-        "study had the tightest variance.",
-        "<b>Report the piecewise fallback upstream as its own issue.</b> A "
-        "warn-once that hides a 92% degradation is a measurement hazard for anyone "
-        "benchmarking that backend.",
+        "worth 28% of TTFT here and is not the default. Nothing about it depends "
+        "on workload mix.",
+        "<b>The prefill graph's value is a function of request size</b> — clearly "
+        "positive below roughly 250 visual tokens, marginal to ~550 prefill "
+        "tokens, not resolvable above. Figure 4 is that function; a workload's own "
+        "size distribution locates it.",
+        "<b>On a mixed stream it stays net positive to a 43–59% image share</b> on "
+        "time to first token, and further on end-to-end latency (Figure 3). The "
+        "width of that range is the load confound, not measurement noise.",
+        "<b>Variance is not a health signal.</b> The most degraded arm in this "
+        "study had the tightest variance of any (§4).",
+        "<b>The piecewise fallback is a measurement hazard</b> for anyone "
+        "benchmarking that backend — a warn-once that hides a 92% degradation. "
+        "Written up separately for upstream.",
     ])
 
     # ---------------------------------------------------------- 6 method ----
@@ -586,6 +597,12 @@ def build():
                                  "both classes", S["cell"])],
     ], [30 * mm, W - 30 * mm])]
     F += [P("Table 10 — both are true; they measure different things.", "cap")]
+    F += [Image(str(FIG / "fig_mix.png"), width=W, height=W * 0.415)]
+    F += [P("Figure 3 — the same four measurements, drawn against the image "
+            "share of the stream. Every endpoint is measured; the only "
+            "arithmetic is the weighted sum. The band is the disagreement "
+            "between the two loads at which the image-side cost was measured, "
+            "which is the confound below.", "cap")]
     F += [P(
         "End-to-end here is ~910 ms of which decode is ~870, so a 4 ms change in "
         "time-to-first-token dilutes below a percent while a small consistent "
@@ -593,8 +610,9 @@ def build():
         "requests end-to-end improves by 31.31 ms, of which only 5.14 ms is TTFT. "
         "<b>Reporting only TTFT understates the graph; reporting only end-to-end "
         "hides that image requests genuinely wait longer for their first token.</b> "
-        "What image fraction a real deployment actually runs at is a separate "
-        "question, and §9 shows it is the wrong one to be asking.")]
+        "Where a given deployment falls on Figure 3 depends on its own mix, "
+        "which is not something this study can supply — §9 explains why, and "
+        "what to use instead.")]
     F += [P("What this bracket cannot say", "h2")]
     F += bullets([
         "<b>Load and image fraction are confounded.</b> The arrival <i>rate</i> "
@@ -623,59 +641,60 @@ def build():
         "evidence</b>: the sign is established, and the prefill graph costs image "
         "requests roughly 4% of their time to first token.")]
 
-    F += [P("9 · Is the assumed workload realistic?", "h1")]
+    F += [P("9 · Request size is the variable, and where real traffic sits", "h1")]
     F += [P(
-        "The analysis above was framed around an image arrival fraction of "
-        "5–20%. <b>That range was invented.</b> The brief was qualitative — users "
-        "attach an image now and then — and the numbers were added without a "
-        "source, then carried through the analysis and this report. Checking them "
-        "changed the recommendation.")]
+        "Sections 3 and 7 place the graph's benefit on request size. Section 8 "
+        "then framed the stream-mix analysis around an image arrival fraction of "
+        "5–20%. <b>That range was invented</b> — the brief was qualitative, the "
+        "numbers were added without a source, and they are withdrawn here.")]
     F += [P(
-        "<b>There is no published figure for the natural image share of LLM "
-        "traffic, and the question has no single answer.</b> The best available "
-        "production data is Microsoft's Azure LMM inference trace — one week from "
-        "a real multimodal cluster, one million requests, with the image count per "
-        "request. Its modality mix cannot be used: it holds exactly 500 000 image "
-        "and 500 000 text-only requests, balanced by construction. The "
-        "accompanying paper describes the cluster as serving <i>image-heavy and "
-        "text-heavy services</i> whose behaviour is opposite. The image fraction "
-        "is a property of a deployment, not of LLM traffic.")]
+        "<b>No public figure for it exists, and the question has no single "
+        "answer.</b> The best available production data is Microsoft's Azure LMM "
+        "inference trace — one week from a real multimodal cluster, one million "
+        "requests, image count per request. Its modality mix cannot be used: it "
+        "holds exactly 500 000 image and 500 000 text-only requests, balanced by "
+        "construction. The accompanying paper describes the cluster as serving "
+        "<i>image-heavy</i> and <i>text-heavy</i> services whose behaviour is "
+        "opposite. The image fraction is a property of a deployment, not of LLM "
+        "traffic, so the useful thing to publish is the curve rather than a "
+        "recommended operating point.")]
     F += [P(
-        "The trace's <b>size</b> distribution is real, however, and this study's "
-        "own finding is that the graph's benefit is governed by prefill token "
-        "count. Mapping one onto the other is the useful move:")]
+        "The trace's <b>size</b> distribution is real, though, and that is the "
+        "variable this study found to matter.")]
+    F += [Image(str(FIG / "fig_sizes_traffic.png"), width=W * 0.95,
+                height=W * 0.95 * 0.665)]
+    F += [P("Figure 4 — measured saving by request size (below) against where a "
+            "million real production requests actually fall (above). Real "
+            "medians are 792 prefill tokens for text-only and 1422 with an "
+            "image.", "cap")]
     F += [table([
-        ["prefill tokens", "≤364 (material win)", "365–544 (marginal)",
+        ["prefill tokens", "≤364 (win measured)", "365–544 (marginal)",
          "&gt;544 (not resolvable)"],
         ["text-only requests", "24.5%", "12.0%", Paragraph("<b>63.5%</b>", S["cellb"])],
         ["requests with an image", "5.8%", "7.1%", Paragraph("<b>87.2%</b>", S["cellb"])],
         ["all", Paragraph("<b>15.2%</b>", S["cellb"]), "9.5%",
          Paragraph("<b>75.3%</b>", S["cellb"])],
     ], [38 * mm, 34 * mm, 34 * mm, W - 106 * mm])]
-    F += [P("Table 11 — where a million real requests fall on this study's "
-            "measured curve. Real medians are 792 tokens text-only and 1422 with "
-            "an image.", "cap")]
+    F += [P("Table 11 — the same million requests, bucketed by this study's "
+            "measured regimes.", "cap")]
     F += [P(
-        "<b>Only 15.2% of real requests land where a material win was measured, "
-        "and 75.3% sit above it.</b> This study's stream-mix prompts were 512 "
-        "tokens — between the p25 and p50 of real text traffic, so smaller than "
-        "typical. Re-weighting the measured saving curve over every request in the "
-        "trace:")]
-    F += [table([
-        ["class", "mean saving", "median", "share gaining > 0.5 ms"],
-        ["text-only", Paragraph("<b>+3.96 ms</b>", S["cellb"]), "+2.33 ms", "61.1%"],
-        ["with an image", Paragraph("<b>+0.07 ms</b>", S["cellb"]), "−0.77 ms", "21.9%"],
-    ], [34 * mm, 30 * mm, 26 * mm, W - 90 * mm])]
-    F += [P("Table 12 — against the +4.0 to +4.5 ms this report previously "
-            "quoted. The tail is extrapolated: the largest size measured here is "
-            "2184 tokens and a quarter of real image requests exceed 4049.", "cap")]
+        "<b>15.2% of real requests land where a material win was measured; 75.3% "
+        "sit above it.</b> Section 8's prompts were 512 tokens — between the p25 "
+        "and p50 of real text traffic, so smaller than typical. Interpolating the "
+        "measured curve over every request in the trace gives <b>+3.96 ms</b> per "
+        "text-only request and <b>+0.07 ms</b> per image request, against the "
+        "+4.0 to +4.5 ms section 8 would suggest at a small image share. The "
+        "direction holds; the magnitude roughly halves.")]
     F += [P(
-        "The direction survives and the magnitude roughly halves. <b>The "
-        "recommendation should never have been stated as a claim about how often "
-        "images appear.</b> It is a claim about prompt size: the graph pays "
-        "clearly below ~400 prefill tokens, marginally to ~550, and is not "
-        "measurable above that — so an operator should plug in their own size "
-        "distribution rather than accept a mix somebody assumed.")]
+        "<b>The tail is extrapolated, and it is a large tail.</b> The widest "
+        "request measured here is 2184 prefill tokens; a quarter of real image "
+        "requests exceed 4049. Figure 4 shades that region because nothing in "
+        "this study speaks to it.")]
+    F += [P(
+        "So the output of this work is Figures 3 and 4 rather than a threshold. "
+        "An operator's own prompt-size distribution and image share place them on "
+        "those curves; both are properties of a deployment that no benchmark can "
+        "supply for them.")]
 
     F += [P("Limits", "h2")]
     F += bullets([
