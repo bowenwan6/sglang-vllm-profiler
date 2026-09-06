@@ -861,7 +861,7 @@ value on text requests is *systematically understated* by percentages measured o
 image workloads, and a text-heavy deployment gains more than those percentages
 suggest.
 
-### Q2 — the request-stream mix — *not started*
+### Q2 — the request-stream mix — *running*
 
 Two bench clients against one server at fixed total arrival rate, per-class TTFT
 reported separately, staged: `f ∈ {0, 0.2, 1.0}` first, and `{0.05, 0.5}` only if
@@ -992,3 +992,58 @@ crosses zero; composition sets how large the percentage looks.** The published
 sentence "the controlling variable is the number of prefill tokens, not the
 image-to-text ratio" is right about the crossover and wrong about the magnitude,
 and will be corrected to say so.
+
+---
+
+### Q2 — control cell (`f = 0`, pure text stream) complete
+
+Two bench clients, Poisson arrivals, total rate 6/s. Observed in-flight requests:
+mean **4.7–4.9**, max 12–13 (the target was ~8; Poisson makes this a distribution
+and the measured value is what is reported).
+
+| block | graph off | graph on | effect |
+|---|---|---|---|
+| b1 | 35.80 ms | 30.13 ms | −15.83% |
+| b2 | 35.66 ms | 30.28 ms | −15.07% |
+| b3 | 34.87 ms | 29.59 ms | −15.14% |
+| **median** | **35.66 ms** | **30.13 ms** | **−15.14%** (spread 0.76 pp) |
+
+**Concurrency does not erode the graph's benefit on a text stream.** Q1 measured
+−15.94% for a 544-token text prompt at c=1; this is −15.14% at ~4.8 in flight.
+That control is what makes the mixed cells interpretable: any extra degradation
+once images enter the stream is attributable to their presence, not to load.
+
+### A precondition check that may invalidate Q2 as designed
+
+Recovering prefill-batch composition from the `f = 0` server log
+([`analyze_batch_mix.py`](scripts/analyze_batch_mix.py), no source patch needed —
+the two classes have distinct token counts, so `#new-seq` and `#new-token`
+determine the split):
+
+```
+prefill batches       614
+  single-request      605  (98.5%)
+  multi-request         9  ( 1.5%)
+  #new-seq             {1: 605, 2: 9}
+```
+
+**At this load 98.5% of prefill batches carry exactly one request.** The
+co-batching interference Q2 exists to detect requires *multi*-request batches —
+a text request sharing a batch with an image request. If batches essentially
+never combine, a null result means the mechanism never engaged, which is a much
+weaker statement than the mechanism engaging and proving harmless.
+
+The cause is scheduling, not the design: with ~5 requests in flight most are
+decoding, so the prefill queue rarely holds two at once. Image requests take
+~100 ms to prefill against ~30 ms for text, so the mixed cells may queue more —
+the `f = 0.2` composition is measured as soon as its log has batches, and if it
+is still low single digits the arrival rate is raised toward saturation and the
+mixed cells re-run rather than reporting "no effect" from an experiment that
+never applied the stress.
+
+This is the same failure shape as three earlier ones in this study — the PCG arm
+reporting 100% graph usage while 92% eager, the prefix cache serving 80% of
+prefill tokens while every check passed, and the engagement verifier filing
+cache-served batches as probes. **The tool reports success while the thing under
+test never runs.** Checking it is not optional diligence here; it is the third
+time it would have changed a conclusion.
