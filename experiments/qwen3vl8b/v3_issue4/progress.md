@@ -1096,3 +1096,45 @@ load"**, not "co-batching does not occur". The distinction is the whole point:
 the first is a statement about this operating point, the second would be a
 statement about the mechanism, and only a load where batches routinely combine
 can support the second. A rate ladder to find that load is the follow-on.
+
+### The break-even depends on which latency you optimise — and on end-to-end there isn't one
+
+The whole study has reported TTFT, because that is where #2 and #4 located the
+gap. Recovering `median_e2e_latency_ms` from the same raw files changes the
+recommendation:
+
+| class | TTFT effect | **end-to-end effect** | TPOT effect |
+|---|---|---|---|
+| text | −13.3 to −16.4% | **−1.9 to −3.7%** | −1.3 to −2.7% |
+| image | **+1.3 to +4.5%** | **−0.7 to −1.5%** | −0.3 to −1.4% |
+
+**The image class costs 3.9% on TTFT and gains ~1.2% end-to-end.** So on
+end-to-end latency there is **no break-even at all** — enabling the graph is net
+positive for both classes at every arrival fraction.
+
+The arithmetic is simple once the decomposition is done. End-to-end here is
+~910 ms, of which decode is ~870 (128 output tokens at ~6.8 ms). A 4 ms TTFT
+change is diluted to 0.5%, while a small but consistent TPOT improvement
+multiplied by 128 tokens is worth ~23 ms. For the text class, e2e falls
+907.5 → 874.4 ms: only −4.9 ms of that is TTFT and **−28 ms comes from decode**.
+
+**This needs an explanation and I only have a hypothesis.** A prefill CUDA graph
+should not touch decode, and both arms run the identical decode backend (`full`).
+The plausible route is indirect: under concurrency, prefill and decode interleave
+on the same CPU thread, so a prefill that issues far fewer kernel launches leaves
+more CPU headroom for the decode loop. The effect is negative in all six cells
+across both classes, which is not the shape of noise — but the mechanism is
+untested, and it is recorded as an observation, not a finding.
+
+**Consequence for the recommendation: report both metrics, separately.**
+
+- **On TTFT** — break-even at f ≈ 0.52–0.54; net positive at every realistic
+  fraction.
+- **On end-to-end** — no break-even; net positive everywhere measured.
+
+They do not conflict; they measure different things. Reporting only the first
+understates the graph's value, and reporting only the second would hide that the
+first-token experience does get worse for image requests. Both go in the report.
+
+This is the check I flagged as owed two steps earlier — "只报一个会误导" — and
+it turned out to matter.
