@@ -102,9 +102,13 @@ class, e2e improves by 31.31 ms of which only 5.14 ms is TTFT.
 end-to-end would hide that image requests genuinely wait longer for their first
 token.** Both belong in the recommendation.
 
-**For the question that prompted this work** — a deployment where users attach an
-image now and then, f ≈ 0.05–0.2 — the graph pays on both metrics by a wide
-margin, and the break-even is far away.
+**On the arrival fraction itself** — the `f ≈ 0.05–0.2` range this analysis was
+framed around was invented and is withdrawn. See
+[`workload_realism.md`](workload_realism.md): no public figure exists, the best
+production trace is balanced by construction, and the source paper describes the
+mix as a per-service property. What governs the decision is **prompt size**, and
+by that measure only 15.2% of real requests fall where a material win was
+measured.
 
 ### What this bracket cannot say
 

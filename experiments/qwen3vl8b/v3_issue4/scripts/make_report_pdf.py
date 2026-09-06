@@ -181,11 +181,12 @@ def build():
         "<b>The piecewise backend could not be measured honestly.</b> On current "
         "upstream it silently falls back to eager execution for 92% of its "
         "graph-eligible calls while every configuration check still reports success.",
-        "<b>For a deployment where images arrive occasionally</b> — an image "
-        "attached now and then, 5–20% of requests — <b>enabling the prefill graph "
-        "pays on both time-to-first-token and end-to-end latency</b>, by a wide "
-        "margin. Break-even on TTFT is around a 54% image share; on end-to-end "
-        "latency, at the load measured, there is none (§8).",
+        "<b>Whether to enable the prefill graph is governed by prompt size, not "
+        "by how often images appear.</b> Break-even against image requests is a "
+        "~54% image share on TTFT and none on end-to-end at the load tested (§8). "
+        "Weighted by a real production size distribution the graph is worth "
+        "<b>+3.96 ms</b> per text-only request and <b>+0.07 ms</b> per image "
+        "request (§9).",
     ])
     F += [Spacer(1, 3),
           P("Two candidate explanations for the graph result were tested against the "
@@ -592,8 +593,8 @@ def build():
         "requests end-to-end improves by 31.31 ms, of which only 5.14 ms is TTFT. "
         "<b>Reporting only TTFT understates the graph; reporting only end-to-end "
         "hides that image requests genuinely wait longer for their first token.</b> "
-        "For the case that prompted this work — users attaching an image now and "
-        "then, f ≈ 0.05–0.2 — the graph pays on both metrics by a wide margin.")]
+        "What image fraction a real deployment actually runs at is a separate "
+        "question, and §9 shows it is the wrong one to be asking.")]
     F += [P("What this bracket cannot say", "h2")]
     F += bullets([
         "<b>Load and image fraction are confounded.</b> The arrival <i>rate</i> "
@@ -621,6 +622,60 @@ def build():
         "<b>A single bracket's resolution floor is not the floor on accumulated "
         "evidence</b>: the sign is established, and the prefill graph costs image "
         "requests roughly 4% of their time to first token.")]
+
+    F += [P("9 · Is the assumed workload realistic?", "h1")]
+    F += [P(
+        "The analysis above was framed around an image arrival fraction of "
+        "5–20%. <b>That range was invented.</b> The brief was qualitative — users "
+        "attach an image now and then — and the numbers were added without a "
+        "source, then carried through the analysis and this report. Checking them "
+        "changed the recommendation.")]
+    F += [P(
+        "<b>There is no published figure for the natural image share of LLM "
+        "traffic, and the question has no single answer.</b> The best available "
+        "production data is Microsoft's Azure LMM inference trace — one week from "
+        "a real multimodal cluster, one million requests, with the image count per "
+        "request. Its modality mix cannot be used: it holds exactly 500 000 image "
+        "and 500 000 text-only requests, balanced by construction. The "
+        "accompanying paper describes the cluster as serving <i>image-heavy and "
+        "text-heavy services</i> whose behaviour is opposite. The image fraction "
+        "is a property of a deployment, not of LLM traffic.")]
+    F += [P(
+        "The trace's <b>size</b> distribution is real, however, and this study's "
+        "own finding is that the graph's benefit is governed by prefill token "
+        "count. Mapping one onto the other is the useful move:")]
+    F += [table([
+        ["prefill tokens", "≤364 (material win)", "365–544 (marginal)",
+         "&gt;544 (not resolvable)"],
+        ["text-only requests", "24.5%", "12.0%", Paragraph("<b>63.5%</b>", S["cellb"])],
+        ["requests with an image", "5.8%", "7.1%", Paragraph("<b>87.2%</b>", S["cellb"])],
+        ["all", Paragraph("<b>15.2%</b>", S["cellb"]), "9.5%",
+         Paragraph("<b>75.3%</b>", S["cellb"])],
+    ], [38 * mm, 34 * mm, 34 * mm, W - 106 * mm])]
+    F += [P("Table 11 — where a million real requests fall on this study's "
+            "measured curve. Real medians are 792 tokens text-only and 1422 with "
+            "an image.", "cap")]
+    F += [P(
+        "<b>Only 15.2% of real requests land where a material win was measured, "
+        "and 75.3% sit above it.</b> This study's stream-mix prompts were 512 "
+        "tokens — between the p25 and p50 of real text traffic, so smaller than "
+        "typical. Re-weighting the measured saving curve over every request in the "
+        "trace:")]
+    F += [table([
+        ["class", "mean saving", "median", "share gaining > 0.5 ms"],
+        ["text-only", Paragraph("<b>+3.96 ms</b>", S["cellb"]), "+2.33 ms", "61.1%"],
+        ["with an image", Paragraph("<b>+0.07 ms</b>", S["cellb"]), "−0.77 ms", "21.9%"],
+    ], [34 * mm, 30 * mm, 26 * mm, W - 90 * mm])]
+    F += [P("Table 12 — against the +4.0 to +4.5 ms this report previously "
+            "quoted. The tail is extrapolated: the largest size measured here is "
+            "2184 tokens and a quarter of real image requests exceed 4049.", "cap")]
+    F += [P(
+        "The direction survives and the magnitude roughly halves. <b>The "
+        "recommendation should never have been stated as a claim about how often "
+        "images appear.</b> It is a claim about prompt size: the graph pays "
+        "clearly below ~400 prefill tokens, marginally to ~550, and is not "
+        "measurable above that — so an operator should plug in their own size "
+        "distribution rather than accept a mix somebody assumed.")]
 
     F += [P("Limits", "h2")]
     F += bullets([
