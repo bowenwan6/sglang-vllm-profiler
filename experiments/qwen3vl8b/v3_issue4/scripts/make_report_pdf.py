@@ -181,6 +181,11 @@ def build():
         "<b>The piecewise backend could not be measured honestly.</b> On current "
         "upstream it silently falls back to eager execution for 92% of its "
         "graph-eligible calls while every configuration check still reports success.",
+        "<b>For a deployment where images arrive occasionally</b> — an image "
+        "attached now and then, 5–20% of requests — <b>enabling the prefill graph "
+        "pays on both time-to-first-token and end-to-end latency</b>, by a wide "
+        "margin. Break-even on TTFT is around a 54% image share; on end-to-end "
+        "latency, at the load measured, there is none (§8).",
     ])
     F += [Spacer(1, 3),
           P("Two candidate explanations for the graph result were tested against the "
@@ -542,6 +547,81 @@ def build():
         "image cells land on 1024 exactly.",
     ])
 
+    F += [P("8 · Follow-on: the request stream, not one request", "h1")]
+    F += [P(
+        "Everything above measures homogeneous workloads at concurrency 1 — every "
+        "request in a bracket the same shape, and every prefill batch carrying "
+        "exactly one request. Real serving is a mixed stream at concurrency above "
+        "one, and the flag is server-wide, so the operator's question is not "
+        "\"does the graph help this workload\" but <b>at what image arrival "
+        "fraction does enabling it stop paying</b>. Two bench clients were run "
+        "against one server at once, each with its own Poisson arrival rate, "
+        "giving per-class latencies rather than an aggregate that would hide the "
+        "effect being looked for.")]
+    F += [table([
+        ["image share of arrivals", "class", "TTFT", "end-to-end", "TPOT"],
+        ["0", "text", "−15.14%", Paragraph("<b>−3.72%</b>", S["cellb"]), "−3.04%"],
+        ["0.2", "text", "−13.84%", Paragraph("<b>−3.45%</b>", S["cellb"]), "−2.49%"],
+        ["0.2", "image", "+3.86%", Paragraph("<b>−1.45%</b>", S["cellb"]), "−0.32%"],
+        ["1.0", "image", "+4.81%", Paragraph("<b>+3.43%</b>", S["cellb"]), "+2.73%"],
+    ], [42 * mm, 20 * mm, 24 * mm, 28 * mm, W - 114 * mm])]
+    F += [P("Table 9 — three paired blocks per cell. Note the two metrics "
+            "disagree in sign for image requests.", "cap")]
+    F += [P(
+        "<b>Adding images to a text stream does not take the graph's benefit away "
+        "from the text requests.</b> The f = 0 and f = 0.2 cells run at the same "
+        "load, so that comparison is clean: the benefit moves 1.30 pp, inside the "
+        "3.10 pp block spread. The reason is visible in the logs — <b>97.7% of "
+        "prefill batches carry a single request</b>, and cross-class batches are "
+        "0.2–0.7% of the total. Co-batching cannot erode what it barely touches, "
+        "so the weighted average of the homogeneous results is valid here. That "
+        "had been an assumption; it is now a measurement.")]
+    F += [P("The recommendation needs two numbers", "h2")]
+    F += [table([
+        ["metric", "at ~4.7 requests in flight"],
+        ["TTFT", Paragraph("break-even at <b>f ≈ 0.54</b> (0.47 using the busier "
+                           "image cost)", S["cell"])],
+        ["end-to-end", Paragraph("<b>no break-even</b> — the graph is faster for "
+                                 "both classes", S["cell"])],
+    ], [30 * mm, W - 30 * mm])]
+    F += [P("Table 10 — both are true; they measure different things.", "cap")]
+    F += [P(
+        "End-to-end here is ~910 ms of which decode is ~870, so a 4 ms change in "
+        "time-to-first-token dilutes below a percent while a small consistent "
+        "per-token difference over 128 output tokens is worth ~30 ms. For text "
+        "requests end-to-end improves by 31.31 ms, of which only 5.14 ms is TTFT. "
+        "<b>Reporting only TTFT understates the graph; reporting only end-to-end "
+        "hides that image requests genuinely wait longer for their first token.</b> "
+        "For the case that prompted this work — users attaching an image now and "
+        "then, f ≈ 0.05–0.2 — the graph pays on both metrics by a wide margin.")]
+    F += [P("What this bracket cannot say", "h2")]
+    F += bullets([
+        "<b>Load and image fraction are confounded.</b> The arrival <i>rate</i> "
+        "was held fixed, not the load, and image requests take longer — so f = 1 "
+        "runs 54% busier (7.20 against 4.67 in flight). The image class's "
+        "end-to-end effect flipping from −1.45% to +3.43% between those cells has "
+        "two possible causes and this data separates neither. The fix is to tune "
+        "the rate per fraction so in-flight requests match.",
+        "<b>A decode-side effect is visible and unexplained.</b> Per-token time is "
+        "consistently better under the graph at ~4.7 in flight and worse at ~7.2. "
+        "A prefill graph should not touch decode and both arms run the identical "
+        "decode backend; the plausible route is indirect, through CPU headroom "
+        "freed by issuing fewer launches. It is a hypothesis, and the end-to-end "
+        "conclusions lean on it more than the TTFT ones do.",
+        "<b>Co-batching was never stressed.</b> \"Too rare to matter at this "
+        "load\" is not \"harmless\". Testing the mechanism needs a load where "
+        "batches routinely combine.",
+    ])
+    F += [P("A caution from section 2, now superseded", "h2")]
+    F += [P(
+        "Section 2 recorded the graph's effect on image requests as <i>no material "
+        "difference</i>, since +3.66% fell inside that bracket's 3.60% resolution "
+        "floor. Three independent brackets now agree — +3.66% at concurrency 1 "
+        "over 2000 requests, +3.86% at ~4.7 over 120, +4.81% at ~7.2 over 600. "
+        "<b>A single bracket's resolution floor is not the floor on accumulated "
+        "evidence</b>: the sign is established, and the prefill graph costs image "
+        "requests roughly 4% of their time to first token.")]
+
     F += [P("Limits", "h2")]
     F += bullets([
         f"<b>Resolution floor {drift:.2f}%</b> on the sweep, from repeating the "
@@ -550,8 +630,9 @@ def build():
         "<b>The gap-filling workloads were a separate bracket</b> without a drift cell "
         "of their own, so they inherit the main sweep's estimate — a weaker "
         "guarantee.",
-        "<b>Everything is concurrency 1.</b> Issue #4's batched case is untested, and "
-        "the graph's value under batching is a different question.",
+        "<b>Sections 2–7 are concurrency 1</b>; section 8 covers ~4.7 and ~7.2 "
+        "requests in flight. Nothing here sweeps concurrency as a variable in its "
+        "own right, which is issue #5's question.",
         "<b>All graph results are the breakable backend.</b> The piecewise backend is "
         "absent for the reason given in section 4.",
         "<b>Absolute latencies are not production numbers</b> — the library stack "
