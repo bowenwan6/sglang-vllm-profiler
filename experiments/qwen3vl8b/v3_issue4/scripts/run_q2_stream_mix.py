@@ -87,6 +87,13 @@ def client_cmd(kind, port, n, rate, out):
 
 
 def parse_class(path):
+    """Prefer the harness's own percentile fields.
+
+    Under `--request-rate` the client emits aggregates (median/p90/p95/p99) but
+    no per-request `ttfts` array, unlike the closed-loop `--max-concurrency`
+    runs. Reading the array first and falling back left p95 empty and the sample
+    count at zero while p50 was fine — the metric was never wrong, the parser
+    was looking in the wrong place."""
     d = R.parse_bench_jsonl(path)
     if d is None:
         return None
@@ -94,10 +101,16 @@ def parse_class(path):
     ttfts = [x * 1000 for x in (d.get("ttfts") or []) if x is not None]
     return {"completed": d.get("completed"),
             "failures": sum(1 for e in errs if e),
-            "ttft_p50": R.percentile(ttfts, 50) if ttfts else d.get("median_ttft_ms"),
-            "ttft_p95": R.percentile(ttfts, 95) if ttfts else None,
+            "ttft_p50": d.get("median_ttft_ms")
+                        or (R.percentile(ttfts, 50) if ttfts else None),
+            "ttft_p95": d.get("p95_ttft_ms")
+                        or (R.percentile(ttfts, 95) if ttfts else None),
+            "ttft_p99": d.get("p99_ttft_ms"),
             "tpot_p50": d.get("median_tpot_ms"),
-            "n": len(ttfts)}
+            "e2e_p50": d.get("median_e2e_latency_ms"),
+            "duration_s": d.get("duration"),
+            "request_rate": d.get("request_rate"),
+            "n": d.get("completed") or len(ttfts)}
 
 
 def observed_concurrency(log_path):
