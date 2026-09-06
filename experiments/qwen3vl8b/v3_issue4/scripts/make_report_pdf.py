@@ -172,8 +172,12 @@ def build():
         "vLLM decodes about 9% faster.",
         "<b>The prefill CUDA graph does pay on image+text, but only for small "
         "images.</b> It is worth 16.3% at a 256×256 image and 14.0% at 360p, "
-        "and is unmeasurable at 720p and above. The controlling variable is the "
-        "number of prefill tokens, not the image-to-text ratio.",
+        "and is unmeasurable at 720p and above. What the graph recovers in "
+        "<i>milliseconds</i> is set by the prefill token count and is nearly "
+        "independent of whether those tokens are visual or textual; the "
+        "image-to-text ratio changes how large that recovery looks as a "
+        "<i>percentage</i>, because an image adds vision-encoder time to the "
+        "denominator that no graph can touch (§7).",
         "<b>The piecewise backend could not be measured honestly.</b> On current "
         "upstream it silently falls back to eager execution for 92% of its "
         "graph-eligible calls while every configuration check still reports success.",
@@ -489,6 +493,54 @@ def build():
         "asymptote, for the step when an image first appears, and for R4's null result "
         "— but it is a hypothesis whose numeric predictions have failed twice, and "
         "it is not used to predict anything here.")]
+
+    F += [P("7 · Follow-on: text tokens versus visual tokens", "h1")]
+    F += [P(
+        "The sweep in section 3 moved visual tokens across seven points but moved "
+        "text tokens only once, at 720p, where every cell sat inside the "
+        "resolution floor. So the claim that composition does not matter had never "
+        "been tested where a difference could show. Three text-only workloads were "
+        "run whose token counts match image workloads already measured, making half "
+        "of each comparison free.")]
+    F += [table([
+        ["prefill tokens", "text-only saving", "image saving", "text-only effect",
+         "image effect"],
+        ["208", Paragraph("<b>+10.86 ms</b>", S["cellb"]), "+9.00 ms",
+         Paragraph("<b>−39.77%</b>", S["cellb"]), "−16.30%"],
+        ["544", Paragraph("<b>+4.33 ms</b>", S["cellb"]), "+3.18 ms",
+         Paragraph("<b>−15.94%</b>", S["cellb"]), "−4.54%"],
+        ["1024", Paragraph("<b>+0.45 ms</b>", S["cellb"]), "−0.84 ms",
+         "−1.30%", "+0.80%"],
+    ], [26 * mm, 32 * mm, 28 * mm, 30 * mm, W - 116 * mm])]
+    F += [P("Table 8 — matched token counts, different composition. Paired "
+            "A/B/A/B blocking, three blocks per cell.", "cap")]
+    F += [P(
+        "<b>The saving column matches; the effect column does not.</b> Across a "
+        "5× range the absolute saving differs by a roughly constant 1.2–1.9 ms "
+        "while the percentage differs by a factor of 2–3.5. The same ~10 ms of "
+        "recovered work reads as −39.8% on a text prompt and −16.3% on an image, "
+        "because at this size the image carries <b>23.6 ms</b> of preprocessing "
+        "and vision-encoder time underneath it. Both compositions still cross "
+        "zero between 544 and 1024 tokens, so section 3's operating guidance is "
+        "unchanged.")]
+    F += [P("Two corrections earned here", "h2")]
+    F += bullets([
+        "<b>A gate that read the wrong quantity.</b> The first pass discarded all "
+        "three workloads on a drift gate applied to absolute latencies. But "
+        "the 208-token cell's levels fall 19.4% across the bracket on a cold-start ramp "
+        "while its paired effects agree to 2.98 pp — the drift that A/B/A/B "
+        "blocking exists to cancel, cancelling as designed. Gating the levels put "
+        "it straight back in.",
+        "<b>A 24% padding artifact that looked like a result.</b> A 1024-token "
+        "text prompt appeared to make the graph <i>cost</i> 10%. The benchmark "
+        "flag excludes the chat template's ~8 tokens, so the request arrived at "
+        "1032, overshot the 1024 capture bucket and padded to 1280. Re-run so the "
+        "server sees 1024, the cell reads −1.30%. The capture ladder steps by "
+        "16–64 tokens below 1024 and by 256 above, so a request a handful of "
+        "tokens past a boundary measures padding rather than the graph. Checked "
+        "across every workload in this report: all land within 0–6.7%, and the "
+        "image cells land on 1024 exactly.",
+    ])
 
     F += [P("Limits", "h2")]
     F += bullets([
