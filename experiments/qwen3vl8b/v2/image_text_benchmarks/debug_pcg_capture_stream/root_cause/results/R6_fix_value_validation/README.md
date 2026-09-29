@@ -1,7 +1,7 @@
 # R6 — Fix-value validation for mixed-modality PCG
 
 Formal validation of clean-Y for upstream PR. See
-[`plan.md` §5b](../../../../../../../../../plan.md) for the full
+[`plan.md` §5b](../../../../../../../../plan.md) for the full
 protocol; this directory holds the recorded artifacts.
 
 ## Current status

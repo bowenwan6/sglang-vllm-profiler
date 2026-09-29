@@ -324,7 +324,7 @@ the current merge.
    [`upstream_handoff.md`](experiments/qwen3vl_bcg_deepstack_fix/upstream_handoff.md).
    Do **not** treat this as closing #4 or #5: BCG ≠ PCG.
 
-3. **#4 — the next GPU work. Detailed plan: [§11](#11-issue-4-execution-plan-v3-drafted-2026-09-03-not-started).**
+3. **#4 — the next GPU work. Detailed plan: [§11](#11-issue-4-execution-plan-v3-drafted-2026-09-03-execution-started-2026-09-04).**
    Superseded 2026-09-03: the upstream audits (§3.5 and §11.1) found that all
    four of #4's levers now have silent-degradation paths — the deprecated IPC
    env, the IPC pool's CPU fallback, the PCG capture-stream assertion demoted to
@@ -1010,7 +1010,7 @@ D≤512 branch of the l2norm launcher.
 ### 9.3 Hot-path and Nsight findings
 
 Existing Stage-3 A1_p128_rep1 nsys capture (evidence at
-[`gdn_stage3_gpu6_20260803T234412Z/A1_p128_rep1/raw/`](experiments/qwen35_4b/gdn/results/gdn_stage3_gpu6_20260803T234412Z/A1_p128_rep1/raw/)),
+[`gdn_stage3_gpu6_20260803T234412Z/A1_p128_rep1/`](experiments/qwen35_4b/gdn/results/gdn_stage3_gpu6_20260803T234412Z/A1_p128_rep1/); its `raw/` capture was not committed),
 re-extracted 2026-08-04 via
 `nsys stats --report cuda_gpu_kern_sum`:
 

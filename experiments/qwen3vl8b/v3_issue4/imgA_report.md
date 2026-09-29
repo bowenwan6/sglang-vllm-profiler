@@ -1,6 +1,6 @@
 # Issue #4 v3 — IMG-A headline (400 prompts, 5 reps, c=1)
 
-Generated 2026-09-04 11:08 UTC from `results.json`. Stack and model: [`../manifest.md`](../manifest.md).
+Generated 2026-09-04 11:08 UTC from `results.json`. Stack and model: [`manifest.md`](manifest.md).
 
 ## Bracket validity
 

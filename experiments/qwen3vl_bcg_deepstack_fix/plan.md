@@ -342,7 +342,7 @@ image_batched_with_text`. Verify:
 
 * Each request's output is deterministic across repeats within an
   arm (already established by earlier sub-tracks at
-  `experiments/qwen35_4b/results/gdn_firsttoken_gpu6…`; re-verify
+  `experiments/qwen35_4b/gdn/results/gdn_firsttoken_gpu6…`; re-verify
   under this harness).
 * The DeepStack drop happens *only* on the image request, not on
   text-only (which has empty DeepStack and should not be affected).

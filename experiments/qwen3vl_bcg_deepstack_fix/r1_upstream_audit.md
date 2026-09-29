@@ -222,7 +222,7 @@ pattern.
 | `Qwen3_5ForCausalLM.forward(input_deepstack_embeds=...)` | `qwen3_5.py:1415` | Kwarg signature unchanged; numel guard at :1450-1451 |
 | `general_mm_embed_routine` DeepStack synthesis | `mm_utils.py:1122-1245` | Structure unchanged; still writes `other_info["input_deepstack_embeds"]` |
 | `Qwen3VLForConditionalGeneration.num_deepstack_embeddings` | `qwen3_vl.py:1302` | Attribute present; used by TC piecewise dummy |
-| Existing byte-pinned image fixture | `experiments/qwen35_4b/scripts/fixtures/` | Verifiable; hash pinned |
+| Existing byte-pinned image fixture | `experiments/qwen35_4b/fixtures/` | Verifiable; hash pinned |
 | `test_instrumentation.py` on CPU | This repo | Passes 2026-08-04 |
 
 **All harness pieces are compatible with current main.** No script

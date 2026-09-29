@@ -1,6 +1,6 @@
 # R6.1 verdict — **FAIL**
 
-> Verdict rules were pre-declared in [`protocol.md`](protocol.md) BEFORE any leg was run. This file computes verdicts from the raw JSON captures under `raw/` and the safety-log tally under `raw/safety_summary.json`.
+> Verdict rules were pre-declared in [`protocol.md`](../protocol.md) BEFORE any leg was run. This file computes verdicts from the raw JSON captures under `raw/` and the safety-log tally under `raw/safety_summary.json`.
 
 ## Launch context (from `raw/launch_context.json`)
 
