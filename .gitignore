@@ -1,6 +1,14 @@
 __pycache__/
 *.pyc
+.DS_Store
 
-# Phase 5 kernel-API (KAPI) debug logs — can be enormous (14.7 GB observed) and exceed Git LFS limits.
+# Per-machine local settings; never commit.
+.claude/settings.local.json
+
+# Kernel-API (KAPI) debug logs — can be enormous (14.7 GB observed) and exceed Git LFS limits.
 # Never commit them; they are instrumentation side-effects, not analysis artifacts.
-logs/qwen3vl8b/phase5/**/*_kapi_*.log
+**/*_kapi_*.log
+
+# Raw run outputs (per-request bench JSON, server logs, profiler dumps) stay out of git;
+# commit summaries instead. Replaces the per-directory raw/.gitignore stubs.
+**/raw/

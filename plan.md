@@ -3,7 +3,7 @@
 > **v2 source of truth.** States the current mainline, the v2 roadmap, and the
 > audited outcome of the Qwen3-VL PCG capture-stream investigation.
 > The full v1 (Phase 0–5) plan is archived at
-> `experiments/qwen3vl8b/v1_archive_plan.md`.
+> `experiments/qwen3vl8b/v1/v1_archive_plan.md`.
 > Experiment: `qwen3vl8b` · `Qwen/Qwen3-VL-8B-Instruct` @ `0c351dd` · single H200 ·
 > TP=1 · bf16 · greedy.
 
@@ -45,7 +45,7 @@
 
 - **Phase 1 four-case ratios** (4.89× / 3.20× / 1.32× / 1.33×) and
   **Phase 2 Case C W500** → KAPI-confounded exploratory provenance only
-  (see `experiments/qwen3vl8b/methodology_correction.md`).
+  (see `experiments/qwen3vl8b/v1/methodology_correction.md`).
 - **`--disable-overlap-schedule`** → ablation only, not the production-default
   headline baseline. (v2 #2 fixed this: the headline is now SGLang default
   overlap-ON.)
@@ -309,7 +309,7 @@ the current merge.
 > Rewritten 2026-08-29. The §7 correctness detour is finished and its fix is
 > upstream; the profiling mainline resumes at #4. Detailed work packages and
 > acceptance gates:
-> [`reports/2026-08-28_profiling_resumption_audit.md`](reports/2026-08-28_profiling_resumption_audit.md).
+> [`reports/2026-08-28_profiling_resumption_audit.md`](https://github.com/bowenwan6/sglang-vllm-profiler/blob/archive/pre-cleanup-2026-09-29/reports/2026-08-28_profiling_resumption_audit.md) (archived).
 
 1. **Tracker hygiene (half day, no GPU).** Close #9 as `NOT_APPLICABLE_QWEN35`,
    stating that no shipped Qwen3.5 checkpoint exercises DeepStack and
@@ -324,7 +324,7 @@ the current merge.
    [`upstream_handoff.md`](experiments/qwen3vl_bcg_deepstack_fix/upstream_handoff.md).
    Do **not** treat this as closing #4 or #5: BCG ≠ PCG.
 
-3. **#4 — the next GPU work. Detailed plan: [§11](#11-issue-4-execution-plan-v3-drafted-2026-09-03-not-started).**
+3. **#4 — the next GPU work. Detailed plan: [§11](#11-issue-4-execution-plan-v3-drafted-2026-09-03-execution-started-2026-09-04).**
    Superseded 2026-09-03: the upstream audits (§3.5 and §11.1) found that all
    four of #4's levers now have silent-degradation paths — the deprecated IPC
    env, the IPC pool's CPU fallback, the PCG capture-stream assertion demoted to
@@ -1010,7 +1010,7 @@ D≤512 branch of the l2norm launcher.
 ### 9.3 Hot-path and Nsight findings
 
 Existing Stage-3 A1_p128_rep1 nsys capture (evidence at
-[`gdn_stage3_gpu6_20260803T234412Z/A1_p128_rep1/raw/`](experiments/qwen35_4b/gdn/results/gdn_stage3_gpu6_20260803T234412Z/A1_p128_rep1/raw/)),
+[`gdn_stage3_gpu6_20260803T234412Z/A1_p128_rep1/`](experiments/qwen35_4b/gdn/results/gdn_stage3_gpu6_20260803T234412Z/A1_p128_rep1/); its `raw/` capture was not committed),
 re-extracted 2026-08-04 via
 `nsys stats --report cuda_gpu_kern_sum`:
 

@@ -11,7 +11,7 @@ inputs for Phase 6 (smallest-cell A1/A2/A3 comparison) and Phase 7
   --cuda-graph-backend-decode=disabled`).
 - Cells: `{p128, p512} × {b1, b4}` × 2 self-repeats = 8 runs.
 - `n_warmup=2`, `n_timed=8`, `new_tokens=128`, greedy (temp=0.0, top_p=1.0).
-- Fixture: `../fixtures/gdn_prompts.jsonl` (sha `8a660d94...`).
+- Fixture: `../../fixtures/gdn_prompts.jsonl` (sha `8a660d94...`).
 - Model: `Qwen/Qwen3.5-4B` @ `851bf6e8...`.
 - Frozen SGLang: `58974ca16c...` (empty diff pre and post).
 - GPU 6 (UUID `GPU-fc4fb3d7-1e6c-1686-cede-63f5d6b137e4`).

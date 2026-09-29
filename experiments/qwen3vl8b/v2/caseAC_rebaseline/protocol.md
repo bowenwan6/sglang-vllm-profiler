@@ -143,7 +143,7 @@ CV across reps · failures / error rate · GPU id · exact flags · model snapsh
 - Results (future): `experiments/qwen3vl8b/v2/caseAC_rebaseline/results/` — per-variant `results.json`,
   per-rep `raw/*.json` + `*_meta.json`, and `summary.md`.
 - Server logs (future): `logs/qwen3vl8b/v2/caseAC_rebaseline/`.
-- **Do not** overwrite or touch any v1 Phase 5 results (`experiments/qwen3vl8b/phase5/...`).
+- **Do not** overwrite or touch any v1 Phase 5 results (`experiments/qwen3vl8b/v1/phase5/...`).
 
 ## 11. Execution Checklist (for the approved run)
 
@@ -159,7 +159,7 @@ CV across reps · failures / error rate · GPU id · exact flags · model snapsh
 
 ## 12. Command Templates (DO NOT EXECUTE — reference only)
 
-Reusable runner template: `experiments/qwen3vl8b/phase5/scripts/run_caseA_h1_confirmation.py` (clean
+Reusable runner template: `experiments/qwen3vl8b/v1/phase5/scripts/run_caseA_h1_confirmation.py` (clean
 bracket harness) and `run_caseC_clean_rerun.py` (interleaved harness). **They hardcode
 `--disable-overlap-schedule` and a fixed GPU**, so #2 needs a new runner
 `experiments/qwen3vl8b/v2/caseAC_rebaseline/run_caseAC_rebaseline.py` whose Case-A `S0`/`S2` variants

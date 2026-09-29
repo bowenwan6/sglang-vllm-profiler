@@ -57,7 +57,7 @@ File "/sgl-workspace/sglang/python/sglang/srt/models/qwen3_vl.py", line 1136, in
 
 ## 3. Why this is the root cause (not just a symptom)
 
-- **Text-only PCG works** ([prior debug E1](../../E1_text_autobench_PCG_control_summary.md)
+- **Text-only PCG works** ([prior debug E1](../../../results/E1_text_autobench_PCG_control_summary.md)
   was `OK`; in this R1 trace the warmup `Compiling num tokens` loop
   iterates 58+ token-count graphs successfully under `cuda graph: True`).
   → The PCG infrastructure itself is sound when the model's Dynamo

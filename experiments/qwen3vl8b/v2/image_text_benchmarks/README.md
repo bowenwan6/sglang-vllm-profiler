@@ -1,5 +1,10 @@
 # v2 / Round 2 — Image+text benchmarks (issue #4)
 
+> **Superseded.** This round-2 attempt at #4 stopped at a partial IMG-A and the PCG capture-stream
+> crash. #4 was redesigned and completed in round 3 (2026-09-06) — see [`../../v3_issue4/`](../../v3_issue4/)
+> and `plan.md` §11–§12. Everything below is the round-2 record as last updated on 2026-06-08;
+> "active", "next step" and "resume" refer to that time.
+
 Clean Qwen3-VL **image+text** benchmarks with **CUDA IPC transport**. Tests whether the text-only Case-A
 PCG finding (#2) transfers to the image path, and separates the **CUDA-IPC transport** benefit from the
 **PCG** prefill-graph lever.
@@ -51,7 +56,7 @@ Key design points (see protocol for detail):
   prefill *graph coverage* (testing lever, not a production fix). Never conflated.
 - **Synthetic image dataset** (`--dataset-name image`): images generated inline (base64), reproducible via
   `--seed`; no external downloads, no large checked-in assets. Dataset identity = harness commit + image
-  params + seed (see [`../../../../datasets/qwen3vl8b/image_text/README.md`](../../../../datasets/qwen3vl8b/image_text/README.md)).
+  params + seed (see [`datasets/qwen3vl8b/image_text/README.md`](https://github.com/bowenwan6/sglang-vllm-profiler/blob/archive/pre-cleanup-2026-09-29/datasets/qwen3vl8b/image_text/README.md), archived).
 - **Both frameworks benchmarked via `--backend sglang-oai-chat`** (the image dataset rejects `--backend
   vllm`; the chat request function POSTs `image_url` data URIs to any `/v1/chat/completions`).
 - **Clean only** — no KAPI, no profiler. Servers serialized.
@@ -80,14 +85,14 @@ selected at runtime via `PYTHONPATH=/data/sglang-pr/python`. Recovery proceeds v
 ## Layout
 
 - `protocol.md` — original #4 protocol (unchanged source of truth).
-- `fixed_generator_plan.md` — **active** recovery plan for the fixed generator.
+- `fixed_generator_plan.md` — recovery plan for the fixed generator (paused; superseded by round 3).
 - `run_image_text_smoke.py`, `run_image_text_imgA.py` — original runners; partial
   IMG-A from these is invalidated.
-- `bench_serving_sanitized.py`, `run_image_text_smoke_sanitized.py`,
-  `run_image_text_imgA_sanitized.py` — sanitized monkeypatch fallback (only if
-  the fixed clone is unavailable).
-- `smoke_fixed/` — Stage 4.1 fixed-generator smoke outputs (future).
-- `results_fixed/` — Stage 4.2+ fixed-generator IMG-A/B/C outputs (future);
+- The sanitized monkeypatch fallback (`bench_serving_sanitized.py`,
+  `run_image_text_{smoke,imgA}_sanitized.py`) was never needed once the fix merged
+  upstream; removed 2026-09-29, still in tag `archive/pre-cleanup-2026-09-29`.
+- `smoke_fixed/` — Stage 4.1 fixed-generator smoke outputs.
+- `results_fixed/` — Stage 4.2 fixed-generator IMG-A outputs (partial);
   raw per-rep dumps under `results_fixed/raw/` not committed unless approved.
 - `results/` — historical (invalidated partial IMG-A); not overwritten.
 - `smoke/` — original 2026-05-30 smoke; not overwritten.
