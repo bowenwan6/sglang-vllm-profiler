@@ -277,3 +277,37 @@ Time per sweep cell: ≈ 1.6 min server start (17 GB load) + 0.2 min warmup + 1 
 - [ ] `RUNBOOK.md` commands are complete and copy-pasteable; the patch applies to the pinned SHA
       (verified on the Mac: `git apply --check` on `89e1316eae`); the simulators in the review's
       scratchpad give G1 GO and 28/28 VERIFIED on the fixed code.
+
+## Outcome so far — 2026-09-29 (first node session, 10:08–12:08 UTC)
+
+**Stack and gates.** `check` PASS on `node-radixark-16-0001` (H200, sglang `0.0.0.dev19038+g89e1316ea`
++ patch v2, torch 2.13.0+cu130). Engagement VERIFIED on every parity arm (graph arm: 2 captures for the two
+image shapes, per-call evidence).
+
+**Parity, pre-registered criterion: FAIL.** Encoder outputs, relative Frobenius error vs eager:
+
+| comparison | 336² (×2) | 512² | reading |
+|---|---|---|---|
+| graph vs eager (the gate) | 0.058 | 0.069 | above the 2e-2 tolerance |
+| eager + unfused rotary vs eager (`off_rot`, both eager) | 0.021 | 0.072 | the implementation noise floor of the bf16 encoder is 2–7 % |
+| graph vs eager + unfused rotary | 0.056 | 0.070 | the graph does **not** reduce to the rotary swap alone |
+| graph with **default** interpolation vs eager | 0.469 | 0.311 | the default-flag configuration is a different model |
+
+LM level (same greedy prompts, 48 tokens): graph vs eager identical tokens on 336² (45/45, 48/48; mean
+|Δlogprob| 0.006–0.008 nat, max 0.11) and on both text fixtures (exact); the 512² fixture diverges at
+token 6 at a 0.0-nat tie **on every comparison, including eager vs eager**. The graph arm with the
+default interpolation flag diverges at token 1 with a 1.0-nat eager margin (14/45 tokens shared).
+
+**Interpretation.** The 2e-2 tolerance was set below what two legitimate eager implementations of this
+encoder differ by; at the LM level the graph arm (with `--enable-precise-embedding-interpolation`) is
+within the eager-vs-eager spread. Two findings stand regardless of what follows: (1) the bf16 Qwen3-VL
+encoder amplifies implementation differences (rotary kernel, rotary-table dtype) to 2–7 % of its output
+norm without changing greedy text; (2) with default flags the ViT CUDA graph changes model outputs
+materially (position-embedding interpolation, B4) — an upstream issue.
+
+**Decision pending (Bowen).** Proceeding to the latency stages requires a *post-hoc* deviation from the
+pre-registered parity gate: judging parity by the downstream rule implemented in
+`run_q3.py parity-judge` (greedy tokens identical or diverging only at an eager near-tie < 0.5 nat, mean
+|Δlogprob| ≤ 0.05 nat over shared tokens; the graph arm passes it, the default-flag arm fails it). The
+command records who approved it; the pre-registered FAIL stays in the record. The assignment expired at
+12:08 UTC (2 GPU-hours used of the 6 allowed), so continuing also needs a new assignment.
