@@ -1,5 +1,9 @@
 __pycache__/
 *.pyc
+.DS_Store
+
+# Per-machine local settings; never commit.
+.claude/settings.local.json
 
 # Phase 5 kernel-API (KAPI) debug logs — can be enormous (14.7 GB observed) and exceed Git LFS limits.
 # Never commit them; they are instrumentation side-effects, not analysis artifacts.
