@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-09-29T15:05:52+00:00",
+  "generated_utc": "2026-09-29T15:09:00+00:00",
   "workloads": {
     "R0_text": {
       "blocks": [
@@ -16,16 +16,30 @@
           "verified": true,
           "status_ok": true,
           "capture_ms": null
+        },
+        {
+          "block": 2,
+          "off_p50": 27.998,
+          "on_p50": 27.812,
+          "saving_ms": 0.186,
+          "effect_pct": -0.66,
+          "off_mean": 28.069,
+          "on_mean": 27.891,
+          "tpot_off": 5.158246130061646,
+          "tpot_on": 5.155908099065224,
+          "verified": true,
+          "status_ok": true,
+          "capture_ms": null
         }
       ],
-      "n_blocks": 1,
-      "effect_pct_median": -1.19,
-      "saving_ms_median": 0.336,
-      "saving_ms_mean": 0.336,
-      "saving_ms_sd": null,
-      "saving_ms_se": null,
-      "spread_pp": null,
-      "gate": "SINGLE_BLOCK",
+      "n_blocks": 2,
+      "effect_pct_median": -0.93,
+      "saving_ms_median": 0.261,
+      "saving_ms_mean": 0.261,
+      "saving_ms_sd": 0.106,
+      "saving_ms_se": 0.075,
+      "spread_pp": 0.53,
+      "gate": "PASS",
       "all_verified": true,
       "expected_patches": 0
     },
