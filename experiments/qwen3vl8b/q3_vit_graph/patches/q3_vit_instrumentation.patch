@@ -1,5 +1,34 @@
+diff --git a/python/sglang/srt/layers/attention/vision.py b/python/sglang/srt/layers/attention/vision.py
+index 693963080e..eb17a2997a 100644
+--- a/python/sglang/srt/layers/attention/vision.py
++++ b/python/sglang/srt/layers/attention/vision.py
+@@ -3,6 +3,7 @@ from __future__ import annotations
+ import dataclasses
+ import functools
+ import math
++import os
+ import warnings
+ from functools import lru_cache, partial
+ from typing import Any, Callable, Optional, Tuple
+@@ -1481,9 +1482,15 @@ class VisionAttention(nn.Module):
+             # CPU-to-CUDA copy. The eager version is captured as part of the
+             # graph, so its pointwise work is still replayed without launch
+             # overhead.
++            # Q3 measurement-only switch (never upstreamed): Q3_VIT_EAGER_ROTARY=1
++            # forces the unfused rotary on the eager arm, so the graph arm's extra
++            # rotary GPU work can be measured in isolation.
+             rotary_fn = (
+                 apply_rotary_pos_emb_native_eager
+-                if envs.SGLANG_VIT_ENABLE_CUDA_GRAPH.get()
++                if (
++                    envs.SGLANG_VIT_ENABLE_CUDA_GRAPH.get()
++                    or os.getenv("Q3_VIT_EAGER_ROTARY") == "1"
++                )
+                 else apply_rotary_pos_emb
+             )
+             q, k = rotary_fn(q, k, cos, sin)
 diff --git a/python/sglang/srt/models/qwen3_vl.py b/python/sglang/srt/models/qwen3_vl.py
-index 9e673ab2af..817b405c86 100644
+index 9e673ab2af..b79e3ffd37 100644
 --- a/python/sglang/srt/models/qwen3_vl.py
 +++ b/python/sglang/srt/models/qwen3_vl.py
 @@ -15,7 +15,9 @@
@@ -20,15 +49,15 @@ index 9e673ab2af..817b405c86 100644
  from transformers.activations import ACT2FN
  
  from sglang.srt.configs.qwen3_vl import Qwen3VLConfig, Qwen3VLVisionConfig
-@@ -1455,7 +1458,31 @@ class Qwen3VLForConditionalGeneration(nn.Module):
+@@ -1455,7 +1458,39 @@ class Qwen3VLForConditionalGeneration(nn.Module):
              items, range(len(items)), preserve_for_reprefill=True
          )
          assert pixel_values.dim() == 2, pixel_values.dim()
 -        visual_features = self.visual(pixel_values, grid_thw=grid_thw)
 +        # Q3 measurement-only instrumentation (never upstreamed). The profiler
-+        # annotation costs nothing unless a profiler is attached; the CUDA-event
-+        # timing is opt-in (Q3_VIT_TIMING=1) because it synchronises the stream
-+        # around the encoder.
++        # annotation costs nothing unless a profiler is attached. Q3_VIT_TIMING=1
++        # adds a stream sync before and after the encoder and logs its timing;
++        # Q3_VIT_DUMP=<dir> saves every encoder output (parity runs only).
 +        _q3_timing = os.getenv("Q3_VIT_TIMING") == "1"
 +        if _q3_timing:
 +            torch.cuda.synchronize()
@@ -50,10 +79,18 @@ index 9e673ab2af..817b405c86 100644
 +                _q3_cpu_ms,
 +                _q3_ev0.elapsed_time(_q3_ev1),
 +            )
++        _q3_dump = os.getenv("Q3_VIT_DUMP")
++        if _q3_dump:
++            os.makedirs(_q3_dump, exist_ok=True)
++            self._q3_dump_idx = getattr(self, "_q3_dump_idx", 0) + 1
++            torch.save(
++                visual_features.detach().float().cpu(),
++                os.path.join(_q3_dump, f"vit_{self._q3_dump_idx:04d}.pt"),
++            )
          if borrowed_items:
              self._offload_packed_visual_inputs(
                  pixel_values, borrowed_items, packed_ready
-@@ -1597,7 +1624,17 @@ class Qwen3VLForConditionalGeneration(nn.Module):
+@@ -1597,7 +1632,17 @@ class Qwen3VLForConditionalGeneration(nn.Module):
          return bool(self._lora_pattern.match(module_name))
  
      @torch.no_grad()
@@ -73,7 +110,7 @@ index 9e673ab2af..817b405c86 100644
          input_ids: torch.Tensor,
          positions: torch.Tensor,
 diff --git a/python/sglang/srt/multimodal/vit_cuda_graph_runner.py b/python/sglang/srt/multimodal/vit_cuda_graph_runner.py
-index 808b2b4124..1257dd0442 100644
+index 808b2b4124..17c21dc4ff 100644
 --- a/python/sglang/srt/multimodal/vit_cuda_graph_runner.py
 +++ b/python/sglang/srt/multimodal/vit_cuda_graph_runner.py
 @@ -17,6 +17,8 @@
@@ -132,7 +169,7 @@ index 808b2b4124..1257dd0442 100644
              self.create_graph(
                  x_3d=x_3d,
                  position_embeddings=position_embeddings,
-@@ -465,6 +486,21 @@ class ViTCudaGraphRunner:
+@@ -465,6 +486,25 @@ class ViTCudaGraphRunner:
                  rotary_pos_emb_sin=rotary_pos_emb_sin,
                  attention_layout_key=attention_layout_key,
              )
@@ -141,14 +178,18 @@ index 808b2b4124..1257dd0442 100644
 +            self._q3_captures += 1
 +            self._q3_capture_ms_total += _q3_ms
 +            logger.info(
-+                "VIT_CG capture key=%s n_graphs=%d capture_ms=%.1f",
++                "VIT_CG capture key=%s n_graphs=%d capture_ms=%.1f reserved_mib=%d",
 +                graph_key,
 +                len(self.block_graphs),
 +                _q3_ms,
++                torch.cuda.memory_reserved() // (1024 * 1024),
 +            )
 +            self._q3_log_stats()
 +        else:
 +            self._q3_replays += 1
++            logger.info(
++                "VIT_CG_CALL replays=%d keys=%d", self._q3_replays, len(self.block_graphs)
++            )
 +            if self._q3_replays % 50 == 0:
 +                self._q3_log_stats()
  

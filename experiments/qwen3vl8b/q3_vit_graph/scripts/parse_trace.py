@@ -8,14 +8,18 @@ The instrumentation patch names three windows with `record_function`:
 
 For every window this reports
   cpu_wall_ms          CPU span of the annotation
-  gpu_busy_ms          union of GPU activity (kernels, memcpy, memset) launched inside
-                       the window, matched through CUPTI correlation ids
-  gpu_busy_window_ms   the same matched by time window (fallback / cross-check)
+  gpu_busy_ms          union of GPU activity (kernels, memcpy, memset) launched inside the
+                       window, matched through CUPTI correlation ids
+  gpu_busy_window_ms   the same matched by time window (cross-check; used automatically
+                       when correlation matching finds nothing)
   gpu_span_ms          first GPU start -> last GPU end of the matched activity
-  n_kernels, n_launches (cudaLaunchKernel*), n_graph_launches (cudaGraphLaunch)
+  crit_ms              critical path: from the CPU start to max(CPU end, last GPU end) (D7)
+  gpu_tail_ms          how far the GPU still runs after the CPU left the window
+  n_kernels, n_launches (cudaLaunchKernel* / cuLaunchKernel*), n_graph_launches (cudaGraphLaunch)
+  kernels              GPU time by kernel name (top entries), for the rotary/attention split (D3)
 
-The eager arm's (cpu_wall - gpu_busy) is the un-overlapped launch time the graph
-can recover: that is the H1 predictor.
+The eager arm's (cpu_wall - gpu_busy) is the un-overlapped launch time the graph can
+recover: that is the H1 predictor's trace-based form.
 
 Usage: parse_trace.py <trace.json[.gz]> [--json out.json]
 """
@@ -35,6 +39,8 @@ GPU_CATS = {"kernel", "gpu_memcpy", "gpu_memset"}
 ANNOT_CATS = {"user_annotation", "cpu_op"}
 NAMES = ("Q3_VIT_FORWARD", "Q3_STEP_EXTEND", "Q3_STEP_DECODE")
 GPU_LAG_US = 2000.0  # slack for the time-window fallback
+LAUNCH_PREFIXES = ("cudaLaunchKernel", "cuLaunchKernel", "cudaLaunchCooperativeKernel")
+TOP_KERNELS = 20
 
 
 def load_events(path: Path) -> List[Dict[str, Any]]:
@@ -85,18 +91,30 @@ def analyze(events: List[Dict[str, Any]], names=NAMES) -> Dict[str, List[Dict[st
                     matched.extend(by_corr.get(c, []))
             glo, ghi = bisect.bisect_left(gpu_ts, t0), bisect.bisect_right(gpu_ts, t1 + GPU_LAG_US)
             win = gpu[glo:ghi]
+            method = "correlation"
+            if not matched and win:
+                matched, method = win, "window"
             iv = [(float(g["ts"]), float(g["ts"]) + float(g["dur"])) for g in matched]
+            gpu_end = max((e for _, e in iv), default=t1)
+            per_kernel: Dict[str, float] = defaultdict(float)
+            for g in matched:
+                if g.get("cat") == "kernel":
+                    per_kernel[str(g.get("name", "?"))[:120]] += float(g["dur"]) / 1000.0
             rows.append({
                 "ts_us": t0,
                 "cpu_wall_ms": round((t1 - t0) / 1000.0, 3),
                 "gpu_busy_ms": round(union_ms(iv), 3),
                 "gpu_busy_window_ms": round(union_ms(
                     [(float(g["ts"]), float(g["ts"]) + float(g["dur"])) for g in win]), 3),
-                "gpu_span_ms": round((max(e for _, e in iv) - min(s for s, _ in iv)) / 1000.0, 3) if iv else 0.0,
+                "gpu_span_ms": round((gpu_end - min(s for s, _ in iv)) / 1000.0, 3) if iv else 0.0,
+                "crit_ms": round((max(t1, gpu_end) - t0) / 1000.0, 3),
+                "gpu_tail_ms": round(max(0.0, gpu_end - t1) / 1000.0, 3),
                 "n_kernels": sum(1 for g in matched if g.get("cat") == "kernel"),
-                "n_launches": sum(1 for r in rt if str(r.get("name", "")).startswith("cudaLaunchKernel")),
+                "n_launches": sum(1 for r in rt if str(r.get("name", "")).startswith(LAUNCH_PREFIXES)),
                 "n_graph_launches": sum(1 for r in rt if str(r.get("name", "")).startswith("cudaGraphLaunch")),
                 "n_runtime_calls": len(rt),
+                "match_method": method,
+                "kernels": dict(per_kernel),
             })
         rows.sort(key=lambda r: r["ts_us"])
         out[name] = rows
@@ -106,12 +124,21 @@ def analyze(events: List[Dict[str, Any]], names=NAMES) -> Dict[str, List[Dict[st
 def summarize(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     if not rows:
         return {"n": 0}
-    keys = ("cpu_wall_ms", "gpu_busy_ms", "gpu_busy_window_ms", "gpu_span_ms",
-            "n_kernels", "n_launches", "n_graph_launches")
+    keys = ("cpu_wall_ms", "gpu_busy_ms", "gpu_busy_window_ms", "gpu_span_ms", "crit_ms",
+            "gpu_tail_ms", "n_kernels", "n_launches", "n_graph_launches")
     s: Dict[str, Any] = {"n": len(rows)}
     for k in keys:
         s[k + "_p50"] = round(statistics.median(r[k] for r in rows), 3)
     s["unoverlapped_ms_p50"] = round(statistics.median(r["cpu_wall_ms"] - r["gpu_busy_ms"] for r in rows), 3)
+    s["match_methods"] = sorted({r["match_method"] for r in rows})
+    agg: Dict[str, float] = defaultdict(float)
+    for r in rows:
+        for k, v in r["kernels"].items():
+            agg[k] += v / len(rows)
+    top = sorted(agg.items(), key=lambda kv: -kv[1])[:TOP_KERNELS]
+    s["kernels_ms_per_window"] = {k: round(v, 3) for k, v in top}
+    s["rotary_like_ms_per_window"] = round(sum(v for k, v in agg.items()
+                                               if "rotary" in k.lower() or "rope" in k.lower()), 3)
     return s
 
 
@@ -120,7 +147,8 @@ def analyze_file(path: Path) -> Dict[str, Any]:
     per = analyze(events)
     return {"trace": str(path), "n_events": len(events),
             "summary": {k: summarize(v) for k, v in per.items()},
-            "windows": per}
+            "windows": {k: [{kk: vv for kk, vv in r.items() if kk != "kernels"} for r in v]
+                        for k, v in per.items()}}
 
 
 def main() -> None:

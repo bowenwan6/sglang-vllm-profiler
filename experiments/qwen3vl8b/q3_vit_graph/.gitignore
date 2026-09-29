@@ -1,5 +1,7 @@
-# per-request jsonl, server logs and profiler traces: backed up by rsync, never committed
+# per-request jsonl, server logs, profiler traces, ViT dumps: rsynced to the Mac, never committed
 results/raw/
+results/STATUS.json
 *.trace.json
 *.trace.json.gz
+*.pt
 __pycache__/
