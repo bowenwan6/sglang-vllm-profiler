@@ -353,7 +353,8 @@
         "evidence": "no_graph_lines",
         "captures": 0,
         "calls": 0,
-        "prefill_batches": 301
+        "prefill_batches": 301,
+        "reverified_from": "mixed_off_server.log"
       },
       "gpu_used_mib_end": 111186,
       "gpu_used_mib_peak": 111186,
@@ -3660,7 +3661,15 @@
           "capture_ms": null,
           "reserved_mib": null
         }
-      ]
+      ],
+      "verify_original": {
+        "verdict": "VERIFIED",
+        "reasons": [],
+        "evidence": "no_graph_lines",
+        "captures": 0,
+        "calls": 0,
+        "prefill_batches": 301
+      }
     },
     "on": {
       "bench": {
@@ -3991,14 +4000,13 @@
       "vit_wall_first_seen_p50": 30.418,
       "vit_wall_repeat_p50": 1.087,
       "verify": {
-        "verdict": "UNVERIFIED",
-        "reasons": [
-          "captures=167 > expected -1"
-        ],
+        "verdict": "VERIFIED",
+        "reasons": [],
         "evidence": "per_call",
-        "captures": 167,
+        "captures": 166,
         "calls": 134,
-        "prefill_batches": 301
+        "prefill_batches": 301,
+        "reverified_from": "mixed_on_server.log"
       },
       "gpu_used_mib_end": 127646,
       "gpu_used_mib_peak": 126116,
@@ -7305,7 +7313,17 @@
           "capture_ms": 21.8,
           "reserved_mib": 124542
         }
-      ]
+      ],
+      "verify_original": {
+        "verdict": "UNVERIFIED",
+        "reasons": [
+          "captures=167 > expected -1"
+        ],
+        "evidence": "per_call",
+        "captures": 167,
+        "calls": 134,
+        "prefill_batches": 301
+      }
     }
   },
   "summary": {
