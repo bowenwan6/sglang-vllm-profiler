@@ -654,7 +654,7 @@ def verify_arm(arm: str, scan: Dict[str, Any], n_requests: int, expect_shapes: i
             reasons.append("ViT graph lines present on a workload that must not use the graph")
         evidence = "no_graph_lines"
     else:
-        if n_cap > expect_shapes:
+        if expect_shapes >= 0 and n_cap > expect_shapes:   # -1 = any number of shapes (mixed stage)
             reasons.append(f"captures={n_cap} > expected {expect_shapes}")
         if scan.get("n_calls", 0) or life.get("n_calls", 0):
             covered = n_cap + scan.get("n_calls", 0)
