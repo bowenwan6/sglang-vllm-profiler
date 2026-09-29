@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-09-29T16:08:27+00:00",
+  "generated_utc": "2026-09-29T16:15:40+00:00",
   "workloads": {
     "R0_text": {
       "blocks": [
@@ -394,14 +394,28 @@
           "verified": true,
           "status_ok": true,
           "capture_ms": 81.9
+        },
+        {
+          "block": 4,
+          "off_p50": 182.772,
+          "on_p50": 190.986,
+          "saving_ms": -8.214,
+          "effect_pct": 4.49,
+          "off_mean": 183.018,
+          "on_mean": 191.158,
+          "tpot_off": 5.708037107251585,
+          "tpot_on": 5.716281104832888,
+          "verified": true,
+          "status_ok": true,
+          "capture_ms": 78.6
         }
       ],
-      "n_blocks": 3,
-      "effect_pct_median": 3.61,
-      "saving_ms_median": -6.674,
-      "saving_ms_mean": -7.108,
-      "saving_ms_sd": 0.962,
-      "saving_ms_se": 0.555,
+      "n_blocks": 4,
+      "effect_pct_median": 4.05,
+      "saving_ms_median": -7.443,
+      "saving_ms_mean": -7.385,
+      "saving_ms_sd": 0.961,
+      "saving_ms_se": 0.48,
       "spread_pp": 1.04,
       "gate": "PASS",
       "all_verified": true,
