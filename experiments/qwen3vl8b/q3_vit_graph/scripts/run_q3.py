@@ -44,6 +44,7 @@ SPREAD_GATE_PP = 3.0        # G2: paired-effect spread per workload (Q1's rule)
 BLOCKS_DEFAULT, BLOCKS_LARGE = 3, 4
 DUMP_REL_FRO_TOL = 2e-2     # parity: relative Frobenius error of the encoder output, bf16 arms
 TEXT_MARGIN_BENIGN_NAT = 0.5
+LOGPROB_MEAN_TOL_NAT = 0.05   # post-hoc downstream rule: mean |Δlogprob| over shared greedy tokens
 EXIT_STOPPED, EXIT_PARITY_FAIL, EXIT_GATE_STOP = 3, 4, 5
 
 
@@ -314,6 +315,62 @@ def cmd_parity(a) -> int:
     log(f"parity {rec['verdict']}  reasons={reasons}  text divergences (non-benign)={non_benign}  "
         f"dump rel_fro={[round(r.get('rel_fro') or -1, 4) for r in rows]}")
     C.write_status(stage="parity", verdict=rec["verdict"], finished=True)
+    return 0 if rec["verdict"] in ("PASS", "PASS_WITH_DEVIATION") else EXIT_PARITY_FAIL
+
+
+def judge_downstream(off: Dict[str, Any], other: Dict[str, Any]) -> Dict[str, Any]:
+    """Post-hoc rule (2026-09-29, written after the first parity data): LM-level equivalence.
+    A fixture passes if the greedy tokens are identical, or the first divergence sits at a
+    near-tie of the eager arm (top-1/top-2 margin < 0.5 nat), and the mean |Δlogprob| over the
+    shared tokens is ≤ 0.05 nat (the eager-vs-eager spread measured with off_rot)."""
+    rows, reasons = [], []
+    for fx, o in off.items():
+        a, b = o.get("tokens", []), (other.get(fx) or {}).get("tokens", [])
+        n = min(len(a), len(b))
+        first_div = next((i for i in range(n) if a[i]["token"] != b[i]["token"]), None)
+        shared = range(n) if first_div is None else range(first_div)
+        diffs = [abs(a[i]["logprob"] - b[i]["logprob"]) for i in shared
+                 if a[i].get("logprob") is not None and b[i].get("logprob") is not None]
+        mean_d = statistics.mean(diffs) if diffs else 0.0
+        margin = a[first_div].get("margin") if first_div is not None else None
+        ok = (first_div is None or (margin is not None and margin < TEXT_MARGIN_BENIGN_NAT)) \
+            and mean_d <= LOGPROB_MEAN_TOL_NAT and n > 0
+        rows.append({"fixture": fx, "n": n, "first_divergence": first_div, "off_margin_nat": margin,
+                     "mean_abs_dlogprob": round(mean_d, 4), "max_abs_dlogprob": round(max(diffs), 4) if diffs else 0.0,
+                     "ok": ok})
+        if not ok:
+            reasons.append(f"{fx}: divergence at {first_div} (margin {margin}), mean |dlogprob| {mean_d:.4f}")
+    return {"rule": f"greedy tokens identical or first divergence at an eager margin < {TEXT_MARGIN_BENIGN_NAT} nat; "
+                    f"mean |dlogprob| over shared tokens <= {LOGPROB_MEAN_TOL_NAT} nat", "rows": rows,
+            "reasons": reasons, "verdict": "PASS" if not reasons else "FAIL"}
+
+
+def cmd_parity_judge(a) -> int:
+    """Re-judge a saved parity.json under the post-hoc downstream rule. Requires --approved-by,
+    which records who allowed the deviation from the pre-registered encoder-output criterion."""
+    par = C.OUT / "parity.json"
+    if not par.exists():
+        log("no parity.json to judge")
+        return 2
+    rec = C.load_json(par)
+    off = rec["arms"]["off"]["outputs"]
+    judged = {arm: judge_downstream(off, rec["arms"][arm]["outputs"]) for arm in rec["arms"] if arm != "off"}
+    rec["parity_judge"] = {"approved_by": a.approved_by, "timestamp_utc": C.utc_now(), "arms": judged}
+    rec.setdefault("verdict_preregistered", rec["verdict"])
+    eng_ok = all(rec["arms"][x]["verify"]["verdict"] == "VERIFIED" for x in ("off", "on"))
+    only_encoder = all(str(r).startswith("encoder outputs differ") for r in (rec.get("reasons") or []))
+    if judged["on"]["verdict"] == "PASS" and eng_ok and only_encoder:
+        rec["verdict"] = "PASS_WITH_DEVIATION"
+        rec["deviation"] = ("post-hoc downstream rule (approved by " + a.approved_by + "): the pre-registered "
+                            "encoder-output tolerance 2e-2 is below the eager-vs-eager implementation spread "
+                            "(off_rot vs off); the graph arm is LM-equivalent to eager")
+    else:
+        rec["verdict"] = "FAIL"
+    C.save_json(par, rec)
+    for arm, j in judged.items():
+        log(f"  {arm}: {j['verdict']} {j['reasons']}")
+    log(f"parity re-judged: pre-registered {rec['verdict_preregistered']} -> {rec['verdict']}")
+    C.write_status(stage="parity-judge", verdict=rec["verdict"], finished=True)
     return 0 if rec["verdict"] in ("PASS", "PASS_WITH_DEVIATION") else EXIT_PARITY_FAIL
 
 
@@ -837,6 +894,8 @@ def main() -> None:
                     help="also run eager with the graph path's unfused rotary (off_rot) to attribute an encoder-output difference")
     pa.add_argument("--with-default-interp", action="store_true",
                     help="also run the graph arm without --enable-precise-embedding-interpolation (upstream-issue evidence)")
+    pj = sub.add_parser("parity-judge", help="re-judge a saved parity.json under the post-hoc downstream rule")
+    pj.add_argument("--approved-by", required=True, help="who approved the deviation, e.g. 'Bowen (chat 2026-09-29)'")
     p = sub.add_parser("pilot")
     p.add_argument("--n-warm", type=int, default=5)
     p.add_argument("--n-profile", type=int, default=5)
@@ -856,7 +915,7 @@ def main() -> None:
     m.add_argument("--warmup", type=int, default=5)
     sub.add_parser("status")
     a = ap.parse_args()
-    rc = {"check": cmd_check, "parity": cmd_parity, "pilot": cmd_pilot,
+    rc = {"check": cmd_check, "parity": cmd_parity, "parity-judge": cmd_parity_judge, "pilot": cmd_pilot,
           "sweep": cmd_sweep, "mixed": cmd_mixed, "status": cmd_status}[a.stage](a)
     sys.exit(rc)
 

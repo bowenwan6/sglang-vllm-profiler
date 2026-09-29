@@ -119,6 +119,12 @@ def main() -> None:
     L.append("## Parity (both arms encode the same fixtures)\n")
     if par:
         rows = g(par, "dumps", "rows") or []
+        pj = par.get("parity_judge")
+        if pj:
+            L.append(f"Pre-registered verdict **{par.get('verdict_preregistered')}**; post-hoc downstream rule "
+                     f"(approved by {pj.get('approved_by')}): on = **{pj['arms']['on']['verdict']}**, "
+                     + ", ".join(f"{k} = {v['verdict']}" for k, v in pj["arms"].items() if k != "on")
+                     + f"; rule: {pj['arms']['on']['rule']}\n")
         L.append(f"**{par.get('verdict')}** — encoder-output relative error per image fixture: "
                  f"{[round(r.get('rel_fro') or -1, 4) for r in rows]} (tolerance {par.get('tolerance_rel_fro')}); "
                  f"reasons: {par.get('reasons')}")
@@ -127,6 +133,10 @@ def main() -> None:
         L.append(f"- greedy text: {len(tx) - len(div)}/{len(tx)} fixtures identical; divergences: "
                  + (", ".join(f"`{k}` at token {v.get('first_divergence')} (off-arm margin {f(v.get('off_margin_nat'))} nat, "
                               f"{'benign' if v.get('benign') else 'not benign'})" for k, v in div.items()) or "none"))
+        for k, label in (("dumps_off_rot_vs_off", "eager with the unfused rotary vs eager (implementation noise floor)"),
+                         ("dumps_on_vs_off_rot", "graph arm vs eager with the unfused rotary")):
+            if par.get(k):
+                L.append(f"- {label}: rel_fro {[round(r.get('rel_fro') or -1, 4) for r in par[k].get('rows') or []]}")
         if par.get("dumps_default_interp_vs_off"):
             r2 = par["dumps_default_interp_vs_off"].get("rows") or []
             L.append(f"- graph arm with the **default** interpolation flag vs eager: rel_fro "
