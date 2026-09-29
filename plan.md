@@ -1847,6 +1847,7 @@ gap in one question. Anything that did not close a gap has been cut — see §12
 | **Q0** | **Transport** — how the multimodal features reach the LM | ✅ **answered, closed.** `cuda_ipc` is worth **−28.2%** of TTFT, independent of the graph (2×2 interaction +0.42 pp). Not a CUDA-graph question at all, and the largest single effect found. |
 | **Q1** | **Within one request** — at what image-to-text composition does the prefill graph pay? | ⚠️ **半答.** The *visual* axis is swept across seven points and the boundary is located. The *text* axis was never varied where a difference could be resolved. |
 | **Q2** | **Across a request stream** — at what image arrival fraction is enabling the graph still worth it? | ❌ **not started, and v3 structurally cannot answer it.** |
+| **Q3** | **Inside the vision encoder** — how much of the image's "fixed cost" is launch overhead a ViT CUDA graph recovers, and does an eager trace predict it? | 🧪 **pre-registered 2026-09-29, not run** — [`experiments/qwen3vl8b/q3_vit_graph/PLAN.md`](experiments/qwen3vl8b/q3_vit_graph/PLAN.md), see §12.6 |
 
 Q0 needs nothing further. The plan below is Q1's missing axis and Q2.
 
@@ -1991,3 +1992,45 @@ Total: **12 cells across two experiments, ≈4.5 GPU-hours**, against ~30 cells 
    observed distribution rather than the target.
 4. **Q1 may invalidate part of the v3 report.** If the text axis behaves
    differently, the published conclusion narrows. That is the experiment working.
+
+## 12.6 Q3 — inside the vision encoder (pre-registered 2026-09-29, not run)
+
+> Full pre-registration, mechanism facts, stage gates and the exact commands live in
+> [`experiments/qwen3vl8b/q3_vit_graph/PLAN.md`](experiments/qwen3vl8b/q3_vit_graph/PLAN.md) and
+> [`RUNBOOK.md`](experiments/qwen3vl8b/q3_vit_graph/RUNBOOK.md). Branch `exp/q3-vit-graph`.
+> This section is the pointer; it gets a dated outcome paragraph after the run, nothing else.
+
+**Why.** §12.1 attributes the image's 23.6 ms at N=208 to "preprocessing and vision-encoder time
+that no CUDA graph can touch". That was established for the **LM** graph only. SGLang ships a
+**ViT CUDA graph** for Qwen3-VL (`SGLANG_VIT_ENABLE_CUDA_GRAPH=1`, since 2025-12) that this lab has
+never measured. Read from source: one graph per exact `(patch count, cu_seqlens)` key, no bucketing,
+lazy capture, never evicted, requires the fa3/fa4/triton vision attention backend, and the runner
+logs nothing — so engagement needs instrumentation.
+
+**Hypotheses (numbers fixed before the run).**
+- **H1 (primary).** The TTFT gain from the ViT graph equals the *eager* encoder's un-overlapped CPU
+  time minus a 1.0 ms residual, read from an eager-mode trace alone; pass if within
+  max(1 ms, 25 %) on ≥ 5 of 6 image sizes and the text control stays inside the 3.6 % floor. This is
+  IMG-R's surviving "launch overhead not hidden behind GPU execution" mechanism, tested with a
+  trace-derived prediction on a second, structurally different stage.
+- **H2.** At 256² the encoder call is ≥ 40 % of the image's TTFT and ≥ 60 % of it is un-overlapped
+  launch time (recoverable); from 720p up it is compute-dominated. The client-side remainder
+  (HTTP, base64/PNG decode, processor, transport) is reported separately and flagged as a
+  random-PNG benchmark artifact where it is one.
+- **H3.** Under resolutions drawn uniformly from 256² to 720p the exact-shape key gives ≈ 25 % hits
+  and a worse mean TTFT than eager, while repeated shapes still gain what H1 predicts.
+
+**Design.** Node stack (`setup_node.sh` @ `89e1316eae`), Qwen3-VL-8B @ `0c351dd`, arms `off`/`on`
+differing in the one env var; LM prefill graph explicitly disabled on both, `cuda_ipc`, `fa3`,
+every cache off, `--attention-backend flashinfer` as v3. Seven workloads: text control plus 256²,
+360p, 512², 640², 720p, 1080p (v3's IMG-R generator byte-for-byte). Parity first; a pilot with
+profiler traces sets the H1 predictions and gate G1 (max predicted gain ≥ 3 ms) before any sweep;
+sweep in A/B/B/A blocks of 200 prompts, one server per cell, Q1's paired-spread gate; a mixed-
+resolution run for H3. Engagement via a measurement-only patch (`VIT_CG` / `VIT_TIMING` lines,
+never upstreamed, same rule as manifest §7). Budget ≈ 3.3 GPU-hours, hard cap 6 h, results synced
+to the Mac every two minutes.
+
+**Scope.** A mechanism study with an upper bound (c=1, fixed shape) on one model and one GPU class.
+Not a deployment claim. The publishable version additionally needs the same predictor on the LM
+stage (PR #33726's branch), a second model (Qwen2.5-VL-7B shares the runner), a second GPU class,
+hit rates on a real resolution distribution, and a bucketed-ViT-graph prototype.
