@@ -3,7 +3,7 @@
 > **v2 source of truth.** States the current mainline, the v2 roadmap, and the
 > audited outcome of the Qwen3-VL PCG capture-stream investigation.
 > The full v1 (Phase 0–5) plan is archived at
-> `experiments/qwen3vl8b/v1_archive_plan.md`.
+> `experiments/qwen3vl8b/v1/v1_archive_plan.md`.
 > Experiment: `qwen3vl8b` · `Qwen/Qwen3-VL-8B-Instruct` @ `0c351dd` · single H200 ·
 > TP=1 · bf16 · greedy.
 
@@ -45,7 +45,7 @@
 
 - **Phase 1 four-case ratios** (4.89× / 3.20× / 1.32× / 1.33×) and
   **Phase 2 Case C W500** → KAPI-confounded exploratory provenance only
-  (see `experiments/qwen3vl8b/methodology_correction.md`).
+  (see `experiments/qwen3vl8b/v1/methodology_correction.md`).
 - **`--disable-overlap-schedule`** → ablation only, not the production-default
   headline baseline. (v2 #2 fixed this: the headline is now SGLang default
   overlap-ON.)

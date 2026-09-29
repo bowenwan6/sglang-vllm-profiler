@@ -122,12 +122,12 @@ Every data directory has one `qwen3vl8b/` subtree (the single experiment):
 |---|---|
 | `experiments/qwen3vl8b/` | per-phase research artifacts: `phase0/`…`phase4/` (summaries, `raw/`, `metadata/`, `scripts/`), `env_snapshot.md`, `README.md`, `phase3/caseB_trace_issue.md` |
 | `datasets/qwen3vl8b/` | canonical autobench JSONL (`caseA..D.jsonl`) — never regenerate mid-project |
-| `traces/qwen3vl8b/` | raw torch-profiler traces (**Git LFS**): per case `sglang_{mapping,formal}/` (DECODE), `sglang_extend_{mapping,formal}/` (EXTEND), `vllm/{prefill_like,decode_like}/` |
-| `analysis/qwen3vl8b/` | triage outputs: per-case `{extend,decode}_triage.md`, `breakdown.md`, `vllm_crosscheck.md`, `preliminary_observations.md`; global `hypotheses.md`, `ranked_recommendations.md`; `category_regex.md` |
-| `reports/qwen3vl8b/` | human-facing reports: `01_current_status_report.md`, `03_profiling_analysis.md` |
-| `logs/qwen3vl8b/` | infrastructure side-effects (server stderr, kernel-API trails) — consult on failure only |
+| `experiments/qwen3vl8b/v1/traces/` | raw torch-profiler traces (**Git LFS**): per case `sglang_{mapping,formal}/` (DECODE), `sglang_extend_{mapping,formal}/` (EXTEND), `vllm/{prefill_like,decode_like}/` |
+| `experiments/qwen3vl8b/v1/analysis/` | triage outputs: per-case `{extend,decode}_triage.md`, `breakdown.md`, `vllm_crosscheck.md`, `preliminary_observations.md`; global `hypotheses.md`, `ranked_recommendations.md`; `category_regex.md` |
+| `experiments/qwen3vl8b/v1/reports/` | human-facing reports: `01_current_status_report.md`, `03_profiling_analysis.md` |
+| `experiments/qwen3vl8b/v1/logs/` | infrastructure side-effects (server stderr, kernel-API trails) — consult on failure only |
 | `configs/qwen3vl8b/` | reserved for Phase 5 sweep configs |
-| `plan.md` | **active v2 source of truth** (short; current mainline + Round 2 roadmap). Full v1 plan archived at `experiments/qwen3vl8b/v1_archive_plan.md` |
+| `plan.md` | **active v2 source of truth** (short; current mainline + Round 2 roadmap). Full v1 plan archived at `experiments/qwen3vl8b/v1/v1_archive_plan.md` |
 | `experiments/qwen3vl8b/v2/` | Round 2 (v2) experiments: `caseAC_rebaseline/` (#2, ✅ complete) and `image_text_benchmarks/` (#4, ⚠️ partial — the active priority) |
 | `experiments/qwen3vl8b/v3_issue4/` | Round 3 (v3) — the live #4 bracket: `manifest.md` (frozen stack), `progress.md` (step-by-step log with Accepted/solvable/Fail status), `scripts/` (runner, engagement verifier, parity check, report generator), `pcg_eager_fallback_finding.md` (drafted for a separate upstream issue) |
 | `experiments/qwen35_4b/` | **Qwen3.5-4B correctness sub-track — concluded.** DeepStack verdict `NOT_APPLICABLE_QWEN35`; GDN verdict `PASS_BCG_GDN_NOTABLE_GAP` (`gdn/final_report.md`). Unrelated to the Qwen3-VL-8B PCG capture-stream sub-track under `experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/`. |
@@ -135,21 +135,21 @@ Every data directory has one `qwen3vl8b/` subtree (the single experiment):
 
 ## How To Read This Repo
 
-0. **`plan.md`** — active v2 mainline + Round 2 roadmap (start here for *current* direction); v1 detail in `experiments/qwen3vl8b/v1_archive_plan.md`.
-1. **`reports/qwen3vl8b/01_current_status_report.md`** — the narrative status + key findings (v1).
-2. **`reports/qwen3vl8b/03_profiling_analysis.md`** — detailed Phase 4 per-case triage analysis.
-3. **`analysis/qwen3vl8b/hypotheses.md`** — structured hypotheses (H1–H4) with evidence + confidence.
-4. **`analysis/qwen3vl8b/ranked_recommendations.md`** — what to validate first, and why.
+0. **`plan.md`** — active v2 mainline + Round 2 roadmap (start here for *current* direction); v1 detail in `experiments/qwen3vl8b/v1/v1_archive_plan.md`.
+1. **`experiments/qwen3vl8b/v1/reports/01_current_status_report.md`** — the narrative status + key findings (v1).
+2. **`experiments/qwen3vl8b/v1/reports/03_profiling_analysis.md`** — detailed Phase 4 per-case triage analysis.
+3. **`experiments/qwen3vl8b/v1/analysis/hypotheses.md`** — structured hypotheses (H1–H4) with evidence + confidence.
+4. **`experiments/qwen3vl8b/v1/analysis/ranked_recommendations.md`** — what to validate first, and why.
 5. **Phase summaries** — `experiments/qwen3vl8b/phase{1,2,3}/summary.md` for baseline / shaping / trace inventory.
 6. **Raw artifacts** — only when auditing (see Artifact Policy).
 
 ## Artifact Policy
 
 - **Raw provenance is not edited.** Benchmark raw JSON (`experiments/qwen3vl8b/*/raw/`), trace metadata
-  JSON (`experiments/qwen3vl8b/phase3/metadata/`), and triage tool output (`analysis/qwen3vl8b/**/*_raw.txt`)
+  JSON (`experiments/qwen3vl8b/v1/phase3/metadata/`), and triage tool output (`experiments/qwen3vl8b/v1/analysis/**/*_raw.txt`)
   are append-only records of what was collected; their embedded paths/timestamps are historical and
   should not be hand-edited.
-- **Traces are Git LFS.** Everything under `traces/qwen3vl8b/` (`*.gz`) and the kernel-API `*.log`
+- **Traces are Git LFS.** Everything under `experiments/qwen3vl8b/v1/traces/` (`*.gz`) and the kernel-API `*.log`
   files are stored via Git LFS.
 - **Processed/deliverable docs** (summaries, `analysis/**` markdown, reports, `plan.md`, this README)
   are hand-edited and reviewed.
@@ -159,7 +159,7 @@ Every data directory has one `qwen3vl8b/` subtree (the single experiment):
 1. **Measurement hygiene (KAPI logging).** Early exploratory SGLang runs enabled
    `SGLANG_KERNEL_API_LOGLEVEL=1`, which inflates latency; the early four-workload ratios are kept only
    as instrumentation-confounded exploratory provenance, not clean evidence. See
-   [`experiments/qwen3vl8b/methodology_correction.md`](experiments/qwen3vl8b/methodology_correction.md).
+   [`experiments/qwen3vl8b/v1/methodology_correction.md`](experiments/qwen3vl8b/v1/methodology_correction.md).
 2. **Case C warmup/variance.** A W500 side investigation surfaced batched warmup/variance sensitivity
    and motivated the clean interleaved rerun; its older cross-framework number is not the final result —
    the clean Case C conclusion (no material gap / no Case-A-like benefit) stands.
