@@ -2008,27 +2008,32 @@ lazy capture, never evicted, requires the fa3/fa4/triton vision attention backen
 logs nothing — so engagement needs instrumentation.
 
 **Hypotheses (numbers fixed before the run).**
-- **H1 (primary).** The TTFT gain from the ViT graph equals the *eager* encoder's un-overlapped CPU
-  time minus a 1.0 ms residual, read from an eager-mode trace alone; pass if within
-  max(1 ms, 25 %) on ≥ 5 of 6 image sizes and the text control stays inside the 3.6 % floor. This is
+- **H1 (primary, amended 09-29).** The TTFT gain from the ViT graph is predicted from an eager profile
+  alone: `Δ̂ = U* − r − ΔG_rot + overlap`, with U* the unprofiled encoder CPU wall minus its GPU busy
+  time, r = 1.0 ms, ΔG_rot the unfused-rotary GPU cost the graph arm carries, and the overlap the
+  graph arm gains with the LM launches; pass per size within max(1 ms, 25 %, 2·SE), sizes with
+  2·SE > |Δ̂| + 1 ms are non-informative; supported if ≥ 4 informative sizes with ≤ 1 miss and the
+  text control stays inside the 3.6 % floor. This is
   IMG-R's surviving "launch overhead not hidden behind GPU execution" mechanism, tested with a
   trace-derived prediction on a second, structurally different stage.
 - **H2.** At 256² the encoder call is ≥ 40 % of the image's TTFT and ≥ 60 % of it is un-overlapped
   launch time (recoverable); from 720p up it is compute-dominated. The client-side remainder
   (HTTP, base64/PNG decode, processor, transport) is reported separately and flagged as a
   random-PNG benchmark artifact where it is one.
-- **H3.** Under resolutions drawn uniformly from 256² to 720p the exact-shape key gives ≈ 25 % hits
-  and a worse mean TTFT than eager, while repeated shapes still gain what H1 predicts.
+- **H3 (amended 09-29).** Under heights 256–720 and widths 256–1280 drawn uniformly, the key (the
+  patch count, 267 possible values) gives ≈ 165 captures in 300 requests, a hit rate ≈ 45 %, and a
+  worse mean TTFT than eager, while repeated shapes still gain what H1 predicts.
 
 **Design.** Node stack (`setup_node.sh` @ `89e1316eae`), Qwen3-VL-8B @ `0c351dd`, arms `off`/`on`
 differing in the one env var; LM prefill graph explicitly disabled on both, `cuda_ipc`, `fa3`,
 every cache off, `--attention-backend flashinfer` as v3. Seven workloads: text control plus 256²,
 360p, 512², 640², 720p, 1080p (v3's IMG-R generator byte-for-byte). Parity first; a pilot with
 profiler traces sets the H1 predictions and gate G1 (max predicted gain ≥ 3 ms) before any sweep;
-sweep in A/B/B/A blocks of 200 prompts, one server per cell, Q1's paired-spread gate; a mixed-
-resolution run for H3. Engagement via a measurement-only patch (`VIT_CG` / `VIT_TIMING` lines,
-never upstreamed, same rule as manifest §7). Budget ≈ 3.3 GPU-hours, hard cap 6 h, results synced
-to the Mac every two minutes.
+sweep in A/B/B/A blocks of 200 prompts and 16 output tokens, 3 blocks per size (4 for 720p and
+1080p), one server per cell, Q1's paired-spread gate; a mixed-resolution run for H3. Engagement via a measurement-only patch (`VIT_CG` / `VIT_TIMING` lines,
+never upstreamed, same rule as manifest §7). Budget ≈ 3.5 GPU-hours, hard cap 6 h, results synced
+to the Mac every two minutes. Amended 2026-09-29 after a two-window review, before any GPU run
+(amendment log in PLAN.md).
 
 **Scope.** A mechanism study with an upper bound (c=1, fixed shape) on one model and one GPU class.
 Not a deployment claim. The publishable version additionally needs the same predictor on the LM
