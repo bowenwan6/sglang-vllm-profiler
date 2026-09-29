@@ -1,0 +1,5 @@
+# per-request jsonl, server logs and profiler traces: backed up by rsync, never committed
+results/raw/
+*.trace.json
+*.trace.json.gz
+__pycache__/
