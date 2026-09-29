@@ -1,0 +1,172 @@
+{
+  "timestamp_utc": "2026-09-29T14:00:06+00:00",
+  "params": {
+    "n_warm": 5,
+    "n_profile": 5,
+    "n_measure": 30,
+    "replay_residual_ms": 1.0,
+    "workloads": [
+      "R0_text",
+      "R1_256",
+      "R2_360p",
+      "R3_512",
+      "R4_640",
+      "R5_720p",
+      "R6_1080p"
+    ],
+    "output_len": 16,
+    "servers": [
+      "off",
+      "on",
+      "off_rot",
+      "off_notiming"
+    ]
+  },
+  "arms": {
+    "off": {
+      "arm": "off",
+      "vit_timing": true,
+      "purpose": "eager: W_v from VIT_TIMING, G_v from the trace, TTFT",
+      "startup_s": 61.0,
+      "resolved": {
+        "mm_feature_transport": "cuda_ipc",
+        "mm_attention_backend": "fa3",
+        "cuda_graph_backend_prefill": "disabled",
+        "attention_backend": "flashinfer",
+        "mem_fraction_static": 0.75,
+        "skip_server_warmup": true,
+        "enable_precise_embedding_interpolation": true,
+        "mm_preprocess_cache_size_mb": 0,
+        "disable_radix_cache": true,
+        "chunked_prefill_size": 8192,
+        "prefill_graph_backend_resolved": "disabled"
+      }
+    }
+  },
+  "cells": {
+    "R0_text": {
+      "off": {
+        "bench": {
+          "status": "OK",
+          "completed": 30,
+          "failures": 0,
+          "failed_idx": [],
+          "ttft_ms": [
+            29.62,
+            30.486,
+            30.778,
+            31.01,
+            30.797,
+            30.718,
+            30.899,
+            30.807,
+            30.984,
+            30.651,
+            30.919,
+            30.863,
+            30.8,
+            30.824,
+            30.983,
+            30.831,
+            36.805,
+            30.738,
+            30.725,
+            34.17,
+            30.838,
+            30.819,
+            30.698,
+            30.681,
+            33.714,
+            30.632,
+            30.707,
+            30.659,
+            30.883,
+            30.422
+          ],
+          "ttft_p50": 30.803,
+          "ttft_mean": 31.149,
+          "ttft_p90": 31.28,
+          "ttft_p99": 36.041,
+          "tpot_p50": 5.1558437369142975,
+          "e2e_p50": 108.15793392248452,
+          "total_input_vision_tokens": 0,
+          "total_input_text_tokens": 3840,
+          "elapsed_s": 19.2
+        },
+        "timings": {
+          "n": 0
+        },
+        "req_times": {
+          "n": 31,
+          "queue_ms_p50": 0.41,
+          "forward_ms_p50": 102.57
+        },
+        "trace_path": "/data/bowenwan6/home/sgl/traces/q3/pilot/off/R0_text/1790690486.4379473-TP-0.trace.json.gz",
+        "trace": {
+          "Q3_VIT_FORWARD": {
+            "n": 0
+          },
+          "Q3_STEP_EXTEND": {
+            "n": 6,
+            "cpu_wall_ms_p50": 25.818,
+            "gpu_busy_ms_p50": 6.343,
+            "gpu_busy_window_ms_p50": 6.377,
+            "gpu_span_ms_p50": 25.919,
+            "crit_ms_p50": 26.061,
+            "gpu_tail_ms_p50": 0.24,
+            "n_kernels_p50": 549.0,
+            "n_launches_p50": 549.0,
+            "n_graph_launches_p50": 0.0,
+            "unoverlapped_ms_p50": 19.467,
+            "match_methods": [
+              "correlation"
+            ],
+            "kernels_ms_per_window": {
+              "nvjet_sm90_tst_192x144_64x5_2x1_v_bz_coopB_TNT": 2.007,
+              "nvjet_sm90_tst_128x72_64x8_1x2_h_bz_splitK_TNT": 1.135,
+              "nvjet_sm90_tst_64x136_64x8_4x1_v_bz_TNT": 0.666,
+              "nvjet_sm90_tst_64x72_64x12_2x1_v_bz_TNT": 0.517,
+              "void flashinfer::PersistentVariableLengthMergeStatesKernel<8u, 16u, 8u, 4u, __nv_bfloat16, __nv_bfloat16, int>(__nv_bflo": 0.469,
+              "void flashinfer::BatchPrefillWithPagedKVCacheKernel<flashinfer::KernelTraits<(flashinfer::MaskMode)1, 128u, 2u, 4u, 8u, ": 0.357,
+              "nvjet_sm90_tst_384x8_64x4_2x1_v_bz_TNT": 0.301,
+              "kernel_cutlass_kernel_flashinfernormkernelsfused_add_rmsnormFusedAddRMSNormKernel_object_at__tensorptrbf16gmemalign128oi": 0.227,
+              "void cublasLt::splitKreduce_kernel<32, 16, int, float, __nv_bfloat16, float, __nv_bfloat16, false, float, __nv_bfloat16,": 0.146,
+              "void sglang::act_and_mul_kernel<__nv_bfloat16, (sglang::ActivationKind)0, true, false, false, false>(sglang::ActivationP": 0.112,
+              "void sglang::fused_qknorm_warp<128l, true, __nv_bfloat16>(sglang::QKNormParams)": 0.111,
+              "void at::native::elementwise_kernel<128, 4, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::T": 0.108,
+              "_triton_mrope_forward_fused": 0.089,
+              "void sglang::store_kvcache_kernel<2048l, 2048l, 128u, true, long>(sglang::StoreKVCacheParams)": 0.052,
+              "void at::native::vectorized_elementwise_kernel<8, at::native::FillFunctor<c10::BFloat16>, std::array<char*, 1ul> >(int, ": 0.044,
+              "void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}:": 0.005,
+              "void at::native::index_elementwise_kernel<128, 4, at::native::gpu_index_kernel<at::native::index_kernel_impl<at::native:": 0.003,
+              "kernel_cutlass_kernel_flashinfernormkernelsrmsnormRMSNormKernel_object_at__tensorptrbf16gmemalign128oi64409640961_tensor": 0.002,
+              "void at::native::vectorized_gather_kernel<16, long>(char*, char*, long*, int, long, long, long, long, bool)": 0.002,
+              "void at_cuda_detail::cub::detail::scan::DeviceScanKernel<at_cuda_detail::cub::detail::scan::policy_hub<long, long, long,": 0.002
+            },
+            "rotary_like_ms_per_window": 0.089
+          },
+          "Q3_STEP_DECODE": {
+            "n": 0
+          }
+        },
+        "captures": [],
+        "stats_last": null,
+        "verify": {
+          "verdict": "VERIFIED",
+          "reasons": [],
+          "evidence": "no_graph_lines",
+          "captures": 0,
+          "calls": 0,
+          "prefill_batches": 43
+        },
+        "gpu_used_mib": 110744
+      }
+    },
+    "R1_256": {},
+    "R2_360p": {},
+    "R3_512": {},
+    "R4_640": {},
+    "R5_720p": {},
+    "R6_1080p": {}
+  }
+}
