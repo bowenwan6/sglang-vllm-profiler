@@ -344,9 +344,12 @@ un-overlapped time clamped at zero and **no overlap term**.
 - 1080p: the pre-registered formula has no floor at U* = 0 and produced a meaningless −26.8 ms; the graph arm
   is **slower by 7.4 ± 0.5 ms (+4.1 %)**, outside the 3.6 % floor — a real cost, explained by ΔG_rot = 8.3 ms:
   the graph path's unfused rotary adds GPU work that grows with the patch count.
-- The rule's verdict is therefore NOT SUPPORTED (two misses; 1080p outside the floor). The post-hoc model
-  above fits all six sizes to within 1.7 ms without the overlap term; it is a hypothesis for the next run,
-  not a result of this one.
+- The rule's verdict is therefore NOT SUPPORTED (two misses; 1080p outside the floor). The residual column
+  shows where the truth sits: the clamped no-overlap model under-predicts 360p–640p by 2–4 ms while the
+  pre-registered point (full overlap = G_v) over-predicts them by 1.3–1.9 ms, so the graph arm recovers a
+  *partial* overlap with the LM launches (roughly half to two thirds of G_v at those sizes, none at 720p).
+  At 1080p the clamp at U* = 0 is what the formula lacked (−9.3 predicted vs −7.4 measured). A predictor
+  with a fitted overlap fraction is a hypothesis for the next run, not a result of this one.
 
 **H2 — NOT SUPPORTED as written; two of three conditions hold.** At 256² the encoder's critical path is 31 %
 of TTFT (the criterion said ≥ 40 %), but **88 %** of the encoder call is un-overlapped launch time (≥ 60 %
