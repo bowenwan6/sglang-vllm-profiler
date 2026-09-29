@@ -15,7 +15,7 @@
 Phase-gated profiling of SGLang against vLLM on **Qwen3-VL-8B-Instruct** to locate *where* SGLang's
 latency gap comes from — not a generic benchmark ranking.
 
-*Single H200 · TP=1 · bfloat16 · greedy · text-only path*
+*Single H200 · TP=1 · bfloat16 · greedy · text-only and image+text paths*
 
 </div>
 
@@ -30,7 +30,9 @@ This repo holds three tracks:
    optimization. Organised as a phase-gated pipeline (Phase 0 → 5): prove the two servers are
    comparable, establish a baseline, shape / de-noise the workloads, collect torch-profiler traces,
    triage them, and validate the top hypothesis. See §Directory Layout below and `plan.md` §1–§6.
-   **Text-only Case A/C is complete; the image+text arm (#4) is the active profiling priority.**
+   **Text-only Case A/C (#2) and the image+text arm (#4, round 3) are complete.** The next question,
+   whether a CUDA graph pays inside the vision encoder (Q3), is pre-registered on branch
+   [`exp/q3-vit-graph`](https://github.com/bowenwan6/sglang-vllm-profiler/tree/exp/q3-vit-graph/experiments/qwen3vl8b/q3_vit_graph).
 2. **`qwen35_4b`** — correctness-first sub-track, **concluded**. Two questions were asked and
    answered: the DeepStack gap on `Qwen/Qwen3.5-4B` is `NOT_APPLICABLE_QWEN35` (every shipped
    Qwen3.5 checkpoint has an empty DeepStack index list), and the GDN study returned
@@ -41,8 +43,8 @@ This repo holds three tracks:
 3. **`qwen3vl_bcg_deepstack_fix`** — spun out of #9. A real, live-fire correctness bug: a
    BCG-replayed Qwen3-VL image prefill dropped its DeepStack contribution. Fixed, validated
    `FAIL → PASS`, and upstreamed as
-   **[sgl-project/sglang#33726](https://github.com/sgl-project/sglang/pull/33726)** (open, approved,
-   mergeable). Current state:
+   **[sgl-project/sglang#33726](https://github.com/sgl-project/sglang/pull/33726)** (open and
+   approved; it needs current upstream `main` merged in before it can land). Current state:
    [`upstream_handoff.md`](experiments/qwen3vl_bcg_deepstack_fix/upstream_handoff.md).
 
 ## Main Findings
@@ -79,6 +81,9 @@ This repo holds three tracks:
 
 > Attention backends are **not** aligned (SGLang FlashInfer vs vLLM FlashAttention v3) — a *measured*
 > variable, so any attention-kernel-level conclusion carries **confidence ceiling M**.
+>
+> This is the round-1 stack. Round 3 pins its own in
+> [`experiments/qwen3vl8b/v3_issue4/manifest.md`](experiments/qwen3vl8b/v3_issue4/manifest.md).
 
 ## Workloads
 
@@ -103,56 +108,66 @@ Clean validation focuses on **Case A** (the actionable gap) and **Case C** (the 
 | 5 — Validation | clean Case A/C validation | ✅ Complete for scoped A/C clean validation |
 | v2 #2 — Default-overlap rebaseline | production-default overlap-ON Case A/C baseline + PCG re-test | ✅ Complete / PASS (`experiments/qwen3vl8b/v2/caseAC_rebaseline/results/`) |
 
-### Round-2 track status (as of 2026-08-29)
+### Track status (as of 2026-09-29)
 
 | Track | Issue | Status |
 |---|---|---|
 | Default-overlap rebaseline | [#2](https://github.com/bowenwan6/sglang-vllm-profiler/issues/2) | ✅ Complete / PASS — closed |
 | Qwen3.5 DeepStack question | [#9](https://github.com/bowenwan6/sglang-vllm-profiler/issues/9) | ✅ **Closed 2026-09-03** — verdict `NOT_APPLICABLE_QWEN35` ([conclusion](experiments/qwen35_4b/issue9_conclusion.md)) |
-| Qwen3-VL BCG DeepStack fix | (spun out of #9) | ✅ Fixed + validated; upstream PR [#33726](https://github.com/sgl-project/sglang/pull/33726) open, approved, mergeable |
+| Qwen3-VL BCG DeepStack fix | (spun out of #9) | ✅ Fixed + validated; upstream PR [#33726](https://github.com/sgl-project/sglang/pull/33726) open and approved. It needs current upstream `main` merged in (the last check showed a conflict in `prefill_cuda_graph_runner.py`), then a fresh smoke run |
 | Qwen3-VL image+text + CUDA IPC | [#4](https://github.com/bowenwan6/sglang-vllm-profiler/issues/4) | ✅ **Measured and reported** — [`issue4_v3_report.pdf`](experiments/qwen3vl8b/v3_issue4/issue4_v3_report.pdf) (7 pp). **Transport `cuda_ipc` is worth −28.2% of TTFT** and is not the default. The prefill graph pays **−16.3% at 256×256 and −14.0% at 360p**, nothing measurable at 720p+; what it recovers in *ms* is set by prefill token count almost regardless of composition, the *percentage* by composition. On a mixed stream the net stays positive to a **43–59% image share** on TTFT and further on e2e. Against a **real 1M-request production size distribution**, though, only **15.2% of requests** land where a material win was measured ([`workload_realism.md`](experiments/qwen3vl8b/v3_issue4/workload_realism.md)) — the deliverable is the curve, not a threshold. SGLang is **36.9% faster than vLLM** on the image path, reversing #2's text-only result. |
 | Qwen3.5 SGLang-vs-vLLM transfer | [#3](https://github.com/bowenwan6/sglang-vllm-profiler/issues/3) | ❌ **Not run.** The DeepStack and GDN studies answer different questions. |
 | Selective / default-on graph policy | [#5](https://github.com/bowenwan6/sglang-vllm-profiler/issues/5) | 🟡 **Partly answered by #4 v3.** The backend sweep exists: BCG pays below ~250 visual tokens and is neutral above; PCG is **unmeasurable on current upstream** (92% eager fallback, [`pcg_eager_fallback_finding.md`](experiments/qwen3vl8b/v3_issue4/pcg_eager_fallback_finding.md)). What #5 still needs is the concurrency axis. |
+| ViT CUDA graph (Q3) | — | 🟡 **Pre-registered 2026-09-29** on branch [`exp/q3-vit-graph`](https://github.com/bowenwan6/sglang-vllm-profiler/tree/exp/q3-vit-graph/experiments/qwen3vl8b/q3_vit_graph): does capturing the vision encoder in a CUDA graph pay, and can the gain be predicted from an eager trace alone? |
 
 ## Directory Layout
 
-Every data directory has one `qwen3vl8b/` subtree (the single experiment):
-
 | Path | Contents |
 |---|---|
-| `experiments/qwen3vl8b/` | per-phase research artifacts: `phase0/`…`phase4/` (summaries, `raw/`, `metadata/`, `scripts/`), `env_snapshot.md`, `README.md`, `phase3/caseB_trace_issue.md` |
-| `datasets/qwen3vl8b/` | canonical autobench JSONL (`caseA..D.jsonl`) — never regenerate mid-project |
-| `experiments/qwen3vl8b/v1/traces/` | raw torch-profiler traces (**Git LFS**): per case `sglang_{mapping,formal}/` (DECODE), `sglang_extend_{mapping,formal}/` (EXTEND), `vllm/{prefill_like,decode_like}/` |
-| `experiments/qwen3vl8b/v1/analysis/` | triage outputs: per-case `{extend,decode}_triage.md`, `breakdown.md`, `vllm_crosscheck.md`, `preliminary_observations.md`; global `hypotheses.md`, `ranked_recommendations.md`; `category_regex.md` |
-| `experiments/qwen3vl8b/v1/reports/` | human-facing reports: `01_current_status_report.md`, `03_profiling_analysis.md` |
-| `experiments/qwen3vl8b/v1/logs/` | infrastructure side-effects (server stderr, kernel-API trails) — consult on failure only |
-| `configs/qwen3vl8b/` | reserved for Phase 5 sweep configs |
-| `plan.md` | **active v2 source of truth** (short; current mainline + Round 2 roadmap). Full v1 plan archived at `experiments/qwen3vl8b/v1/v1_archive_plan.md` |
-| `experiments/qwen3vl8b/v2/` | Round 2 (v2) experiments: `caseAC_rebaseline/` (#2, ✅ complete) and `image_text_benchmarks/` (#4, ⚠️ partial — the active priority) |
-| `experiments/qwen3vl8b/v3_issue4/` | Round 3 (v3) — the live #4 bracket: `manifest.md` (frozen stack), `progress.md` (step-by-step log with Accepted/solvable/Fail status), `scripts/` (runner, engagement verifier, parity check, report generator), `pcg_eager_fallback_finding.md` (drafted for a separate upstream issue) |
-| `experiments/qwen35_4b/` | **Qwen3.5-4B correctness sub-track — concluded.** DeepStack verdict `NOT_APPLICABLE_QWEN35`; GDN verdict `PASS_BCG_GDN_NOTABLE_GAP` (`gdn/final_report.md`). Unrelated to the Qwen3-VL-8B PCG capture-stream sub-track under `experiments/qwen3vl8b/v2/image_text_benchmarks/debug_pcg_capture_stream/`. |
-| `experiments/qwen3vl_bcg_deepstack_fix/` | **Qwen3-VL BCG DeepStack replay-slot fix** — upstream PR [#33726](https://github.com/sgl-project/sglang/pull/33726). Start at [`upstream_handoff.md`](experiments/qwen3vl_bcg_deepstack_fix/upstream_handoff.md); `results/m*/` hold the milestone evidence (M10 = post-merge smoke). The two `*submission*.md` files are superseded historical snapshots. |
+| `plan.md` | **Research source of truth**: current mainline, roadmap and the record of every sub-track (§1–§12). |
+| `datasets/qwen3vl8b/` | Canonical text workloads `caseA..D.jsonl`; their sha256 is pinned in each run's metadata. Never regenerated mid-project. |
+| `tools/radix/setup_node.sh` | Rebuilds the profiling environment on an SGLang community (RADIX) GPU node. |
+| `experiments/qwen3vl8b/v1/` | **Round 1 — Phases 0–5.** `phase0/`…`phase5/` (summaries, scripts, run metadata), `analysis/` (Phase 4 triage, Phase 5 launch-gap analysis), `traces/` (Phase 3 torch-profiler traces, Git LFS), `logs/` (server and orchestrator logs, Git LFS), `reports/` (v1 narrative reports), `v1_archive_plan.md` (the full v1 plan). |
+| `experiments/qwen3vl8b/v2/` | **Round 2.** `caseAC_rebaseline/` (#2, production-default rebaseline, ✅) and `image_text_benchmarks/` (first #4 attempt, superseded by round 3; its `debug_pcg_capture_stream/root_cause/` holds the PCG capture-stream root cause, `plan.md` §4). |
+| `experiments/qwen3vl8b/v3_issue4/` | **Round 3 — #4 image+text + CUDA IPC (✅ 2026-09-06).** `manifest.md` (frozen stack), `progress.md` (step log), `issue4_v3_report.pdf`, `imgA_report.md`, `imgR_report.md`, `q1_report.md`, `q2_report.md`, `workload_realism.md`, `pcg_eager_fallback_finding.md`, `figures/`, `scripts/`. |
+| `experiments/qwen35_4b/` | **Qwen3.5-4B correctness sub-track — concluded.** DeepStack verdict `NOT_APPLICABLE_QWEN35` ([`issue9_conclusion.md`](experiments/qwen35_4b/issue9_conclusion.md)); GDN verdict `PASS_BCG_GDN_NOTABLE_GAP` ([`gdn/final_report.md`](experiments/qwen35_4b/gdn/final_report.md)). |
+| `experiments/qwen3vl_bcg_deepstack_fix/` | **Qwen3-VL BCG DeepStack replay-slot fix** — upstream PR [#33726](https://github.com/sgl-project/sglang/pull/33726). Start at [`upstream_handoff.md`](experiments/qwen3vl_bcg_deepstack_fix/upstream_handoff.md); `results/` holds the r2 baseline and the m* milestone evidence (m10 = post-merge smoke). The two `*submission*.md` files are superseded snapshots. |
 
 ## How To Read This Repo
 
-0. **`plan.md`** — active v2 mainline + Round 2 roadmap (start here for *current* direction); v1 detail in `experiments/qwen3vl8b/v1/v1_archive_plan.md`.
-1. **`experiments/qwen3vl8b/v1/reports/01_current_status_report.md`** — the narrative status + key findings (v1).
-2. **`experiments/qwen3vl8b/v1/reports/03_profiling_analysis.md`** — detailed Phase 4 per-case triage analysis.
-3. **`experiments/qwen3vl8b/v1/analysis/hypotheses.md`** — structured hypotheses (H1–H4) with evidence + confidence.
-4. **`experiments/qwen3vl8b/v1/analysis/ranked_recommendations.md`** — what to validate first, and why.
-5. **Phase summaries** — `experiments/qwen3vl8b/phase{1,2,3}/summary.md` for baseline / shaping / trace inventory.
-6. **Raw artifacts** — only when auditing (see Artifact Policy).
+0. **`plan.md`** — current direction and the record of every track. Start here.
+1. **Main Findings and Track status above** — the one-page summary.
+2. **[`experiments/qwen3vl8b/v3_issue4/issue4_v3_report.pdf`](experiments/qwen3vl8b/v3_issue4/issue4_v3_report.pdf)**
+   — the image+text (#4) report; `q1_report.md`, `q2_report.md` and `workload_realism.md` next to it
+   carry the follow-on questions.
+3. **[`experiments/qwen3vl8b/v2/caseAC_rebaseline/`](experiments/qwen3vl8b/v2/caseAC_rebaseline/)** — the
+   production-default text-only numbers behind Main Findings 1, 3 and 4.
+4. **Round 1** — [`v1/reports/03_profiling_analysis.md`](experiments/qwen3vl8b/v1/reports/03_profiling_analysis.md)
+   (Phase 4 triage), [`v1/analysis/hypotheses.md`](experiments/qwen3vl8b/v1/analysis/hypotheses.md) and
+   [`ranked_recommendations.md`](experiments/qwen3vl8b/v1/analysis/ranked_recommendations.md), and the
+   phase summaries `experiments/qwen3vl8b/v1/phase{1,2,3}/summary.md` and `v1/phase5/*/summary.md`.
+   [`v1/reports/01_current_status_report.md`](experiments/qwen3vl8b/v1/reports/01_current_status_report.md)
+   is the v1-era status report (overlap-OFF baseline).
+5. **Raw artifacts** — only when auditing (see Artifact Policy).
 
 ## Artifact Policy
 
-- **Raw provenance is not edited.** Benchmark raw JSON (`experiments/qwen3vl8b/*/raw/`), trace metadata
-  JSON (`experiments/qwen3vl8b/v1/phase3/metadata/`), and triage tool output (`experiments/qwen3vl8b/v1/analysis/**/*_raw.txt`)
-  are append-only records of what was collected; their embedded paths/timestamps are historical and
-  should not be hand-edited.
-- **Traces are Git LFS.** Everything under `experiments/qwen3vl8b/v1/traces/` (`*.gz`) and the kernel-API `*.log`
-  files are stored via Git LFS.
-- **Processed/deliverable docs** (summaries, `analysis/**` markdown, reports, `plan.md`, this README)
-  are hand-edited and reviewed.
+- **Raw provenance is not edited.** Run metadata (`experiments/qwen3vl8b/v1/phase*/raw/*_meta.json`,
+  `v1/phase3/metadata/`) and triage tool output (`v1/analysis/**/*_raw.txt`) are append-only records;
+  their embedded paths and timestamps are historical and predate the 2026-09-29 move into `v1/`.
+- **Raw outputs stay out of git.** Per-request bench JSON, server logs and profiler dumps are not
+  committed (`**/raw/` is ignored); commit summaries and aggregate results instead.
+- **Removed from the tree on 2026-09-29, restorable from tag
+  [`archive/pre-cleanup-2026-09-29`](https://github.com/bowenwan6/sglang-vllm-profiler/tree/archive/pre-cleanup-2026-09-29):** round 1's per-request bench JSON (phases 1, 2 and 5; 146 files,
+  502 MiB) and about 1 GiB of kernel-API debug logs. The reported numbers live in the per-run
+  `summary.md` / `results.json` files, which stay. To restore, e.g., Phase 5's raw files (the tag uses the
+  pre-move paths):
+  ```bash
+  git archive archive/pre-cleanup-2026-09-29 experiments/qwen3vl8b/phase5 | tar -x -C /tmp/restore
+  ```
+- **Git LFS** stores `*.gz` (torch-profiler traces) and `*.log`.
+- **Processed and deliverable docs** (summaries, analysis markdown, reports, `plan.md`, this README) are
+  hand-edited and reviewed.
 
 ## Side Quests / Methodological Notes
 
@@ -169,26 +184,18 @@ Every data directory has one `qwen3vl8b/` subtree (the single experiment):
 
 ## Next Step
 
-The correctness detour is done: the Qwen3-VL BCG DeepStack bug is fixed and sitting in an approved,
-mergeable upstream PR. **The profiling mainline resumes at #4.** Full execution plan and acceptance
-gates in [`reports/2026-08-28_profiling_resumption_audit.md`](https://github.com/bowenwan6/sglang-vllm-profiler/blob/archive/pre-cleanup-2026-09-29/reports/2026-08-28_profiling_resumption_audit.md) (archived).
+- **Q3 — ViT CUDA graph:** pre-registered 2026-09-29 on branch
+  [`exp/q3-vit-graph`](https://github.com/bowenwan6/sglang-vllm-profiler/tree/exp/q3-vit-graph/experiments/qwen3vl8b/q3_vit_graph) (`plan.md` §12.6 on that branch); runs on an SGLang community GPU node.
+- **PR #33726:** merge current upstream `main` into the PR branch, re-run the dense and MoE smokes, and
+  report the result on the PR.
+- **#5 — graph-enablement policy:** #4 v3 supplied the backend sweep; the concurrency (load) axis is still
+  missing. Decide PCG vs BCG explicitly — **BCG must not silently replace the PCG arm** (different backends).
+- **#3 — the Qwen3.5 transfer check** (after a common environment pin): clean Case A/C, SGLang default vs
+  the supported graph lever vs a vLLM anchor. The old Qwen3-VL PCG lever may not be valid for Qwen3.5 —
+  its supported route is BCG unless a source audit proves otherwise.
+- **Tracker hygiene (no GPU):** post a refreshed checklist on #1 and re-scope #5.
 
-1. **#4 — finish IMG-A (active, next GPU work).** Only the `S0_ipc` arm ran. Pin a fresh environment
-   manifest, run a small current-upstream image+PCG smoke to see whether the capture-stream assertion
-   still reproduces, then complete the bracket `S0_ipc_repeat → V0_vllm → S0_noipc` even if PCG stays
-   excluded. **Do not start IMG-B/C** until IMG-A has drift, framework-anchor, and IPC controls.
-   Image+text conclusions stay separate from the text-only (#2) findings, and the **CUDA-IPC transport**
-   benefit stays separate from the **PCG** prefill-graph lever.
-2. **#3 — the real Qwen3.5 transfer check** (parallel, after a common environment pin): clean Case A/C,
-   SGLang default vs the supported graph lever vs a vLLM anchor. Note the old Qwen3-VL PCG lever may
-   not be valid for Qwen3.5 — its supported route is BCG unless a source audit proves otherwise.
-3. **#5 — graph-enablement policy** (after #4): build the backend × modality × load matrix, and decide
-   PCG vs BCG explicitly. **BCG must not silently replace the PCG arm** — different backends.
-4. **Tracker hygiene (no GPU):** ✅ #9 closed 2026-09-03 (`NOT_APPLICABLE_QWEN35`, write-up at
-   [`experiments/qwen35_4b/issue9_conclusion.md`](experiments/qwen35_4b/issue9_conclusion.md));
-   still to do — post a refreshed checklist on #1 and re-scope #5.
-
-> ⚠️ **Read [`plan.md` §3.5](plan.md) before running #4 or #5.** Upstream restructured the
+> ⚠️ **Read [`plan.md` §3.5](plan.md) before running graph experiments.** Upstream restructured the
 > CUDA-graph flags: `--enforce-piecewise-cuda-graph` is now a deprecated alias for
 > `--cuda-graph-backend-prefill=tc_piecewise`, **breakable (BCG) is the default prefill backend
 > on CUDA**, and PR #33726 adds Qwen3-VL to the breakable allowlist — so Qwen3-VL's default flips

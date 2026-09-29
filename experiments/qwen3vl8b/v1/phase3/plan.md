@@ -1,5 +1,9 @@
 # Phase 3 — Profiling & Trace Collection Plan
 
+> **Executed** — outcome in [`summary.md`](summary.md) and
+> [`extend_supplement_summary.md`](extend_supplement_summary.md). The status line below is the plan's
+> original pre-execution header.
+
 > **Status: PLAN ONLY — not executed.** Phase 3 collects traces; it produces **no** hypotheses
 > (that is Phase 4). Active run `qwen3vl8b`. Gate input: `../phase2/selected_cases.md`.
 

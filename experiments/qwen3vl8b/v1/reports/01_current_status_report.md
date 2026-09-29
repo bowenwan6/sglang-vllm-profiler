@@ -1,5 +1,9 @@
 # SGLang vs vLLM Profiling 当前状态报告
 
+> **历史报告（v1，最后更新 2026-05-26）。** 本文的数字来自 v1 的 `--disable-overlap-schedule` baseline。
+> 当前结论以 production-default（overlap-ON）的 v2 #2 重测为准：Case A TTFT SGLang **21.94 ms** →
+> 强制 PCG 后 **14.04 ms**，vLLM **13.12 ms**；见仓库根目录 `README.md` 的 Main Findings 与 `plan.md` §1。
+
 <aside>
 📌
 
@@ -254,7 +258,7 @@ Phase 4 最重要的结构性判断是：**最大 GPU kernel 不等于最大 gap
 3. **Case B trace limitation.** Case B 的 SGLang EXTEND trace 不可用,故未进入最终 clean headline。该缺口
    不影响 Case A 的 validated finding,也不影响 Case C 作为 boundary test 的结论。
 
-*(历史 instrumented Phase 1/2 baseline 表保留在 `experiments/qwen3vl8b/phase{1,2}/summary.md`,带
+*(历史 instrumented Phase 1/2 baseline 表保留在 `experiments/qwen3vl8b/v1/phase{1,2}/summary.md`,带
 provenance/confounded 标注,记录研究路径;不应读作 clean baseline。)*
 
 ## 13. Conclusion / Future Work

@@ -475,6 +475,10 @@ Auto-benchmark controls *inputs*; profiler-analysis interprets *outputs*; debug-
 
 > **Layout note:** the single retained experiment is `qwen3vl8b`; every top-level data directory has a
 > matching `qwen3vl8b/` subtree. The earlier exploratory round was removed (see Historical note in §0).
+>
+> *2026-09-29:* the round-1 folders drawn below (`analysis/`, `traces/`, `logs/`, `reports/` and the
+> phase folders) now live under `experiments/qwen3vl8b/v1/`; the empty `configs/` placeholder was removed.
+> See the root `README.md` for the current layout.
 
 **Directory purpose rule:** `logs/` = infrastructure side-effects (server stderr, kernel-API boundary trails) — consult on failure, never cited in analysis. `experiments/` = research artifacts deliberately produced by the experiment protocol — cited in analysis and reports.
 
@@ -489,7 +493,7 @@ Auto-benchmark controls *inputs*; profiler-analysis interprets *outputs*; debug-
 │   ├── caseC_batched.jsonl          512→128
 │   └── caseD_decode.jsonl           512→512
 │
-├── experiments/qwen3vl8b/v1/logs/                  infrastructure side-effects (consult on failure only)
+├── logs/qwen3vl8b/                  infrastructure side-effects (consult on failure only)
 │   ├── phase1/  phase2/  phase3/    server startup logs + kernel-API (LFS) boundary trails
 │
 ├── experiments/qwen3vl8b/           research artifacts (cited in analysis)
@@ -503,20 +507,20 @@ Auto-benchmark controls *inputs*; profiler-analysis interprets *outputs*; debug-
 │   ├── phase4/                      plan.md
 │   └── phase5/                      (pending)
 │
-├── experiments/qwen3vl8b/v1/traces/                raw torch profiler artifacts (Git LFS)
+├── traces/qwen3vl8b/                raw torch profiler artifacts (Git LFS)
 │   └── {case}/
 │       ├── sglang_mapping/          graph-off DECODE      sglang_extend_mapping/  graph-off EXTEND
 │       ├── sglang_formal/           graph-on DECODE       sglang_extend_formal/   graph-on EXTEND
 │       └── vllm/{prefill_like,decode_like}/
 │
-├── experiments/qwen3vl8b/v1/analysis/              interpretation layer (processed from traces)
+├── analysis/qwen3vl8b/              interpretation layer (processed from traces)
 │   ├── category_regex.md            shared regex applied symmetrically to both frameworks
 │   ├── {case}/                      extend_triage.md, decode_triage.md, breakdown.md,
 │   │                               vllm_crosscheck.md, preliminary_observations.md (+ *_raw.txt)
 │   ├── hypotheses.md                structured hypotheses, de-duplicated
 │   └── ranked_recommendations.md    sorted by confidence × impact × feasibility
 │
-├── experiments/qwen3vl8b/v1/reports/               final deliverables (human-facing)
+├── reports/qwen3vl8b/               final deliverables (human-facing)
 │   ├── 01_current_status_report.md
 │   └── 03_profiling_analysis.md
 │

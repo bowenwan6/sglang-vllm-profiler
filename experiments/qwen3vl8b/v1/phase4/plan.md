@@ -1,5 +1,9 @@
 # Phase 4 — Trace Triage / Interpretation Plan
 
+> **Executed** — outcome in [`../analysis/`](../analysis/) and
+> [`../reports/03_profiling_analysis.md`](../reports/03_profiling_analysis.md). The status line below is
+> the plan's original pre-execution header.
+
 > ⚠️ **Methodology correction (2026-05-26):** SGLang TTFT figures from Phase 1 / Phase 2 Case C were collected with **SGLang-only KAPI logging** and are **instrumentation-confounded (provenance only)**. The Case C **“1.32× SGLang-slower” gap is SUPERSEDED** by the clean rerun (no material median gap; SGLang ≈ vLLM ≈ 190 ms). Data retained unchanged. See `experiments/qwen3vl8b/v1/methodology_correction.md`.
 
 
