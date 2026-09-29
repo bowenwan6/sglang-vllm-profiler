@@ -1,0 +1,46 @@
+{
+  "timestamp_utc": "2026-09-29T10:11:14+00:00",
+  "hard_failures": [],
+  "warnings": [],
+  "python": "/data/bowenwan6/home/miniforge3/envs/sgl-profiler/bin/python3",
+  "snapshot": "/data/bowenwan6/home/hf/hub/models--Qwen--Qwen3-VL-8B-Instruct/snapshots/0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+  "model_shards": {
+    "complete": true,
+    "shards": 4,
+    "missing": []
+  },
+  "sharegpt": "/data/bowenwan6/home/hf/hub/datasets--anon8231489123--ShareGPT_Vicuna_unfiltered/snapshots/192ab2185289094fc556ec8ce5ce1e8e587154ca/ShareGPT_V3_unfiltered_cleaned_split.json",
+  "sglang_pkg_dir": "/data/bowenwan6/home/sgl/sglang/python/sglang",
+  "sglang_version": "0.0.0.dev19038+g89e1316ea",
+  "torch": "2.13.0+cu130 13.0 True 1",
+  "patch_applied": {
+    "runner": true,
+    "model": true,
+    "vision": true
+  },
+  "sglang_commit": "89e1316eae9aae634c174c040415289fe4484aee",
+  "sglang_dirty_files": [
+    "M python/sglang/srt/layers/attention/vision.py",
+    " M python/sglang/srt/models/qwen3_vl.py",
+    " M python/sglang/srt/multimodal/vit_cuda_graph_runner.py"
+  ],
+  "visible_gpus": [
+    "GPU 0: NVIDIA H200 (UUID: GPU-166288d3-a850-bcc1-8716-96c33d3a5679)"
+  ],
+  "gpu": "NVIDIA H200, 595.71.05",
+  "gpu_total_mib": 143771,
+  "gpu_used_mib": 4,
+  "disk_free_gb": 14274.6,
+  "profiler_commit": "4712638",
+  "profiler_branch": "exp/q3-vit-graph",
+  "paths": {
+    "OUT": "/data/bowenwan6/home/sgl/profiler/experiments/qwen3vl8b/q3_vit_graph/results",
+    "CELLS": "/data/bowenwan6/home/sgl/profiler/experiments/qwen3vl8b/q3_vit_graph/results/cells",
+    "LOGS": "/data/bowenwan6/home/sgl/logs/q3",
+    "TRACES": "/data/bowenwan6/home/sgl/traces/q3",
+    "STOP_FILE": "/data/bowenwan6/home/sgl/q3/STOP"
+  },
+  "server_cmd": "/data/bowenwan6/home/miniforge3/envs/sgl-profiler/bin/python3 -m sglang.launch_server --model-path /data/bowenwan6/home/hf/hub/models--Qwen--Qwen3-VL-8B-Instruct/snapshots/0c351dd01ed87e9c1b53cbc748cba10e6187ff3b --port 30000 --dtype bfloat16 --tp 1 --host 127.0.0.1 --attention-backend flashinfer --mm-attention-backend fa3 --mm-feature-transport cuda_ipc --cuda-graph-backend-prefill disabled --disable-radix-cache --chunked-prefill-size 8192 --mm-preprocess-cache-size-mb 0 --enable-request-time-stats-logging --skip-server-warmup --mem-fraction-static 0.75 --enable-precise-embedding-interpolation",
+  "output_len": 16,
+  "verdict": "PASS"
+}
