@@ -1,0 +1,10 @@
+{
+  "verdict": "GO",
+  "reasons": [],
+  "warnings": [
+    "D6: TTFT differs between 16 and 128 output tokens by 7.5%; run the sweep with --output-len 128 to stay comparable"
+  ],
+  "max_pred_point_ms": 15.038,
+  "parity": "PASS_WITH_DEVIATION",
+  "timestamp_utc": "2026-09-29T14:31:51+00:00"
+}
