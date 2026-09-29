@@ -309,7 +309,7 @@ the current merge.
 > Rewritten 2026-08-29. The §7 correctness detour is finished and its fix is
 > upstream; the profiling mainline resumes at #4. Detailed work packages and
 > acceptance gates:
-> [`reports/2026-08-28_profiling_resumption_audit.md`](reports/2026-08-28_profiling_resumption_audit.md).
+> [`reports/2026-08-28_profiling_resumption_audit.md`](https://github.com/bowenwan6/sglang-vllm-profiler/blob/archive/pre-cleanup-2026-09-29/reports/2026-08-28_profiling_resumption_audit.md) (archived).
 
 1. **Tracker hygiene (half day, no GPU).** Close #9 as `NOT_APPLICABLE_QWEN35`,
    stating that no shipped Qwen3.5 checkpoint exercises DeepStack and

@@ -171,7 +171,7 @@ Every data directory has one `qwen3vl8b/` subtree (the single experiment):
 
 The correctness detour is done: the Qwen3-VL BCG DeepStack bug is fixed and sitting in an approved,
 mergeable upstream PR. **The profiling mainline resumes at #4.** Full execution plan and acceptance
-gates in [`reports/2026-08-28_profiling_resumption_audit.md`](reports/2026-08-28_profiling_resumption_audit.md).
+gates in [`reports/2026-08-28_profiling_resumption_audit.md`](https://github.com/bowenwan6/sglang-vllm-profiler/blob/archive/pre-cleanup-2026-09-29/reports/2026-08-28_profiling_resumption_audit.md) (archived).
 
 1. **#4 — finish IMG-A (active, next GPU work).** Only the `S0_ipc` arm ran. Pin a fresh environment
    manifest, run a small current-upstream image+PCG smoke to see whether the capture-stream assertion

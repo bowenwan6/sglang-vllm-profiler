@@ -1,4 +1,0 @@
-# Raw server / bench logs from R1 runs. Not committed.
-*.log
-*.jsonl
-*.txt
