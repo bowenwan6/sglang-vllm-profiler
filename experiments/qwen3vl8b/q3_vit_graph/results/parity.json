@@ -1,0 +1,4443 @@
+{
+  "timestamp_utc": "2026-09-29T10:15:39+00:00",
+  "arms": {
+    "off": {
+      "outputs": {
+        "image336_colors": {
+          "content": "The colors in the image, from left to right, are:\n\n1. Red\n2. Green\n3. Blue\n4. Yellow\n5. Red\n6. Green\n7. Blue\n8. Yellow",
+          "tokens": [
+            {
+              "token": "The",
+              "logprob": -0.5663148164749146,
+              "margin": 0.75
+            },
+            {
+              "token": " colors",
+              "logprob": -0.3133678734302521,
+              "margin": 0.9999999701976776
+            },
+            {
+              "token": " in",
+              "logprob": -2.932505594799295e-05,
+              "margin": 10.50000023884786
+            },
+            {
+              "token": " the",
+              "logprob": -0.4740787744522095,
+              "margin": 0.5
+            },
+            {
+              "token": " image",
+              "logprob": 0.0,
+              "margin": 18.25
+            },
+            {
+              "token": ",",
+              "logprob": -0.00028796817059628665,
+              "margin": 8.750000041472958
+            },
+            {
+              "token": " from",
+              "logprob": -0.08247890323400497,
+              "margin": 2.5000000968575478
+            },
+            {
+              "token": " left",
+              "logprob": 0.0,
+              "margin": 19.5
+            },
+            {
+              "token": " to",
+              "logprob": 0.0,
+              "margin": 22.375
+            },
+            {
+              "token": " right",
+              "logprob": 0.0,
+              "margin": 23.125
+            },
+            {
+              "token": ",",
+              "logprob": -1.680836794548668e-05,
+              "margin": 11.00000035776975
+            },
+            {
+              "token": " are",
+              "logprob": -2.264974000354414e-06,
+              "margin": 12.999999642374632
+            },
+            {
+              "token": ":\n\n",
+              "logprob": -0.062104303389787674,
+              "margin": 2.9999999217689037
+            },
+            {
+              "token": "1",
+              "logprob": -0.5113260746002197,
+              "margin": 0.5
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 20.25
+            },
+            {
+              "token": " Red",
+              "logprob": -0.018731020390987396,
+              "margin": 4.000000096857548
+            },
+            {
+              "token": "\n",
+              "logprob": -0.004082560073584318,
+              "margin": 5.500000119674951
+            },
+            {
+              "token": "2",
+              "logprob": 0.0,
+              "margin": 24.375
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.5
+            },
+            {
+              "token": " Green",
+              "logprob": -0.00032824851223267615,
+              "margin": 8.249999815452611
+            },
+            {
+              "token": "\n",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 15.999999880790718
+            },
+            {
+              "token": "3",
+              "logprob": 0.0,
+              "margin": 24.0
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.625
+            },
+            {
+              "token": " Blue",
+              "logprob": -7.497983460780233e-05,
+              "margin": 9.500000360436388
+            },
+            {
+              "token": "\n",
+              "logprob": -5.960462772236497e-07,
+              "margin": 14.25000035762804
+            },
+            {
+              "token": "4",
+              "logprob": 0.0,
+              "margin": 22.75
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 24.25
+            },
+            {
+              "token": " Yellow",
+              "logprob": -3.576278118089249e-07,
+              "margin": 15.499999642372188
+            },
+            {
+              "token": "\n",
+              "logprob": -2.1457441107486375e-05,
+              "margin": 10.749999523393853
+            },
+            {
+              "token": "5",
+              "logprob": 0.0,
+              "margin": 24.875
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.375
+            },
+            {
+              "token": " Red",
+              "logprob": 0.0,
+              "margin": 23.375
+            },
+            {
+              "token": "\n",
+              "logprob": 0.0,
+              "margin": 18.25
+            },
+            {
+              "token": "6",
+              "logprob": 0.0,
+              "margin": 24.75
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 26.0
+            },
+            {
+              "token": " Green",
+              "logprob": 0.0,
+              "margin": 23.75
+            },
+            {
+              "token": "\n",
+              "logprob": 0.0,
+              "margin": 26.375
+            },
+            {
+              "token": "7",
+              "logprob": 0.0,
+              "margin": 26.25
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 25.5
+            },
+            {
+              "token": " Blue",
+              "logprob": 0.0,
+              "margin": 23.5
+            },
+            {
+              "token": "\n",
+              "logprob": 0.0,
+              "margin": 28.75
+            },
+            {
+              "token": "8",
+              "logprob": 0.0,
+              "margin": 25.875
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 28.25
+            },
+            {
+              "token": " Yellow",
+              "logprob": 0.0,
+              "margin": 20.875
+            },
+            {
+              "token": "<|im_end|>",
+              "logprob": -0.47407713532447815,
+              "margin": 0.4999999701976776
+            }
+          ]
+        },
+        "image336_count": {
+          "content": "Looking at the image, we can see a series of vertical stripes of different colors.\n\nLet's count them from left to right:\n\n1.  Red\n2.  Green\n3.  Blue\n4.  Yellow\n5.",
+          "tokens": [
+            {
+              "token": "Looking",
+              "logprob": -0.5323375463485718,
+              "margin": 0.5
+            },
+            {
+              "token": " at",
+              "logprob": -4.768370445162873e-07,
+              "margin": 15.374999523162955
+            },
+            {
+              "token": " the",
+              "logprob": -3.576278118089249e-07,
+              "margin": 14.999999642372188
+            },
+            {
+              "token": " image",
+              "logprob": -0.0002833203470800072,
+              "margin": 8.499999920924893
+            },
+            {
+              "token": ",",
+              "logprob": -0.048637520521879196,
+              "margin": 3.0000001080334187
+            },
+            {
+              "token": " we",
+              "logprob": -0.38820400834083557,
+              "margin": 0.7499999701976776
+            },
+            {
+              "token": " can",
+              "logprob": -0.00023326536756940186,
+              "margin": 8.75000038483995
+            },
+            {
+              "token": " see",
+              "logprob": -0.029986679553985596,
+              "margin": 3.4999999403953552
+            },
+            {
+              "token": " a",
+              "logprob": -0.09583989530801773,
+              "margin": 2.5000000819563866
+            },
+            {
+              "token": " series",
+              "logprob": -0.577175498008728,
+              "margin": 0.25
+            },
+            {
+              "token": " of",
+              "logprob": 0.0,
+              "margin": 24.0
+            },
+            {
+              "token": " vertical",
+              "logprob": -9.179073458653875e-06,
+              "margin": 12.000000357669705
+            },
+            {
+              "token": " stripes",
+              "logprob": -0.0020052341278642416,
+              "margin": 7.24999986612238
+            },
+            {
+              "token": " of",
+              "logprob": -0.9598069190979004,
+              "margin": 0.25
+            },
+            {
+              "token": " different",
+              "logprob": -0.012791488319635391,
+              "margin": 5.250000145286322
+            },
+            {
+              "token": " colors",
+              "logprob": -1.311301275563892e-06,
+              "margin": 13.74999964237304
+            },
+            {
+              "token": ".\n\n",
+              "logprob": -0.038181524723768234,
+              "margin": 3.2500000186264515
+            },
+            {
+              "token": "Let",
+              "logprob": -0.37792110443115234,
+              "margin": 1.75
+            },
+            {
+              "token": "'s",
+              "logprob": -0.0012553200358524919,
+              "margin": 6.750000192201696
+            },
+            {
+              "token": " count",
+              "logprob": -0.018155815079808235,
+              "margin": 4.500000236555934
+            },
+            {
+              "token": " them",
+              "logprob": -3.3378044463461265e-05,
+              "margin": 11.00000000055661
+            },
+            {
+              "token": " from",
+              "logprob": -0.03357960656285286,
+              "margin": 3.4999999813735485
+            },
+            {
+              "token": " left",
+              "logprob": 0.0,
+              "margin": 18.25
+            },
+            {
+              "token": " to",
+              "logprob": 0.0,
+              "margin": 22.25
+            },
+            {
+              "token": " right",
+              "logprob": 0.0,
+              "margin": 22.125
+            },
+            {
+              "token": ":\n\n",
+              "logprob": -0.20141343772411346,
+              "margin": 1.4999999552965164
+            },
+            {
+              "token": "1",
+              "logprob": -0.0031777145341038704,
+              "margin": 5.749999928288162
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 22.625
+            },
+            {
+              "token": " ",
+              "logprob": -0.004123162943869829,
+              "margin": 5.500000047963113
+            },
+            {
+              "token": " Red",
+              "logprob": -0.16548418998718262,
+              "margin": 1.75
+            },
+            {
+              "token": "\n",
+              "logprob": -0.0012993711279705167,
+              "margin": 7.250000010128133
+            },
+            {
+              "token": "2",
+              "logprob": 0.0,
+              "margin": 23.375
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 28.5
+            },
+            {
+              "token": " ",
+              "logprob": 0.0,
+              "margin": 23.625
+            },
+            {
+              "token": " Green",
+              "logprob": -1.3232143828645349e-05,
+              "margin": 11.250000119296601
+            },
+            {
+              "token": "\n",
+              "logprob": 0.0,
+              "margin": 17.75
+            },
+            {
+              "token": "3",
+              "logprob": 0.0,
+              "margin": 24.375
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 29.25
+            },
+            {
+              "token": " ",
+              "logprob": 0.0,
+              "margin": 23.75
+            },
+            {
+              "token": " Blue",
+              "logprob": -1.0132738680113107e-05,
+              "margin": 11.5000003576788
+            },
+            {
+              "token": "\n",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 15.749999880790718
+            },
+            {
+              "token": "4",
+              "logprob": 0.0,
+              "margin": 23.625
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 30.75
+            },
+            {
+              "token": " ",
+              "logprob": 0.0,
+              "margin": 23.375
+            },
+            {
+              "token": " Yellow",
+              "logprob": -7.152555099310121e-07,
+              "margin": 14.500000238418806
+            },
+            {
+              "token": "\n",
+              "logprob": -2.1457441107486375e-05,
+              "margin": 10.749999523393853
+            },
+            {
+              "token": "5",
+              "logprob": 0.0,
+              "margin": 23.75
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 29.875
+            }
+          ]
+        },
+        "image512_colors": {
+          "content": "The image consists of vertical stripes, alternating in color. Reading from left to right, the sequence of colors is:\n\n1. Red\n2. Green\n3. Blue\n4. Yellow\n5. Red\n6. Green\n7",
+          "tokens": [
+            {
+              "token": "The",
+              "logprob": -0.1359042376279831,
+              "margin": 2.750000074505806
+            },
+            {
+              "token": " image",
+              "logprob": -0.38695836067199707,
+              "margin": 0.75
+            },
+            {
+              "token": " consists",
+              "logprob": -0.6549313068389893,
+              "margin": 0.25
+            },
+            {
+              "token": " of",
+              "logprob": 0.0,
+              "margin": 18.125
+            },
+            {
+              "token": " vertical",
+              "logprob": -0.01226396206766367,
+              "margin": 4.7499998128041625
+            },
+            {
+              "token": " stripes",
+              "logprob": -7.557583012385294e-05,
+              "margin": 9.999999764440872
+            },
+            {
+              "token": ",",
+              "logprob": -1.1062620878219604,
+              "margin": 0.0
+            },
+            {
+              "token": " alternating",
+              "logprob": -0.25054892897605896,
+              "margin": 1.7499999105930328
+            },
+            {
+              "token": " in",
+              "logprob": -0.004125893581658602,
+              "margin": 5.500000178348273
+            },
+            {
+              "token": " color",
+              "logprob": -0.03277479484677315,
+              "margin": 4.0000001303851604
+            },
+            {
+              "token": ".",
+              "logprob": -0.3241026699542999,
+              "margin": 1.2499999701976776
+            },
+            {
+              "token": " Reading",
+              "logprob": -0.7093418836593628,
+              "margin": 0.25
+            },
+            {
+              "token": " from",
+              "logprob": -0.01755356974899769,
+              "margin": 4.250000236555934
+            },
+            {
+              "token": " left",
+              "logprob": -3.5523738915799186e-05,
+              "margin": 10.249999762210791
+            },
+            {
+              "token": " to",
+              "logprob": 0.0,
+              "margin": 19.75
+            },
+            {
+              "token": " right",
+              "logprob": 0.0,
+              "margin": 21.25
+            },
+            {
+              "token": ",",
+              "logprob": -0.0020387833938002586,
+              "margin": 6.250000172294676
+            },
+            {
+              "token": " the",
+              "logprob": -4.172316494077677e-06,
+              "margin": 13.749999642380772
+            },
+            {
+              "token": " sequence",
+              "logprob": -0.3123706877231598,
+              "margin": 1.4999999701976776
+            },
+            {
+              "token": " of",
+              "logprob": -0.018154995515942574,
+              "margin": 4.000000102445483
+            },
+            {
+              "token": " colors",
+              "logprob": -1.9192511899746023e-05,
+              "margin": 11.249999880974428
+            },
+            {
+              "token": " is",
+              "logprob": -0.00026246439665555954,
+              "margin": 8.249999796040356
+            },
+            {
+              "token": ":\n\n",
+              "logprob": -0.003557307878509164,
+              "margin": 5.749999897321686
+            },
+            {
+              "token": "1",
+              "logprob": -0.40370091795921326,
+              "margin": 1.2500000298023224
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 19.875
+            },
+            {
+              "token": " Red",
+              "logprob": -0.011991790495812893,
+              "margin": 4.5000001871958375
+            },
+            {
+              "token": "\n",
+              "logprob": -0.01815335638821125,
+              "margin": 3.9999998342245817
+            },
+            {
+              "token": "2",
+              "logprob": 0.0,
+              "margin": 23.25
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.875
+            },
+            {
+              "token": " Green",
+              "logprob": -0.0005975367967039347,
+              "margin": 8.000000416999683
+            },
+            {
+              "token": "\n",
+              "logprob": -3.576278118089249e-07,
+              "margin": 14.749999642372188
+            },
+            {
+              "token": "3",
+              "logprob": 0.0,
+              "margin": 23.5
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 24.125
+            },
+            {
+              "token": " Blue",
+              "logprob": -1.0371154530730564e-05,
+              "margin": 11.50000011926295
+            },
+            {
+              "token": "\n",
+              "logprob": -2.753696753643453e-05,
+              "margin": 10.50000011958764
+            },
+            {
+              "token": "4",
+              "logprob": 0.0,
+              "margin": 23.625
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.0
+            },
+            {
+              "token": " Yellow",
+              "logprob": 0.0,
+              "margin": 18.25
+            },
+            {
+              "token": "\n",
+              "logprob": -8.344646857949556e-07,
+              "margin": 14.00000011920963
+            },
+            {
+              "token": "5",
+              "logprob": 0.0,
+              "margin": 21.0
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.0
+            },
+            {
+              "token": " Red",
+              "logprob": -3.6954811548639555e-06,
+              "margin": 12.50000011921611
+            },
+            {
+              "token": "\n",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 15.999999880790718
+            },
+            {
+              "token": "6",
+              "logprob": 0.0,
+              "margin": 24.625
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.5
+            },
+            {
+              "token": " Green",
+              "logprob": 0.0,
+              "margin": 24.5
+            },
+            {
+              "token": "\n",
+              "logprob": 0.0,
+              "margin": 25.375
+            },
+            {
+              "token": "7",
+              "logprob": 0.0,
+              "margin": 26.25
+            }
+          ]
+        },
+        "text_primes": {
+          "content": "The first four prime numbers are:\n\n**2, 3, 5, 7**\n\n### Explanation:\nA **prime number** is a natural number greater than 1 that has no positive divisors other than 1 and itself.\n\n",
+          "tokens": [
+            {
+              "token": "The",
+              "logprob": 0.0,
+              "margin": 21.25
+            },
+            {
+              "token": " first",
+              "logprob": -8.344646857949556e-07,
+              "margin": 14.00000011920963
+            },
+            {
+              "token": " four",
+              "logprob": 0.0,
+              "margin": 22.5
+            },
+            {
+              "token": " prime",
+              "logprob": -1.4305104514278355e-06,
+              "margin": 13.499999523163865
+            },
+            {
+              "token": " numbers",
+              "logprob": 0.0,
+              "margin": 26.5
+            },
+            {
+              "token": " are",
+              "logprob": 0.0,
+              "margin": 24.125
+            },
+            {
+              "token": ":\n\n",
+              "logprob": -5.960462772236497e-07,
+              "margin": 14.50000035762804
+            },
+            {
+              "token": "**",
+              "logprob": 0.0,
+              "margin": 17.625
+            },
+            {
+              "token": "2",
+              "logprob": 0.0,
+              "margin": 23.875
+            },
+            {
+              "token": ",",
+              "logprob": 0.0,
+              "margin": 20.0
+            },
+            {
+              "token": " ",
+              "logprob": 0.0,
+              "margin": 23.5
+            },
+            {
+              "token": "3",
+              "logprob": 0.0,
+              "margin": 34.0
+            },
+            {
+              "token": ",",
+              "logprob": 0.0,
+              "margin": 32.125
+            },
+            {
+              "token": " ",
+              "logprob": 0.0,
+              "margin": 26.125
+            },
+            {
+              "token": "5",
+              "logprob": 0.0,
+              "margin": 27.25
+            },
+            {
+              "token": ",",
+              "logprob": 0.0,
+              "margin": 20.125
+            },
+            {
+              "token": " ",
+              "logprob": -0.0015023384476080537,
+              "margin": 6.50000017543789
+            },
+            {
+              "token": "7",
+              "logprob": 0.0,
+              "margin": 30.0
+            },
+            {
+              "token": "**\n\n",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 16.374999880790718
+            },
+            {
+              "token": "###",
+              "logprob": -0.26621854305267334,
+              "margin": 2.0000001192092896
+            },
+            {
+              "token": " Explanation",
+              "logprob": -8.999896090244874e-05,
+              "margin": 9.49999964642484
+            },
+            {
+              "token": ":\n",
+              "logprob": -2.264974000354414e-06,
+              "margin": 12.999999642374632
+            },
+            {
+              "token": "A",
+              "logprob": -0.1623336225748062,
+              "margin": 1.7499999850988388
+            },
+            {
+              "token": " **",
+              "logprob": -0.03857364133000374,
+              "margin": 3.250000100582838
+            },
+            {
+              "token": "prime",
+              "logprob": 0.0,
+              "margin": 17.5
+            },
+            {
+              "token": " number",
+              "logprob": 0.0,
+              "margin": 21.5
+            },
+            {
+              "token": "**",
+              "logprob": 0.0,
+              "margin": 28.375
+            },
+            {
+              "token": " is",
+              "logprob": 0.0,
+              "margin": 27.5
+            },
+            {
+              "token": " a",
+              "logprob": 0.0,
+              "margin": 21.0
+            },
+            {
+              "token": " natural",
+              "logprob": -1.1920922133867862e-06,
+              "margin": 13.749999761582103
+            },
+            {
+              "token": " number",
+              "logprob": 0.0,
+              "margin": 20.0
+            },
+            {
+              "token": " greater",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 16.124999880790718
+            },
+            {
+              "token": " than",
+              "logprob": 0.0,
+              "margin": 26.25
+            },
+            {
+              "token": " ",
+              "logprob": -5.960462772236497e-07,
+              "margin": 14.25000035762804
+            },
+            {
+              "token": "1",
+              "logprob": 0.0,
+              "margin": 30.875
+            },
+            {
+              "token": " that",
+              "logprob": 0.0,
+              "margin": 19.0
+            },
+            {
+              "token": " has",
+              "logprob": -1.4305104514278355e-06,
+              "margin": 13.999999523163865
+            },
+            {
+              "token": " no",
+              "logprob": -0.001513170194812119,
+              "margin": 6.499999834108166
+            },
+            {
+              "token": " positive",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 16.249999880790718
+            },
+            {
+              "token": " div",
+              "logprob": -2.3841855067985307e-07,
+              "margin": 15.99999976158145
+            },
+            {
+              "token": "isors",
+              "logprob": 0.0,
+              "margin": 18.125
+            },
+            {
+              "token": " other",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 16.624999880790718
+            },
+            {
+              "token": " than",
+              "logprob": 0.0,
+              "margin": 26.75
+            },
+            {
+              "token": " ",
+              "logprob": -2.861018856492592e-06,
+              "margin": 12.750000000004093
+            },
+            {
+              "token": "1",
+              "logprob": 0.0,
+              "margin": 33.875
+            },
+            {
+              "token": " and",
+              "logprob": 0.0,
+              "margin": 23.875
+            },
+            {
+              "token": " itself",
+              "logprob": 0.0,
+              "margin": 22.5
+            },
+            {
+              "token": ".\n\n",
+              "logprob": -1.490105023549404e-05,
+              "margin": 11.125000357738827
+            }
+          ]
+        },
+        "text_capital": {
+          "content": "Paris",
+          "tokens": [
+            {
+              "token": "Paris",
+              "logprob": -1.0728830375228426e-06,
+              "margin": 13.999999880791279
+            },
+            {
+              "token": "<|im_end|>",
+              "logprob": 0.0,
+              "margin": 20.75
+            }
+          ]
+        }
+      },
+      "captures": [],
+      "verify": {
+        "verdict": "VERIFIED",
+        "reasons": [],
+        "evidence": "no_graph_lines",
+        "captures": 0,
+        "calls": 0,
+        "prefill_batches": 5
+      },
+      "startup_s": 37.0,
+      "gpu_used_mib": 110804,
+      "resolved": {
+        "mm_feature_transport": "cuda_ipc",
+        "mm_attention_backend": "fa3",
+        "cuda_graph_backend_prefill": "disabled",
+        "attention_backend": "flashinfer",
+        "mem_fraction_static": 0.75,
+        "skip_server_warmup": true,
+        "enable_precise_embedding_interpolation": true,
+        "mm_preprocess_cache_size_mb": 0,
+        "disable_radix_cache": true,
+        "chunked_prefill_size": 8192,
+        "prefill_graph_backend_resolved": "disabled"
+      },
+      "effective": {
+        "mm_backend_fa3_log": false,
+        "hopper_override_log": false,
+        "prefill_graph_disabled_log": false
+      },
+      "dump_dir": "/data/bowenwan6/home/sgl/profiler/experiments/qwen3vl8b/q3_vit_graph/results/raw/parity/off",
+      "n_dumps": 3
+    },
+    "on": {
+      "outputs": {
+        "image336_colors": {
+          "content": "The colors in the image, from left to right, are:\n\n1. Red\n2. Green\n3. Blue\n4. Yellow\n5. Red\n6. Green\n7. Blue\n8. Yellow",
+          "tokens": [
+            {
+              "token": "The",
+              "logprob": -0.5052169561386108,
+              "margin": 1.0
+            },
+            {
+              "token": " colors",
+              "logprob": -0.25202038884162903,
+              "margin": 1.2499999701976776
+            },
+            {
+              "token": " in",
+              "logprob": -2.90866428258596e-05,
+              "margin": 10.499999523586666
+            },
+            {
+              "token": " the",
+              "logprob": -0.575941264629364,
+              "margin": 0.25
+            },
+            {
+              "token": " image",
+              "logprob": 0.0,
+              "margin": 18.125
+            },
+            {
+              "token": ",",
+              "logprob": -0.00032479254878126085,
+              "margin": 8.750000410393113
+            },
+            {
+              "token": " from",
+              "logprob": -0.06561635434627533,
+              "margin": 2.750000014901161
+            },
+            {
+              "token": " left",
+              "logprob": 0.0,
+              "margin": 19.25
+            },
+            {
+              "token": " to",
+              "logprob": 0.0,
+              "margin": 22.5
+            },
+            {
+              "token": " right",
+              "logprob": 0.0,
+              "margin": 23.375
+            },
+            {
+              "token": ",",
+              "logprob": -2.1576648578047752e-05,
+              "margin": 10.7500003578607
+            },
+            {
+              "token": " are",
+              "logprob": -2.861018856492592e-06,
+              "margin": 12.750000000004093
+            },
+            {
+              "token": ":\n\n",
+              "logprob": -0.06210441514849663,
+              "margin": 3.000000048428774
+            },
+            {
+              "token": "1",
+              "logprob": -0.6173030734062195,
+              "margin": 0.25
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 20.125
+            },
+            {
+              "token": " Red",
+              "logprob": -0.018727745860815048,
+              "margin": 4.000000033527613
+            },
+            {
+              "token": "\n",
+              "logprob": -0.005238852929323912,
+              "margin": 5.250000156927854
+            },
+            {
+              "token": "2",
+              "logprob": 0.0,
+              "margin": 23.75
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.375
+            },
+            {
+              "token": " Green",
+              "logprob": -0.00027056847466155887,
+              "margin": 8.500000275031198
+            },
+            {
+              "token": "\n",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 15.999999880790718
+            },
+            {
+              "token": "3",
+              "logprob": 0.0,
+              "margin": 23.875
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.75
+            },
+            {
+              "token": " Blue",
+              "logprob": -7.497983460780233e-05,
+              "margin": 9.500000360436388
+            },
+            {
+              "token": "\n",
+              "logprob": -5.960462772236497e-07,
+              "margin": 14.25000035762804
+            },
+            {
+              "token": "4",
+              "logprob": 0.0,
+              "margin": 22.625
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 24.0
+            },
+            {
+              "token": " Yellow",
+              "logprob": -3.576278118089249e-07,
+              "margin": 15.499999642372188
+            },
+            {
+              "token": "\n",
+              "logprob": -2.1457441107486375e-05,
+              "margin": 10.749999523393853
+            },
+            {
+              "token": "5",
+              "logprob": 0.0,
+              "margin": 24.75
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.125
+            },
+            {
+              "token": " Red",
+              "logprob": 0.0,
+              "margin": 23.375
+            },
+            {
+              "token": "\n",
+              "logprob": 0.0,
+              "margin": 17.75
+            },
+            {
+              "token": "6",
+              "logprob": 0.0,
+              "margin": 24.5
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 25.75
+            },
+            {
+              "token": " Green",
+              "logprob": 0.0,
+              "margin": 23.25
+            },
+            {
+              "token": "\n",
+              "logprob": 0.0,
+              "margin": 26.5
+            },
+            {
+              "token": "7",
+              "logprob": 0.0,
+              "margin": 25.875
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 24.875
+            },
+            {
+              "token": " Blue",
+              "logprob": 0.0,
+              "margin": 23.25
+            },
+            {
+              "token": "\n",
+              "logprob": 0.0,
+              "margin": 28.625
+            },
+            {
+              "token": "8",
+              "logprob": 0.0,
+              "margin": 26.125
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 28.5
+            },
+            {
+              "token": " Yellow",
+              "logprob": 0.0,
+              "margin": 20.75
+            },
+            {
+              "token": "<|im_end|>",
+              "logprob": -0.474077045917511,
+              "margin": 0.5
+            }
+          ]
+        },
+        "image336_count": {
+          "content": "Looking at the image, we can see a series of vertical stripes of different colors.\n\nLet's count them from left to right:\n\n1.  Red\n2.  Green\n3.  Blue\n4.  Yellow\n5.",
+          "tokens": [
+            {
+              "token": "Looking",
+              "logprob": -0.6308630108833313,
+              "margin": 0.25
+            },
+            {
+              "token": " at",
+              "logprob": -3.576278118089249e-07,
+              "margin": 15.374999642372188
+            },
+            {
+              "token": " the",
+              "logprob": -3.576278118089249e-07,
+              "margin": 14.874999642372188
+            },
+            {
+              "token": " image",
+              "logprob": -0.00036483307485468686,
+              "margin": 8.250000424188329
+            },
+            {
+              "token": ",",
+              "logprob": -0.038082268089056015,
+              "margin": 3.2500000931322575
+            },
+            {
+              "token": " we",
+              "logprob": -0.47569507360458374,
+              "margin": 0.5
+            },
+            {
+              "token": " can",
+              "logprob": -0.0002544794406276196,
+              "margin": 8.750000151601853
+            },
+            {
+              "token": " see",
+              "logprob": -0.038316912949085236,
+              "margin": 3.250000052154064
+            },
+            {
+              "token": " a",
+              "logprob": -0.12146611511707306,
+              "margin": 2.2500000447034836
+            },
+            {
+              "token": " series",
+              "logprob": -0.5771903991699219,
+              "margin": 0.25
+            },
+            {
+              "token": " of",
+              "logprob": 0.0,
+              "margin": 23.875
+            },
+            {
+              "token": " vertical",
+              "logprob": -9.179073458653875e-06,
+              "margin": 12.000000357669705
+            },
+            {
+              "token": " stripes",
+              "logprob": -0.0019101722864434123,
+              "margin": 7.250000037369318
+            },
+            {
+              "token": " of",
+              "logprob": -0.9601811170578003,
+              "margin": 0.25
+            },
+            {
+              "token": " different",
+              "logprob": -0.015526018105447292,
+              "margin": 4.9999997997656465
+            },
+            {
+              "token": " colors",
+              "logprob": -1.1920922133867862e-06,
+              "margin": 13.749999761582103
+            },
+            {
+              "token": ".\n\n",
+              "logprob": -0.0382608100771904,
+              "margin": 3.249999888241291
+            },
+            {
+              "token": "Let",
+              "logprob": -0.4311516284942627,
+              "margin": 1.5
+            },
+            {
+              "token": "'s",
+              "logprob": -0.0015986294019967318,
+              "margin": 6.500000205589458
+            },
+            {
+              "token": " count",
+              "logprob": -0.018154410645365715,
+              "margin": 4.500000210478902
+            },
+            {
+              "token": " them",
+              "logprob": -2.9682672902708873e-05,
+              "margin": 10.999999881230906
+            },
+            {
+              "token": " from",
+              "logprob": -0.027521809563040733,
+              "margin": 3.750000039115548
+            },
+            {
+              "token": " left",
+              "logprob": 0.0,
+              "margin": 18.25
+            },
+            {
+              "token": " to",
+              "logprob": 0.0,
+              "margin": 22.0
+            },
+            {
+              "token": " right",
+              "logprob": 0.0,
+              "margin": 22.125
+            },
+            {
+              "token": ":\n\n",
+              "logprob": -0.20141352713108063,
+              "margin": 1.4999999850988388
+            },
+            {
+              "token": "1",
+              "logprob": -0.003177833277732134,
+              "margin": 5.7499998095445335
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 22.5
+            },
+            {
+              "token": " ",
+              "logprob": -0.004119957331568003,
+              "margin": 5.499999915715307
+            },
+            {
+              "token": " Red",
+              "logprob": -0.1654352843761444,
+              "margin": 1.7500000298023224
+            },
+            {
+              "token": "\n",
+              "logprob": -0.0014216327108442783,
+              "margin": 7.249999818857759
+            },
+            {
+              "token": "2",
+              "logprob": 0.0,
+              "margin": 23.5
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 28.25
+            },
+            {
+              "token": " ",
+              "logprob": 0.0,
+              "margin": 23.875
+            },
+            {
+              "token": " Green",
+              "logprob": -1.6927575416048057e-05,
+              "margin": 11.00000023856228
+            },
+            {
+              "token": "\n",
+              "logprob": 0.0,
+              "margin": 18.0
+            },
+            {
+              "token": "3",
+              "logprob": 0.0,
+              "margin": 24.75
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 29.375
+            },
+            {
+              "token": " ",
+              "logprob": 0.0,
+              "margin": 23.5
+            },
+            {
+              "token": " Blue",
+              "logprob": -1.2993727978027891e-05,
+              "margin": 11.250000357712452
+            },
+            {
+              "token": "\n",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 16.249999880790718
+            },
+            {
+              "token": "4",
+              "logprob": 0.0,
+              "margin": 23.625
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 30.75
+            },
+            {
+              "token": " ",
+              "logprob": 0.0,
+              "margin": 23.375
+            },
+            {
+              "token": " Yellow",
+              "logprob": -8.344646857949556e-07,
+              "margin": 14.25000011920963
+            },
+            {
+              "token": "\n",
+              "logprob": -2.1457441107486375e-05,
+              "margin": 10.749999523393853
+            },
+            {
+              "token": "5",
+              "logprob": 0.0,
+              "margin": 23.75
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 29.625
+            }
+          ]
+        },
+        "image512_colors": {
+          "content": "The image consists of vertical stripes in the following order, repeating from left to right:\n\n1. Red\n2. Green\n3. Blue\n4. Yellow\n5. Red\n6. Green\n7. Blue\n8. Yellow",
+          "tokens": [
+            {
+              "token": "The",
+              "logprob": -0.10305238515138626,
+              "margin": 2.9999999925494194
+            },
+            {
+              "token": " image",
+              "logprob": -0.4741727113723755,
+              "margin": 0.5
+            },
+            {
+              "token": " consists",
+              "logprob": -0.5457848906517029,
+              "margin": 0.5000000596046448
+            },
+            {
+              "token": " of",
+              "logprob": 0.0,
+              "margin": 18.375
+            },
+            {
+              "token": " vertical",
+              "logprob": -0.011095255613327026,
+              "margin": 4.749999791383743
+            },
+            {
+              "token": " stripes",
+              "logprob": -9.357491217087954e-05,
+              "margin": 9.999999885170837
+            },
+            {
+              "token": " in",
+              "logprob": -0.958046555519104,
+              "margin": 0.25
+            },
+            {
+              "token": " the",
+              "logprob": -0.06546317040920258,
+              "margin": 2.9999998956918716
+            },
+            {
+              "token": " following",
+              "logprob": -2.9802276912960224e-06,
+              "margin": 12.749999880795258
+            },
+            {
+              "token": " order",
+              "logprob": -0.4355448782444,
+              "margin": 0.7499999701976776
+            },
+            {
+              "token": ",",
+              "logprob": -0.07510532438755035,
+              "margin": 2.7500001043081284
+            },
+            {
+              "token": " repeating",
+              "logprob": -0.0404350720345974,
+              "margin": 3.2500000037252903
+            },
+            {
+              "token": " from",
+              "logprob": -0.5012664794921875,
+              "margin": 0.5
+            },
+            {
+              "token": " left",
+              "logprob": -2.3841855067985307e-07,
+              "margin": 15.99999976158145
+            },
+            {
+              "token": " to",
+              "logprob": 0.0,
+              "margin": 23.5
+            },
+            {
+              "token": " right",
+              "logprob": 0.0,
+              "margin": 22.5
+            },
+            {
+              "token": ":\n\n",
+              "logprob": -0.008957913145422935,
+              "margin": 4.749999949708581
+            },
+            {
+              "token": "1",
+              "logprob": -0.2844240963459015,
+              "margin": 1.7499999701976776
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 19.125
+            },
+            {
+              "token": " Red",
+              "logprob": -0.052146635949611664,
+              "margin": 3.000000037252903
+            },
+            {
+              "token": "\n",
+              "logprob": -0.10021369904279709,
+              "margin": 2.2500000670552254
+            },
+            {
+              "token": "2",
+              "logprob": 0.0,
+              "margin": 22.625
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.75
+            },
+            {
+              "token": " Green",
+              "logprob": -0.0016230279579758644,
+              "margin": 7.000000125728548
+            },
+            {
+              "token": "\n",
+              "logprob": -1.7881377516459906e-06,
+              "margin": 13.250000119210881
+            },
+            {
+              "token": "3",
+              "logprob": 0.0,
+              "margin": 22.5
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.75
+            },
+            {
+              "token": " Blue",
+              "logprob": -1.2636104656849056e-05,
+              "margin": 11.499999761661456
+            },
+            {
+              "token": "\n",
+              "logprob": -5.829164365422912e-05,
+              "margin": 9.749999882489647
+            },
+            {
+              "token": "4",
+              "logprob": 0.0,
+              "margin": 23.5
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.25
+            },
+            {
+              "token": " Yellow",
+              "logprob": 0.0,
+              "margin": 18.5
+            },
+            {
+              "token": "\n",
+              "logprob": -7.509902934543788e-05,
+              "margin": 9.50000024124165
+            },
+            {
+              "token": "5",
+              "logprob": 0.0,
+              "margin": 19.5
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.5
+            },
+            {
+              "token": " Red",
+              "logprob": -1.4066597032069694e-05,
+              "margin": 11.250000238517714
+            },
+            {
+              "token": "\n",
+              "logprob": -1.0728830375228426e-06,
+              "margin": 13.749999880791279
+            },
+            {
+              "token": "6",
+              "logprob": 0.0,
+              "margin": 23.75
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.125
+            },
+            {
+              "token": " Green",
+              "logprob": 0.0,
+              "margin": 24.375
+            },
+            {
+              "token": "\n",
+              "logprob": 0.0,
+              "margin": 19.75
+            },
+            {
+              "token": "7",
+              "logprob": 0.0,
+              "margin": 24.125
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.625
+            },
+            {
+              "token": " Blue",
+              "logprob": 0.0,
+              "margin": 22.75
+            },
+            {
+              "token": "\n",
+              "logprob": 0.0,
+              "margin": 21.0
+            },
+            {
+              "token": "8",
+              "logprob": 0.0,
+              "margin": 23.0
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 26.125
+            },
+            {
+              "token": " Yellow",
+              "logprob": 0.0,
+              "margin": 21.0
+            }
+          ]
+        },
+        "text_primes": {
+          "content": "The first four prime numbers are:\n\n**2, 3, 5, 7**\n\n### Explanation:\nA **prime number** is a natural number greater than 1 that has no positive divisors other than 1 and itself.\n\n",
+          "tokens": [
+            {
+              "token": "The",
+              "logprob": 0.0,
+              "margin": 21.25
+            },
+            {
+              "token": " first",
+              "logprob": -8.344646857949556e-07,
+              "margin": 14.00000011920963
+            },
+            {
+              "token": " four",
+              "logprob": 0.0,
+              "margin": 22.5
+            },
+            {
+              "token": " prime",
+              "logprob": -1.4305104514278355e-06,
+              "margin": 13.499999523163865
+            },
+            {
+              "token": " numbers",
+              "logprob": 0.0,
+              "margin": 26.5
+            },
+            {
+              "token": " are",
+              "logprob": 0.0,
+              "margin": 24.125
+            },
+            {
+              "token": ":\n\n",
+              "logprob": -5.960462772236497e-07,
+              "margin": 14.50000035762804
+            },
+            {
+              "token": "**",
+              "logprob": 0.0,
+              "margin": 17.625
+            },
+            {
+              "token": "2",
+              "logprob": 0.0,
+              "margin": 23.875
+            },
+            {
+              "token": ",",
+              "logprob": 0.0,
+              "margin": 20.0
+            },
+            {
+              "token": " ",
+              "logprob": 0.0,
+              "margin": 23.5
+            },
+            {
+              "token": "3",
+              "logprob": 0.0,
+              "margin": 34.0
+            },
+            {
+              "token": ",",
+              "logprob": 0.0,
+              "margin": 32.125
+            },
+            {
+              "token": " ",
+              "logprob": 0.0,
+              "margin": 26.125
+            },
+            {
+              "token": "5",
+              "logprob": 0.0,
+              "margin": 27.25
+            },
+            {
+              "token": ",",
+              "logprob": 0.0,
+              "margin": 20.125
+            },
+            {
+              "token": " ",
+              "logprob": -0.0015023384476080537,
+              "margin": 6.50000017543789
+            },
+            {
+              "token": "7",
+              "logprob": 0.0,
+              "margin": 30.0
+            },
+            {
+              "token": "**\n\n",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 16.374999880790718
+            },
+            {
+              "token": "###",
+              "logprob": -0.26621854305267334,
+              "margin": 2.0000001192092896
+            },
+            {
+              "token": " Explanation",
+              "logprob": -8.999896090244874e-05,
+              "margin": 9.49999964642484
+            },
+            {
+              "token": ":\n",
+              "logprob": -2.264974000354414e-06,
+              "margin": 12.999999642374632
+            },
+            {
+              "token": "A",
+              "logprob": -0.1623336225748062,
+              "margin": 1.7499999850988388
+            },
+            {
+              "token": " **",
+              "logprob": -0.03857364133000374,
+              "margin": 3.250000100582838
+            },
+            {
+              "token": "prime",
+              "logprob": 0.0,
+              "margin": 17.5
+            },
+            {
+              "token": " number",
+              "logprob": 0.0,
+              "margin": 21.5
+            },
+            {
+              "token": "**",
+              "logprob": 0.0,
+              "margin": 28.375
+            },
+            {
+              "token": " is",
+              "logprob": 0.0,
+              "margin": 27.5
+            },
+            {
+              "token": " a",
+              "logprob": 0.0,
+              "margin": 21.0
+            },
+            {
+              "token": " natural",
+              "logprob": -1.1920922133867862e-06,
+              "margin": 13.749999761582103
+            },
+            {
+              "token": " number",
+              "logprob": 0.0,
+              "margin": 20.0
+            },
+            {
+              "token": " greater",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 16.124999880790718
+            },
+            {
+              "token": " than",
+              "logprob": 0.0,
+              "margin": 26.25
+            },
+            {
+              "token": " ",
+              "logprob": -5.960462772236497e-07,
+              "margin": 14.25000035762804
+            },
+            {
+              "token": "1",
+              "logprob": 0.0,
+              "margin": 30.875
+            },
+            {
+              "token": " that",
+              "logprob": 0.0,
+              "margin": 19.0
+            },
+            {
+              "token": " has",
+              "logprob": -1.4305104514278355e-06,
+              "margin": 13.999999523163865
+            },
+            {
+              "token": " no",
+              "logprob": -0.001513170194812119,
+              "margin": 6.499999834108166
+            },
+            {
+              "token": " positive",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 16.249999880790718
+            },
+            {
+              "token": " div",
+              "logprob": -2.3841855067985307e-07,
+              "margin": 15.99999976158145
+            },
+            {
+              "token": "isors",
+              "logprob": 0.0,
+              "margin": 18.125
+            },
+            {
+              "token": " other",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 16.624999880790718
+            },
+            {
+              "token": " than",
+              "logprob": 0.0,
+              "margin": 26.75
+            },
+            {
+              "token": " ",
+              "logprob": -2.861018856492592e-06,
+              "margin": 12.750000000004093
+            },
+            {
+              "token": "1",
+              "logprob": 0.0,
+              "margin": 33.875
+            },
+            {
+              "token": " and",
+              "logprob": 0.0,
+              "margin": 23.875
+            },
+            {
+              "token": " itself",
+              "logprob": 0.0,
+              "margin": 22.5
+            },
+            {
+              "token": ".\n\n",
+              "logprob": -1.490105023549404e-05,
+              "margin": 11.125000357738827
+            }
+          ]
+        },
+        "text_capital": {
+          "content": "Paris",
+          "tokens": [
+            {
+              "token": "Paris",
+              "logprob": -1.0728830375228426e-06,
+              "margin": 13.999999880791279
+            },
+            {
+              "token": "<|im_end|>",
+              "logprob": 0.0,
+              "margin": 20.75
+            }
+          ]
+        }
+      },
+      "captures": [
+        {
+          "key": "(400, ((0, 400), None))",
+          "n_graphs": 1,
+          "capture_ms": 75.1,
+          "reserved_mib": 108338
+        },
+        {
+          "key": "(1024, ((0, 1024), None))",
+          "n_graphs": 2,
+          "capture_ms": 69.1,
+          "reserved_mib": 108400
+        }
+      ],
+      "verify": {
+        "verdict": "VERIFIED",
+        "reasons": [],
+        "evidence": "per_call",
+        "captures": 2,
+        "calls": 1,
+        "prefill_batches": 5
+      },
+      "startup_s": 34.0,
+      "gpu_used_mib": 110926,
+      "resolved": {
+        "mm_feature_transport": "cuda_ipc",
+        "mm_attention_backend": "fa3",
+        "cuda_graph_backend_prefill": "disabled",
+        "attention_backend": "flashinfer",
+        "mem_fraction_static": 0.75,
+        "skip_server_warmup": true,
+        "enable_precise_embedding_interpolation": true,
+        "mm_preprocess_cache_size_mb": 0,
+        "disable_radix_cache": true,
+        "chunked_prefill_size": 8192,
+        "prefill_graph_backend_resolved": "disabled"
+      },
+      "effective": {
+        "mm_backend_fa3_log": false,
+        "hopper_override_log": false,
+        "prefill_graph_disabled_log": false
+      },
+      "dump_dir": "/data/bowenwan6/home/sgl/profiler/experiments/qwen3vl8b/q3_vit_graph/results/raw/parity/on",
+      "n_dumps": 3
+    },
+    "off_rot": {
+      "outputs": {
+        "image336_colors": {
+          "content": "The colors in the image, from left to right, are:\n\n1. Red\n2. Green\n3. Blue\n4. Yellow\n5. Red\n6. Green\n7. Blue\n8. Yellow",
+          "tokens": [
+            {
+              "token": "The",
+              "logprob": -0.6397395133972168,
+              "margin": 0.5
+            },
+            {
+              "token": " colors",
+              "logprob": -0.3133709132671356,
+              "margin": 1.0000000298023224
+            },
+            {
+              "token": " in",
+              "logprob": -2.932505594799295e-05,
+              "margin": 10.50000023884786
+            },
+            {
+              "token": " the",
+              "logprob": -0.4740793704986572,
+              "margin": 0.5
+            },
+            {
+              "token": " image",
+              "logprob": 0.0,
+              "margin": 18.375
+            },
+            {
+              "token": ",",
+              "logprob": -0.00028975578607060015,
+              "margin": 8.750000161206117
+            },
+            {
+              "token": " from",
+              "logprob": -0.06565096229314804,
+              "margin": 2.749999977648258
+            },
+            {
+              "token": " left",
+              "logprob": 0.0,
+              "margin": 19.25
+            },
+            {
+              "token": " to",
+              "logprob": 0.0,
+              "margin": 22.625
+            },
+            {
+              "token": " right",
+              "logprob": 0.0,
+              "margin": 23.5
+            },
+            {
+              "token": ",",
+              "logprob": -2.777537883957848e-05,
+              "margin": 10.499999881176336
+            },
+            {
+              "token": " are",
+              "logprob": -2.861018856492592e-06,
+              "margin": 12.750000000004093
+            },
+            {
+              "token": ":\n\n",
+              "logprob": -0.0790565237402916,
+              "margin": 2.749999977648258
+            },
+            {
+              "token": "1",
+              "logprob": -0.511329710483551,
+              "margin": 0.4999999403953552
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 20.25
+            },
+            {
+              "token": " Red",
+              "logprob": -0.018890241160988808,
+              "margin": 4.000000139698386
+            },
+            {
+              "token": "\n",
+              "logprob": -0.0040833912789821625,
+              "margin": 5.499999765306711
+            },
+            {
+              "token": "2",
+              "logprob": 0.0,
+              "margin": 24.0
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.625
+            },
+            {
+              "token": " Green",
+              "logprob": -0.00026258357684127986,
+              "margin": 8.49999967686017
+            },
+            {
+              "token": "\n",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 15.999999880790718
+            },
+            {
+              "token": "3",
+              "logprob": 0.0,
+              "margin": 23.75
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.75
+            },
+            {
+              "token": " Blue",
+              "logprob": -9.619726915843785e-05,
+              "margin": 9.250000123836799
+            },
+            {
+              "token": "\n",
+              "logprob": -1.0728830375228426e-06,
+              "margin": 13.749999880791279
+            },
+            {
+              "token": "4",
+              "logprob": 0.0,
+              "margin": 22.875
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 24.125
+            },
+            {
+              "token": " Yellow",
+              "logprob": -3.576278118089249e-07,
+              "margin": 15.624999642372188
+            },
+            {
+              "token": "\n",
+              "logprob": -2.1457441107486375e-05,
+              "margin": 10.749999523393853
+            },
+            {
+              "token": "5",
+              "logprob": 0.0,
+              "margin": 24.875
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.125
+            },
+            {
+              "token": " Red",
+              "logprob": 0.0,
+              "margin": 23.5
+            },
+            {
+              "token": "\n",
+              "logprob": 0.0,
+              "margin": 18.0
+            },
+            {
+              "token": "6",
+              "logprob": 0.0,
+              "margin": 24.75
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 26.0
+            },
+            {
+              "token": " Green",
+              "logprob": 0.0,
+              "margin": 23.5
+            },
+            {
+              "token": "\n",
+              "logprob": 0.0,
+              "margin": 26.375
+            },
+            {
+              "token": "7",
+              "logprob": 0.0,
+              "margin": 26.375
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 25.25
+            },
+            {
+              "token": " Blue",
+              "logprob": 0.0,
+              "margin": 23.25
+            },
+            {
+              "token": "\n",
+              "logprob": 0.0,
+              "margin": 28.375
+            },
+            {
+              "token": "8",
+              "logprob": 0.0,
+              "margin": 26.125
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 28.25
+            },
+            {
+              "token": " Yellow",
+              "logprob": 0.0,
+              "margin": 20.75
+            },
+            {
+              "token": "<|im_end|>",
+              "logprob": -0.474077045917511,
+              "margin": 0.5
+            }
+          ]
+        },
+        "image336_count": {
+          "content": "Looking at the image, we can see a series of vertical stripes of different colors.\n\nLet's count them from left to right:\n\n1.  Red\n2.  Green\n3.  Blue\n4.  Yellow\n5.",
+          "tokens": [
+            {
+              "token": "Looking",
+              "logprob": -0.6301479935646057,
+              "margin": 0.25
+            },
+            {
+              "token": " at",
+              "logprob": -3.576278118089249e-07,
+              "margin": 15.499999642372188
+            },
+            {
+              "token": " the",
+              "logprob": -3.576278118089249e-07,
+              "margin": 14.874999642372188
+            },
+            {
+              "token": " image",
+              "logprob": -0.0003256267518736422,
+              "margin": 8.249999576190021
+            },
+            {
+              "token": ",",
+              "logprob": -0.048638198524713516,
+              "margin": 2.9999999068677425
+            },
+            {
+              "token": " we",
+              "logprob": -0.5771909952163696,
+              "margin": 0.25
+            },
+            {
+              "token": " can",
+              "logprob": -0.0002544794406276196,
+              "margin": 8.750000151601853
+            },
+            {
+              "token": " see",
+              "logprob": -0.03831898048520088,
+              "margin": 3.2499998919665813
+            },
+            {
+              "token": " a",
+              "logprob": -0.12149261683225632,
+              "margin": 2.2500000074505806
+            },
+            {
+              "token": " series",
+              "logprob": -0.5773695111274719,
+              "margin": 0.25
+            },
+            {
+              "token": " of",
+              "logprob": 0.0,
+              "margin": 23.75
+            },
+            {
+              "token": " vertical",
+              "logprob": -7.390948667307384e-06,
+              "margin": 12.250000238445864
+            },
+            {
+              "token": " stripes",
+              "logprob": -0.0018716213526204228,
+              "margin": 7.249999964493327
+            },
+            {
+              "token": " of",
+              "logprob": -0.9604073762893677,
+              "margin": 0.25
+            },
+            {
+              "token": " different",
+              "logprob": -0.015916675329208374,
+              "margin": 5.000000149011612
+            },
+            {
+              "token": " colors",
+              "logprob": -1.311301275563892e-06,
+              "margin": 13.74999964237304
+            },
+            {
+              "token": ".\n\n",
+              "logprob": -0.03821468725800514,
+              "margin": 3.2499999962747097
+            },
+            {
+              "token": "Let",
+              "logprob": -0.37792879343032837,
+              "margin": 1.7499999403953552
+            },
+            {
+              "token": "'s",
+              "logprob": -0.0014109190087765455,
+              "margin": 6.6250000421423465
+            },
+            {
+              "token": " count",
+              "logprob": -0.02325301803648472,
+              "margin": 4.249999945983291
+            },
+            {
+              "token": " them",
+              "logprob": -3.814624506048858e-05,
+              "margin": 10.750000000727596
+            },
+            {
+              "token": " from",
+              "logprob": -0.027090296149253845,
+              "margin": 3.750000014901161
+            },
+            {
+              "token": " left",
+              "logprob": 0.0,
+              "margin": 18.5
+            },
+            {
+              "token": " to",
+              "logprob": 0.0,
+              "margin": 22.25
+            },
+            {
+              "token": " right",
+              "logprob": 0.0,
+              "margin": 22.125
+            },
+            {
+              "token": ":\n\n",
+              "logprob": -0.20141343772411346,
+              "margin": 1.4999999552965164
+            },
+            {
+              "token": "1",
+              "logprob": -0.0024756519123911858,
+              "margin": 6.000000086612999
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 22.75
+            },
+            {
+              "token": " ",
+              "logprob": -0.0032245328184217215,
+              "margin": 5.749999840045348
+            },
+            {
+              "token": " Red",
+              "logprob": -0.16551591455936432,
+              "margin": 1.7499999850988388
+            },
+            {
+              "token": "\n",
+              "logprob": -0.0014218707801774144,
+              "margin": 7.250000057625584
+            },
+            {
+              "token": "2",
+              "logprob": 0.0,
+              "margin": 23.25
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 28.25
+            },
+            {
+              "token": " ",
+              "logprob": 0.0,
+              "margin": 23.75
+            },
+            {
+              "token": " Green",
+              "logprob": -1.6927575416048057e-05,
+              "margin": 11.00000023856228
+            },
+            {
+              "token": "\n",
+              "logprob": 0.0,
+              "margin": 17.5
+            },
+            {
+              "token": "3",
+              "logprob": 0.0,
+              "margin": 24.375
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 29.25
+            },
+            {
+              "token": " ",
+              "logprob": 0.0,
+              "margin": 23.375
+            },
+            {
+              "token": " Blue",
+              "logprob": -1.2993727978027891e-05,
+              "margin": 11.250000357712452
+            },
+            {
+              "token": "\n",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 15.999999880790718
+            },
+            {
+              "token": "4",
+              "logprob": 0.0,
+              "margin": 23.375
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 30.875
+            },
+            {
+              "token": " ",
+              "logprob": 0.0,
+              "margin": 23.5
+            },
+            {
+              "token": " Yellow",
+              "logprob": -5.960462772236497e-07,
+              "margin": 14.62500035762804
+            },
+            {
+              "token": "\n",
+              "logprob": -2.1457441107486375e-05,
+              "margin": 10.749999523393853
+            },
+            {
+              "token": "5",
+              "logprob": 0.0,
+              "margin": 23.875
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 29.5
+            }
+          ]
+        },
+        "image512_colors": {
+          "content": "The image consists of vertical stripes in the following order, repeating from left to right:\n\n1. Red\n2. Green\n3. Blue\n4. Yellow\n5. Red\n6. Green\n7. Blue\n8. Yellow",
+          "tokens": [
+            {
+              "token": "The",
+              "logprob": -0.14294037222862244,
+              "margin": 2.499999910593033
+            },
+            {
+              "token": " image",
+              "logprob": -0.3869752287864685,
+              "margin": 0.7500000596046448
+            },
+            {
+              "token": " consists",
+              "logprob": -0.6409275531768799,
+              "margin": 0.25
+            },
+            {
+              "token": " of",
+              "logprob": 0.0,
+              "margin": 18.0
+            },
+            {
+              "token": " vertical",
+              "logprob": -0.014089635573327541,
+              "margin": 4.499999948777258
+            },
+            {
+              "token": " stripes",
+              "logprob": -9.572047565598041e-05,
+              "margin": 9.999999646955985
+            },
+            {
+              "token": " in",
+              "logprob": -1.0218348503112793,
+              "margin": 0.25
+            },
+            {
+              "token": " the",
+              "logprob": -0.05513041839003563,
+              "margin": 3.250000063329935
+            },
+            {
+              "token": " following",
+              "logprob": -2.9802276912960224e-06,
+              "margin": 12.749999880795258
+            },
+            {
+              "token": " order",
+              "logprob": -0.2989705204963684,
+              "margin": 1.2499999403953552
+            },
+            {
+              "token": ",",
+              "logprob": -0.07634497433900833,
+              "margin": 2.7499999925494194
+            },
+            {
+              "token": " repeating",
+              "logprob": -0.04048922285437584,
+              "margin": 3.249999973922968
+            },
+            {
+              "token": " from",
+              "logprob": -0.4112713634967804,
+              "margin": 0.7499999701976776
+            },
+            {
+              "token": " left",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 15.999999880790718
+            },
+            {
+              "token": " to",
+              "logprob": 0.0,
+              "margin": 22.875
+            },
+            {
+              "token": " right",
+              "logprob": 0.0,
+              "margin": 22.75
+            },
+            {
+              "token": ":\n\n",
+              "logprob": -0.011483640410006046,
+              "margin": 4.500000028871
+            },
+            {
+              "token": "1",
+              "logprob": -0.43335387110710144,
+              "margin": 1.2500000298023224
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 18.875
+            },
+            {
+              "token": " Red",
+              "logprob": -0.052031099796295166,
+              "margin": 2.9999999403953552
+            },
+            {
+              "token": "\n",
+              "logprob": -0.07889790087938309,
+              "margin": 2.500000052154064
+            },
+            {
+              "token": "2",
+              "logprob": 0.0,
+              "margin": 22.5
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.375
+            },
+            {
+              "token": " Green",
+              "logprob": -0.0016229089815169573,
+              "margin": 6.999999767867848
+            },
+            {
+              "token": "\n",
+              "logprob": -1.4305104514278355e-06,
+              "margin": 13.499999523163865
+            },
+            {
+              "token": "3",
+              "logprob": 0.0,
+              "margin": 22.125
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.375
+            },
+            {
+              "token": " Blue",
+              "logprob": -1.728519782773219e-05,
+              "margin": 10.999999880939868
+            },
+            {
+              "token": "\n",
+              "logprob": -2.753696753643453e-05,
+              "margin": 10.50000011958764
+            },
+            {
+              "token": "4",
+              "logprob": 0.0,
+              "margin": 23.5
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.375
+            },
+            {
+              "token": " Yellow",
+              "logprob": 0.0,
+              "margin": 18.5
+            },
+            {
+              "token": "\n",
+              "logprob": -3.564294092939235e-05,
+              "margin": 10.249999643008778
+            },
+            {
+              "token": "5",
+              "logprob": 0.0,
+              "margin": 20.625
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.375
+            },
+            {
+              "token": " Red",
+              "logprob": -1.4066597032069694e-05,
+              "margin": 11.250000238517714
+            },
+            {
+              "token": "\n",
+              "logprob": -1.0728830375228426e-06,
+              "margin": 13.749999880791279
+            },
+            {
+              "token": "6",
+              "logprob": 0.0,
+              "margin": 23.625
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 22.75
+            },
+            {
+              "token": " Green",
+              "logprob": 0.0,
+              "margin": 24.5
+            },
+            {
+              "token": "\n",
+              "logprob": 0.0,
+              "margin": 19.875
+            },
+            {
+              "token": "7",
+              "logprob": 0.0,
+              "margin": 24.125
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.375
+            },
+            {
+              "token": " Blue",
+              "logprob": 0.0,
+              "margin": 23.0
+            },
+            {
+              "token": "\n",
+              "logprob": 0.0,
+              "margin": 20.75
+            },
+            {
+              "token": "8",
+              "logprob": 0.0,
+              "margin": 22.25
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 26.375
+            },
+            {
+              "token": " Yellow",
+              "logprob": 0.0,
+              "margin": 20.75
+            }
+          ]
+        },
+        "text_primes": {
+          "content": "The first four prime numbers are:\n\n**2, 3, 5, 7**\n\n### Explanation:\nA **prime number** is a natural number greater than 1 that has no positive divisors other than 1 and itself.\n\n",
+          "tokens": [
+            {
+              "token": "The",
+              "logprob": 0.0,
+              "margin": 21.25
+            },
+            {
+              "token": " first",
+              "logprob": -8.344646857949556e-07,
+              "margin": 14.00000011920963
+            },
+            {
+              "token": " four",
+              "logprob": 0.0,
+              "margin": 22.5
+            },
+            {
+              "token": " prime",
+              "logprob": -1.4305104514278355e-06,
+              "margin": 13.499999523163865
+            },
+            {
+              "token": " numbers",
+              "logprob": 0.0,
+              "margin": 26.5
+            },
+            {
+              "token": " are",
+              "logprob": 0.0,
+              "margin": 24.125
+            },
+            {
+              "token": ":\n\n",
+              "logprob": -5.960462772236497e-07,
+              "margin": 14.50000035762804
+            },
+            {
+              "token": "**",
+              "logprob": 0.0,
+              "margin": 17.625
+            },
+            {
+              "token": "2",
+              "logprob": 0.0,
+              "margin": 23.875
+            },
+            {
+              "token": ",",
+              "logprob": 0.0,
+              "margin": 20.0
+            },
+            {
+              "token": " ",
+              "logprob": 0.0,
+              "margin": 23.5
+            },
+            {
+              "token": "3",
+              "logprob": 0.0,
+              "margin": 34.0
+            },
+            {
+              "token": ",",
+              "logprob": 0.0,
+              "margin": 32.125
+            },
+            {
+              "token": " ",
+              "logprob": 0.0,
+              "margin": 26.125
+            },
+            {
+              "token": "5",
+              "logprob": 0.0,
+              "margin": 27.25
+            },
+            {
+              "token": ",",
+              "logprob": 0.0,
+              "margin": 20.125
+            },
+            {
+              "token": " ",
+              "logprob": -0.0015023384476080537,
+              "margin": 6.50000017543789
+            },
+            {
+              "token": "7",
+              "logprob": 0.0,
+              "margin": 30.0
+            },
+            {
+              "token": "**\n\n",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 16.374999880790718
+            },
+            {
+              "token": "###",
+              "logprob": -0.26621854305267334,
+              "margin": 2.0000001192092896
+            },
+            {
+              "token": " Explanation",
+              "logprob": -8.999896090244874e-05,
+              "margin": 9.49999964642484
+            },
+            {
+              "token": ":\n",
+              "logprob": -2.264974000354414e-06,
+              "margin": 12.999999642374632
+            },
+            {
+              "token": "A",
+              "logprob": -0.1623336225748062,
+              "margin": 1.7499999850988388
+            },
+            {
+              "token": " **",
+              "logprob": -0.03857364133000374,
+              "margin": 3.250000100582838
+            },
+            {
+              "token": "prime",
+              "logprob": 0.0,
+              "margin": 17.5
+            },
+            {
+              "token": " number",
+              "logprob": 0.0,
+              "margin": 21.5
+            },
+            {
+              "token": "**",
+              "logprob": 0.0,
+              "margin": 28.375
+            },
+            {
+              "token": " is",
+              "logprob": 0.0,
+              "margin": 27.5
+            },
+            {
+              "token": " a",
+              "logprob": 0.0,
+              "margin": 21.0
+            },
+            {
+              "token": " natural",
+              "logprob": -1.1920922133867862e-06,
+              "margin": 13.749999761582103
+            },
+            {
+              "token": " number",
+              "logprob": 0.0,
+              "margin": 20.0
+            },
+            {
+              "token": " greater",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 16.124999880790718
+            },
+            {
+              "token": " than",
+              "logprob": 0.0,
+              "margin": 26.25
+            },
+            {
+              "token": " ",
+              "logprob": -5.960462772236497e-07,
+              "margin": 14.25000035762804
+            },
+            {
+              "token": "1",
+              "logprob": 0.0,
+              "margin": 30.875
+            },
+            {
+              "token": " that",
+              "logprob": 0.0,
+              "margin": 19.0
+            },
+            {
+              "token": " has",
+              "logprob": -1.4305104514278355e-06,
+              "margin": 13.999999523163865
+            },
+            {
+              "token": " no",
+              "logprob": -0.001513170194812119,
+              "margin": 6.499999834108166
+            },
+            {
+              "token": " positive",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 16.249999880790718
+            },
+            {
+              "token": " div",
+              "logprob": -2.3841855067985307e-07,
+              "margin": 15.99999976158145
+            },
+            {
+              "token": "isors",
+              "logprob": 0.0,
+              "margin": 18.125
+            },
+            {
+              "token": " other",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 16.624999880790718
+            },
+            {
+              "token": " than",
+              "logprob": 0.0,
+              "margin": 26.75
+            },
+            {
+              "token": " ",
+              "logprob": -2.861018856492592e-06,
+              "margin": 12.750000000004093
+            },
+            {
+              "token": "1",
+              "logprob": 0.0,
+              "margin": 33.875
+            },
+            {
+              "token": " and",
+              "logprob": 0.0,
+              "margin": 23.875
+            },
+            {
+              "token": " itself",
+              "logprob": 0.0,
+              "margin": 22.5
+            },
+            {
+              "token": ".\n\n",
+              "logprob": -1.490105023549404e-05,
+              "margin": 11.125000357738827
+            }
+          ]
+        },
+        "text_capital": {
+          "content": "Paris",
+          "tokens": [
+            {
+              "token": "Paris",
+              "logprob": -1.0728830375228426e-06,
+              "margin": 13.999999880791279
+            },
+            {
+              "token": "<|im_end|>",
+              "logprob": 0.0,
+              "margin": 20.75
+            }
+          ]
+        }
+      },
+      "captures": [],
+      "verify": {
+        "verdict": "VERIFIED",
+        "reasons": [],
+        "evidence": "no_graph_lines",
+        "captures": 0,
+        "calls": 0,
+        "prefill_batches": 5
+      },
+      "startup_s": 34.0,
+      "gpu_used_mib": 110804,
+      "resolved": {
+        "mm_feature_transport": "cuda_ipc",
+        "mm_attention_backend": "fa3",
+        "cuda_graph_backend_prefill": "disabled",
+        "attention_backend": "flashinfer",
+        "mem_fraction_static": 0.75,
+        "skip_server_warmup": true,
+        "enable_precise_embedding_interpolation": true,
+        "mm_preprocess_cache_size_mb": 0,
+        "disable_radix_cache": true,
+        "chunked_prefill_size": 8192,
+        "prefill_graph_backend_resolved": "disabled"
+      },
+      "effective": {
+        "mm_backend_fa3_log": false,
+        "hopper_override_log": false,
+        "prefill_graph_disabled_log": false
+      },
+      "dump_dir": "/data/bowenwan6/home/sgl/profiler/experiments/qwen3vl8b/q3_vit_graph/results/raw/parity/off_rot",
+      "n_dumps": 3
+    },
+    "on_default_interp": {
+      "outputs": {
+        "image336_colors": {
+          "content": "The image consists of vertical stripes, and from left to right, the colors are:\n\n1. Red\n2. Green\n3. Blue\n4. Yellow\n5. Red\n6. Green\n7. Blue\n8. Yellow",
+          "tokens": [
+            {
+              "token": "The",
+              "logprob": -0.27458876371383667,
+              "margin": 1.2500000596046448
+            },
+            {
+              "token": " image",
+              "logprob": -0.3869214653968811,
+              "margin": 0.7499999403953552
+            },
+            {
+              "token": " consists",
+              "logprob": -0.25688064098358154,
+              "margin": 1.5
+            },
+            {
+              "token": " of",
+              "logprob": 0.0,
+              "margin": 19.0
+            },
+            {
+              "token": " vertical",
+              "logprob": -0.009633953683078289,
+              "margin": 5.500000064261258
+            },
+            {
+              "token": " stripes",
+              "logprob": -8.034383063204587e-05,
+              "margin": 10.249999764811946
+            },
+            {
+              "token": ",",
+              "logprob": -0.7417612075805664,
+              "margin": 0.25
+            },
+            {
+              "token": " and",
+              "logprob": -0.7208533883094788,
+              "margin": 0.0
+            },
+            {
+              "token": " from",
+              "logprob": -0.6806635856628418,
+              "margin": 0.25
+            },
+            {
+              "token": " left",
+              "logprob": -2.264974000354414e-06,
+              "margin": 12.999999642374632
+            },
+            {
+              "token": " to",
+              "logprob": 0.0,
+              "margin": 22.875
+            },
+            {
+              "token": " right",
+              "logprob": 0.0,
+              "margin": 22.0
+            },
+            {
+              "token": ",",
+              "logprob": -9.536738616588991e-07,
+              "margin": 14.625000000000455
+            },
+            {
+              "token": " the",
+              "logprob": -5.221230458118953e-05,
+              "margin": 10.000000239782821
+            },
+            {
+              "token": " colors",
+              "logprob": -4.458328112377785e-05,
+              "margin": 10.750000239411747
+            },
+            {
+              "token": " are",
+              "logprob": -0.023511895909905434,
+              "margin": 3.7499999906867743
+            },
+            {
+              "token": ":\n\n",
+              "logprob": -0.0003326578007545322,
+              "margin": 8.250000174535671
+            },
+            {
+              "token": "1",
+              "logprob": -0.009718840010464191,
+              "margin": 5.250000054948032
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 21.25
+            },
+            {
+              "token": " Red",
+              "logprob": -0.0620047003030777,
+              "margin": 2.7500001043081284
+            },
+            {
+              "token": "\n",
+              "logprob": -0.20141440629959106,
+              "margin": 1.4999999403953552
+            },
+            {
+              "token": "2",
+              "logprob": 0.0,
+              "margin": 25.0
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 24.625
+            },
+            {
+              "token": " Green",
+              "logprob": -0.00013171759201213717,
+              "margin": 9.249999889463652
+            },
+            {
+              "token": "\n",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 15.999999880790718
+            },
+            {
+              "token": "3",
+              "logprob": 0.0,
+              "margin": 24.625
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 24.25
+            },
+            {
+              "token": " Blue",
+              "logprob": -3.540453326422721e-05,
+              "margin": 10.249999881416443
+            },
+            {
+              "token": "\n",
+              "logprob": -5.960462772236497e-07,
+              "margin": 14.25000035762804
+            },
+            {
+              "token": "4",
+              "logprob": 0.0,
+              "margin": 24.625
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 24.5
+            },
+            {
+              "token": " Yellow",
+              "logprob": 0.0,
+              "margin": 17.875
+            },
+            {
+              "token": "\n",
+              "logprob": -1.2993727978027891e-05,
+              "margin": 11.250000357712452
+            },
+            {
+              "token": "5",
+              "logprob": 0.0,
+              "margin": 26.375
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.75
+            },
+            {
+              "token": " Red",
+              "logprob": 0.0,
+              "margin": 23.5
+            },
+            {
+              "token": "\n",
+              "logprob": 0.0,
+              "margin": 19.5
+            },
+            {
+              "token": "6",
+              "logprob": 0.0,
+              "margin": 25.625
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 25.625
+            },
+            {
+              "token": " Green",
+              "logprob": 0.0,
+              "margin": 22.875
+            },
+            {
+              "token": "\n",
+              "logprob": 0.0,
+              "margin": 27.125
+            },
+            {
+              "token": "7",
+              "logprob": 0.0,
+              "margin": 26.25
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 25.25
+            },
+            {
+              "token": " Blue",
+              "logprob": 0.0,
+              "margin": 23.0
+            },
+            {
+              "token": "\n",
+              "logprob": 0.0,
+              "margin": 29.25
+            },
+            {
+              "token": "8",
+              "logprob": 0.0,
+              "margin": 26.375
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 28.75
+            },
+            {
+              "token": " Yellow",
+              "logprob": 0.0,
+              "margin": 21.375
+            }
+          ]
+        },
+        "image336_count": {
+          "content": "Looking at the image, we can see a pattern of vertical stripes. Let's count them from left to right:\n\n1.  Red\n2.  Green\n3.  Blue\n4.  Yellow\n5.  Red\n",
+          "tokens": [
+            {
+              "token": "Looking",
+              "logprob": -0.008681767620146275,
+              "margin": 5.750000006519258
+            },
+            {
+              "token": " at",
+              "logprob": -3.576278118089249e-07,
+              "margin": 15.499999642372188
+            },
+            {
+              "token": " the",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 15.874999880790718
+            },
+            {
+              "token": " image",
+              "logprob": -0.006846421863883734,
+              "margin": 5.000000006053597
+            },
+            {
+              "token": ",",
+              "logprob": -0.02339847758412361,
+              "margin": 3.7499999217689037
+            },
+            {
+              "token": " we",
+              "logprob": -0.16719938814640045,
+              "margin": 1.7499999850988388
+            },
+            {
+              "token": " can",
+              "logprob": -0.005783964414149523,
+              "margin": 5.250000070314854
+            },
+            {
+              "token": " see",
+              "logprob": -0.038566187024116516,
+              "margin": 3.249999925494194
+            },
+            {
+              "token": " a",
+              "logprob": -0.1078648641705513,
+              "margin": 2.7499999925494194
+            },
+            {
+              "token": " pattern",
+              "logprob": -0.5821383595466614,
+              "margin": 0.25
+            },
+            {
+              "token": " of",
+              "logprob": -0.00011789103882620111,
+              "margin": 9.250000364576408
+            },
+            {
+              "token": " vertical",
+              "logprob": -4.386805812828243e-05,
+              "margin": 10.500000000960426
+            },
+            {
+              "token": " stripes",
+              "logprob": -0.0006650857976637781,
+              "margin": 7.999999625200871
+            },
+            {
+              "token": ".",
+              "logprob": -0.5193026661872864,
+              "margin": 0.4999999403953552
+            },
+            {
+              "token": " Let",
+              "logprob": -0.029476134106516838,
+              "margin": 4.5000000316649675
+            },
+            {
+              "token": "'s",
+              "logprob": -0.023444240912795067,
+              "margin": 3.7499999348074198
+            },
+            {
+              "token": " count",
+              "logprob": -0.0010937429033219814,
+              "margin": 7.250000121537596
+            },
+            {
+              "token": " them",
+              "logprob": -0.00413527199998498,
+              "margin": 5.4999998598359525
+            },
+            {
+              "token": " from",
+              "logprob": -0.17249473929405212,
+              "margin": 2.249999910593033
+            },
+            {
+              "token": " left",
+              "logprob": 0.0,
+              "margin": 18.75
+            },
+            {
+              "token": " to",
+              "logprob": 0.0,
+              "margin": 23.25
+            },
+            {
+              "token": " right",
+              "logprob": 0.0,
+              "margin": 22.25
+            },
+            {
+              "token": ":\n\n",
+              "logprob": -0.0004395472351461649,
+              "margin": 7.750000096624717
+            },
+            {
+              "token": "1",
+              "logprob": -0.005234820768237114,
+              "margin": 5.249999897554517
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 18.125
+            },
+            {
+              "token": " ",
+              "logprob": -0.499767541885376,
+              "margin": 0.5
+            },
+            {
+              "token": " Red",
+              "logprob": -0.5001916885375977,
+              "margin": 0.5
+            },
+            {
+              "token": "\n",
+              "logprob": -0.0006677066558040679,
+              "margin": 7.99999986536568
+            },
+            {
+              "token": "2",
+              "logprob": 0.0,
+              "margin": 23.75
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 27.625
+            },
+            {
+              "token": " ",
+              "logprob": 0.0,
+              "margin": 23.625
+            },
+            {
+              "token": " Green",
+              "logprob": -1.0251946150674485e-05,
+              "margin": 11.50000023847133
+            },
+            {
+              "token": "\n",
+              "logprob": 0.0,
+              "margin": 18.75
+            },
+            {
+              "token": "3",
+              "logprob": 0.0,
+              "margin": 24.0
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 29.0
+            },
+            {
+              "token": " ",
+              "logprob": 0.0,
+              "margin": 23.0
+            },
+            {
+              "token": " Blue",
+              "logprob": -6.198863957251888e-06,
+              "margin": 11.999999523181941
+            },
+            {
+              "token": "\n",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 15.999999880790718
+            },
+            {
+              "token": "4",
+              "logprob": 0.0,
+              "margin": 24.625
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 30.25
+            },
+            {
+              "token": " ",
+              "logprob": 0.0,
+              "margin": 22.5
+            },
+            {
+              "token": " Yellow",
+              "logprob": -1.4305104514278355e-06,
+              "margin": 13.499999523163865
+            },
+            {
+              "token": "\n",
+              "logprob": -1.4305104514278355e-06,
+              "margin": 13.499999523163865
+            },
+            {
+              "token": "5",
+              "logprob": 0.0,
+              "margin": 24.875
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 30.0
+            },
+            {
+              "token": " ",
+              "logprob": 0.0,
+              "margin": 30.125
+            },
+            {
+              "token": " Red",
+              "logprob": 0.0,
+              "margin": 24.0
+            },
+            {
+              "token": "\n",
+              "logprob": 0.0,
+              "margin": 16.75
+            }
+          ]
+        },
+        "image512_colors": {
+          "content": "The image consists of vertical stripes in the following order, repeating from left to right:\n\n1. Red\n2. Green\n3. Blue\n4. Yellow\n5. Red\n6. Green\n7. Blue\n8. Yellow",
+          "tokens": [
+            {
+              "token": "The",
+              "logprob": -0.15801362693309784,
+              "margin": 2.7499999552965164
+            },
+            {
+              "token": " image",
+              "logprob": -0.4741966724395752,
+              "margin": 0.5
+            },
+            {
+              "token": " consists",
+              "logprob": -0.8201184868812561,
+              "margin": 0.0
+            },
+            {
+              "token": " of",
+              "logprob": 0.0,
+              "margin": 17.75
+            },
+            {
+              "token": " vertical",
+              "logprob": -0.01416732743382454,
+              "margin": 4.4999999813735485
+            },
+            {
+              "token": " stripes",
+              "logprob": -5.090107151772827e-05,
+              "margin": 10.749999643667252
+            },
+            {
+              "token": " in",
+              "logprob": -1.0551284551620483,
+              "margin": 0.25
+            },
+            {
+              "token": " the",
+              "logprob": -0.09730583429336548,
+              "margin": 2.7499999403953552
+            },
+            {
+              "token": " following",
+              "logprob": -2.9802276912960224e-06,
+              "margin": 12.749999880795258
+            },
+            {
+              "token": " order",
+              "logprob": -0.38212043046951294,
+              "margin": 0.9999999403953552
+            },
+            {
+              "token": ",",
+              "logprob": -0.035843536257743835,
+              "margin": 3.500000074505806
+            },
+            {
+              "token": " repeating",
+              "logprob": -0.032112836837768555,
+              "margin": 3.5
+            },
+            {
+              "token": " from",
+              "logprob": -0.33397677540779114,
+              "margin": 0.9999999701976776
+            },
+            {
+              "token": " left",
+              "logprob": -3.576278118089249e-07,
+              "margin": 14.999999642372188
+            },
+            {
+              "token": " to",
+              "logprob": 0.0,
+              "margin": 23.125
+            },
+            {
+              "token": " right",
+              "logprob": 0.0,
+              "margin": 22.25
+            },
+            {
+              "token": ":\n\n",
+              "logprob": -0.007005533203482628,
+              "margin": 5.000000158324838
+            },
+            {
+              "token": "1",
+              "logprob": -0.21594156324863434,
+              "margin": 2.2500001043081284
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 19.625
+            },
+            {
+              "token": " Red",
+              "logprob": -0.0522959865629673,
+              "margin": 2.999999936670065
+            },
+            {
+              "token": "\n",
+              "logprob": -0.16023313999176025,
+              "margin": 1.75
+            },
+            {
+              "token": "2",
+              "logprob": 0.0,
+              "margin": 22.75
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.875
+            },
+            {
+              "token": " Green",
+              "logprob": -0.008150649257004261,
+              "margin": 5.499999928288162
+            },
+            {
+              "token": "\n",
+              "logprob": -4.768360213347478e-06,
+              "margin": 12.250000000011369
+            },
+            {
+              "token": "3",
+              "logprob": 0.0,
+              "margin": 22.25
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.625
+            },
+            {
+              "token": " Blue",
+              "logprob": -3.5523738915799186e-05,
+              "margin": 10.249999762210791
+            },
+            {
+              "token": "\n",
+              "logprob": -1.6689160474925302e-05,
+              "margin": 10.999999523302904
+            },
+            {
+              "token": "4",
+              "logprob": 0.0,
+              "margin": 24.0
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.75
+            },
+            {
+              "token": " Yellow",
+              "logprob": 0.0,
+              "margin": 17.875
+            },
+            {
+              "token": "\n",
+              "logprob": -1.1920922133867862e-06,
+              "margin": 13.999999761582103
+            },
+            {
+              "token": "5",
+              "logprob": 0.0,
+              "margin": 22.25
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.625
+            },
+            {
+              "token": " Red",
+              "logprob": -7.152555099310121e-07,
+              "margin": 14.250000238418806
+            },
+            {
+              "token": "\n",
+              "logprob": -3.576278118089249e-07,
+              "margin": 14.749999642372188
+            },
+            {
+              "token": "6",
+              "logprob": 0.0,
+              "margin": 23.875
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.0
+            },
+            {
+              "token": " Green",
+              "logprob": 0.0,
+              "margin": 24.5
+            },
+            {
+              "token": "\n",
+              "logprob": 0.0,
+              "margin": 22.375
+            },
+            {
+              "token": "7",
+              "logprob": 0.0,
+              "margin": 24.25
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 23.875
+            },
+            {
+              "token": " Blue",
+              "logprob": 0.0,
+              "margin": 23.75
+            },
+            {
+              "token": "\n",
+              "logprob": 0.0,
+              "margin": 20.0
+            },
+            {
+              "token": "8",
+              "logprob": 0.0,
+              "margin": 21.75
+            },
+            {
+              "token": ".",
+              "logprob": 0.0,
+              "margin": 26.5
+            },
+            {
+              "token": " Yellow",
+              "logprob": 0.0,
+              "margin": 19.75
+            }
+          ]
+        },
+        "text_primes": {
+          "content": "The first four prime numbers are:\n\n**2, 3, 5, 7**\n\n### Explanation:\nA **prime number** is a natural number greater than 1 that has no positive divisors other than 1 and itself.\n\n",
+          "tokens": [
+            {
+              "token": "The",
+              "logprob": 0.0,
+              "margin": 21.25
+            },
+            {
+              "token": " first",
+              "logprob": -8.344646857949556e-07,
+              "margin": 14.00000011920963
+            },
+            {
+              "token": " four",
+              "logprob": 0.0,
+              "margin": 22.5
+            },
+            {
+              "token": " prime",
+              "logprob": -1.4305104514278355e-06,
+              "margin": 13.499999523163865
+            },
+            {
+              "token": " numbers",
+              "logprob": 0.0,
+              "margin": 26.5
+            },
+            {
+              "token": " are",
+              "logprob": 0.0,
+              "margin": 24.125
+            },
+            {
+              "token": ":\n\n",
+              "logprob": -5.960462772236497e-07,
+              "margin": 14.50000035762804
+            },
+            {
+              "token": "**",
+              "logprob": 0.0,
+              "margin": 17.625
+            },
+            {
+              "token": "2",
+              "logprob": 0.0,
+              "margin": 23.875
+            },
+            {
+              "token": ",",
+              "logprob": 0.0,
+              "margin": 20.0
+            },
+            {
+              "token": " ",
+              "logprob": 0.0,
+              "margin": 23.5
+            },
+            {
+              "token": "3",
+              "logprob": 0.0,
+              "margin": 34.0
+            },
+            {
+              "token": ",",
+              "logprob": 0.0,
+              "margin": 32.125
+            },
+            {
+              "token": " ",
+              "logprob": 0.0,
+              "margin": 26.125
+            },
+            {
+              "token": "5",
+              "logprob": 0.0,
+              "margin": 27.25
+            },
+            {
+              "token": ",",
+              "logprob": 0.0,
+              "margin": 20.125
+            },
+            {
+              "token": " ",
+              "logprob": -0.0015023384476080537,
+              "margin": 6.50000017543789
+            },
+            {
+              "token": "7",
+              "logprob": 0.0,
+              "margin": 30.0
+            },
+            {
+              "token": "**\n\n",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 16.374999880790718
+            },
+            {
+              "token": "###",
+              "logprob": -0.26621854305267334,
+              "margin": 2.0000001192092896
+            },
+            {
+              "token": " Explanation",
+              "logprob": -8.999896090244874e-05,
+              "margin": 9.49999964642484
+            },
+            {
+              "token": ":\n",
+              "logprob": -2.264974000354414e-06,
+              "margin": 12.999999642374632
+            },
+            {
+              "token": "A",
+              "logprob": -0.1623336225748062,
+              "margin": 1.7499999850988388
+            },
+            {
+              "token": " **",
+              "logprob": -0.03857364133000374,
+              "margin": 3.250000100582838
+            },
+            {
+              "token": "prime",
+              "logprob": 0.0,
+              "margin": 17.5
+            },
+            {
+              "token": " number",
+              "logprob": 0.0,
+              "margin": 21.5
+            },
+            {
+              "token": "**",
+              "logprob": 0.0,
+              "margin": 28.375
+            },
+            {
+              "token": " is",
+              "logprob": 0.0,
+              "margin": 27.5
+            },
+            {
+              "token": " a",
+              "logprob": 0.0,
+              "margin": 21.0
+            },
+            {
+              "token": " natural",
+              "logprob": -1.1920922133867862e-06,
+              "margin": 13.749999761582103
+            },
+            {
+              "token": " number",
+              "logprob": 0.0,
+              "margin": 20.0
+            },
+            {
+              "token": " greater",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 16.124999880790718
+            },
+            {
+              "token": " than",
+              "logprob": 0.0,
+              "margin": 26.25
+            },
+            {
+              "token": " ",
+              "logprob": -5.960462772236497e-07,
+              "margin": 14.25000035762804
+            },
+            {
+              "token": "1",
+              "logprob": 0.0,
+              "margin": 30.875
+            },
+            {
+              "token": " that",
+              "logprob": 0.0,
+              "margin": 19.0
+            },
+            {
+              "token": " has",
+              "logprob": -1.4305104514278355e-06,
+              "margin": 13.999999523163865
+            },
+            {
+              "token": " no",
+              "logprob": -0.001513170194812119,
+              "margin": 6.499999834108166
+            },
+            {
+              "token": " positive",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 16.249999880790718
+            },
+            {
+              "token": " div",
+              "logprob": -2.3841855067985307e-07,
+              "margin": 15.99999976158145
+            },
+            {
+              "token": "isors",
+              "logprob": 0.0,
+              "margin": 18.125
+            },
+            {
+              "token": " other",
+              "logprob": -1.1920928244535389e-07,
+              "margin": 16.624999880790718
+            },
+            {
+              "token": " than",
+              "logprob": 0.0,
+              "margin": 26.75
+            },
+            {
+              "token": " ",
+              "logprob": -2.861018856492592e-06,
+              "margin": 12.750000000004093
+            },
+            {
+              "token": "1",
+              "logprob": 0.0,
+              "margin": 33.875
+            },
+            {
+              "token": " and",
+              "logprob": 0.0,
+              "margin": 23.875
+            },
+            {
+              "token": " itself",
+              "logprob": 0.0,
+              "margin": 22.5
+            },
+            {
+              "token": ".\n\n",
+              "logprob": -1.490105023549404e-05,
+              "margin": 11.125000357738827
+            }
+          ]
+        },
+        "text_capital": {
+          "content": "Paris",
+          "tokens": [
+            {
+              "token": "Paris",
+              "logprob": -1.0728830375228426e-06,
+              "margin": 13.999999880791279
+            },
+            {
+              "token": "<|im_end|>",
+              "logprob": 0.0,
+              "margin": 20.75
+            }
+          ]
+        }
+      },
+      "captures": [
+        {
+          "key": "(400, ((0, 400), None))",
+          "n_graphs": 1,
+          "capture_ms": 79.8,
+          "reserved_mib": 108338
+        },
+        {
+          "key": "(1024, ((0, 1024), None))",
+          "n_graphs": 2,
+          "capture_ms": 28.6,
+          "reserved_mib": 108400
+        }
+      ],
+      "verify": {
+        "verdict": "VERIFIED",
+        "reasons": [],
+        "evidence": "per_call",
+        "captures": 2,
+        "calls": 1,
+        "prefill_batches": 5
+      },
+      "startup_s": 37.0,
+      "gpu_used_mib": 110926,
+      "resolved": {
+        "mm_feature_transport": "cuda_ipc",
+        "mm_attention_backend": "fa3",
+        "cuda_graph_backend_prefill": "disabled",
+        "attention_backend": "flashinfer",
+        "mem_fraction_static": 0.75,
+        "skip_server_warmup": true,
+        "enable_precise_embedding_interpolation": false,
+        "mm_preprocess_cache_size_mb": 0,
+        "disable_radix_cache": true,
+        "chunked_prefill_size": 8192,
+        "prefill_graph_backend_resolved": "disabled"
+      },
+      "effective": {
+        "mm_backend_fa3_log": false,
+        "hopper_override_log": false,
+        "prefill_graph_disabled_log": false
+      },
+      "dump_dir": "/data/bowenwan6/home/sgl/profiler/experiments/qwen3vl8b/q3_vit_graph/results/raw/parity/on_default_interp",
+      "n_dumps": 3
+    }
+  },
+  "tolerance_rel_fro": 0.02,
+  "dumps": {
+    "n_off": 3,
+    "n_on": 3,
+    "rows": [
+      {
+        "i": 0,
+        "shape": [
+          100,
+          16384
+        ],
+        "rel_fro": 0.05821667239069939,
+        "rel_max": 0.23099415004253387,
+        "max_abs": 1.234375
+      },
+      {
+        "i": 1,
+        "shape": [
+          100,
+          16384
+        ],
+        "rel_fro": 0.05821667239069939,
+        "rel_max": 0.23099415004253387,
+        "max_abs": 1.234375
+      },
+      {
+        "i": 2,
+        "shape": [
+          256,
+          16384
+        ],
+        "rel_fro": 0.06895607709884644,
+        "rel_max": 0.2975171208381653,
+        "max_abs": 1.357421875
+      }
+    ]
+  },
+  "dumps_off_rot_vs_off": {
+    "n_off": 3,
+    "n_on": 3,
+    "rows": [
+      {
+        "i": 0,
+        "shape": [
+          100,
+          16384
+        ],
+        "rel_fro": 0.021207313984632492,
+        "rel_max": 0.04093567281961441,
+        "max_abs": 0.21875
+      },
+      {
+        "i": 1,
+        "shape": [
+          100,
+          16384
+        ],
+        "rel_fro": 0.021207313984632492,
+        "rel_max": 0.04093567281961441,
+        "max_abs": 0.21875
+      },
+      {
+        "i": 2,
+        "shape": [
+          256,
+          16384
+        ],
+        "rel_fro": 0.07227911055088043,
+        "rel_max": 0.4773116409778595,
+        "max_abs": 2.177734375
+      }
+    ]
+  },
+  "dumps_on_vs_off_rot": {
+    "n_off": 3,
+    "n_on": 3,
+    "rows": [
+      {
+        "i": 0,
+        "shape": [
+          100,
+          16384
+        ],
+        "rel_fro": 0.05573165416717529,
+        "rel_max": 0.21646341681480408,
+        "max_abs": 1.109375
+      },
+      {
+        "i": 1,
+        "shape": [
+          100,
+          16384
+        ],
+        "rel_fro": 0.05573165416717529,
+        "rel_max": 0.21646341681480408,
+        "max_abs": 1.109375
+      },
+      {
+        "i": 2,
+        "shape": [
+          256,
+          16384
+        ],
+        "rel_fro": 0.07024849206209183,
+        "rel_max": 0.31506848335266113,
+        "max_abs": 1.4375
+      }
+    ]
+  },
+  "dumps_default_interp_vs_off": {
+    "n_off": 3,
+    "n_on": 3,
+    "rows": [
+      {
+        "i": 0,
+        "shape": [
+          100,
+          16384
+        ],
+        "rel_fro": 0.4693898856639862,
+        "rel_max": 0.6162280440330505,
+        "max_abs": 3.29296875
+      },
+      {
+        "i": 1,
+        "shape": [
+          100,
+          16384
+        ],
+        "rel_fro": 0.4693898856639862,
+        "rel_max": 0.6162280440330505,
+        "max_abs": 3.29296875
+      },
+      {
+        "i": 2,
+        "shape": [
+          256,
+          16384
+        ],
+        "rel_fro": 0.3104584515094757,
+        "rel_max": 0.8261986374855042,
+        "max_abs": 3.76953125
+      }
+    ]
+  },
+  "text": {
+    "image336_colors": {
+      "identical": true
+    },
+    "image336_count": {
+      "identical": true
+    },
+    "image512_colors": {
+      "identical": false,
+      "first_divergence": 6,
+      "off_margin_nat": 0.0,
+      "benign": true
+    },
+    "text_primes": {
+      "identical": true
+    },
+    "text_capital": {
+      "identical": true
+    }
+  },
+  "text_warnings": [],
+  "reasons": [
+    "encoder outputs differ beyond 0.02: [{'i': 0, 'shape': [100, 16384], 'rel_fro': 0.05821667239069939, 'rel_max': 0.23099415004253387, 'max_abs': 1.234375}, {'i': 1, 'shape': [100, 16384], 'rel_fro': 0.05821667239069939, 'rel_max': 0.23099415004253387, 'max_abs': 1.234375}, {'i': 2, 'shape': [256, 16384], 'rel_fro': 0.06895607709884644, 'rel_max': 0.2975171208381653, 'max_abs': 1.357421875}]"
+  ],
+  "deviation": "post-hoc downstream rule (approved by Bowen (chat, 2026-09-29 13:55 UTC)): the pre-registered encoder-output tolerance 2e-2 is below the eager-vs-eager implementation spread (off_rot vs off); the graph arm is LM-equivalent to eager",
+  "verdict": "PASS_WITH_DEVIATION",
+  "parity_judge": {
+    "approved_by": "Bowen (chat, 2026-09-29 13:55 UTC)",
+    "timestamp_utc": "2026-09-29T13:59:58+00:00",
+    "arms": {
+      "on": {
+        "rule": "greedy tokens identical or first divergence at an eager margin < 0.5 nat; mean |dlogprob| over shared tokens <= 0.05 nat",
+        "rows": [
+          {
+            "fixture": "image336_colors",
+            "n": 45,
+            "first_divergence": null,
+            "off_margin_nat": null,
+            "mean_abs_dlogprob": 0.0077,
+            "max_abs_dlogprob": 0.106,
+            "ok": true
+          },
+          {
+            "fixture": "image336_count",
+            "n": 48,
+            "first_divergence": null,
+            "off_margin_nat": null,
+            "mean_abs_dlogprob": 0.0061,
+            "max_abs_dlogprob": 0.0985,
+            "ok": true
+          },
+          {
+            "fixture": "image512_colors",
+            "n": 48,
+            "first_divergence": 6,
+            "off_margin_nat": 0.0,
+            "mean_abs_dlogprob": 0.0384,
+            "max_abs_dlogprob": 0.1091,
+            "ok": true
+          },
+          {
+            "fixture": "text_primes",
+            "n": 48,
+            "first_divergence": null,
+            "off_margin_nat": null,
+            "mean_abs_dlogprob": 0.0,
+            "max_abs_dlogprob": 0.0,
+            "ok": true
+          },
+          {
+            "fixture": "text_capital",
+            "n": 2,
+            "first_divergence": null,
+            "off_margin_nat": null,
+            "mean_abs_dlogprob": 0.0,
+            "max_abs_dlogprob": 0.0,
+            "ok": true
+          }
+        ],
+        "reasons": [],
+        "verdict": "PASS"
+      },
+      "off_rot": {
+        "rule": "greedy tokens identical or first divergence at an eager margin < 0.5 nat; mean |dlogprob| over shared tokens <= 0.05 nat",
+        "rows": [
+          {
+            "fixture": "image336_colors",
+            "n": 45,
+            "first_divergence": null,
+            "off_margin_nat": null,
+            "mean_abs_dlogprob": 0.0024,
+            "max_abs_dlogprob": 0.0734,
+            "ok": true
+          },
+          {
+            "fixture": "image336_count",
+            "n": 48,
+            "first_divergence": null,
+            "off_margin_nat": null,
+            "mean_abs_dlogprob": 0.0071,
+            "max_abs_dlogprob": 0.189,
+            "ok": true
+          },
+          {
+            "fixture": "image512_colors",
+            "n": 48,
+            "first_divergence": 6,
+            "off_margin_nat": 0.0,
+            "mean_abs_dlogprob": 0.0038,
+            "max_abs_dlogprob": 0.014,
+            "ok": true
+          },
+          {
+            "fixture": "text_primes",
+            "n": 48,
+            "first_divergence": null,
+            "off_margin_nat": null,
+            "mean_abs_dlogprob": 0.0,
+            "max_abs_dlogprob": 0.0,
+            "ok": true
+          },
+          {
+            "fixture": "text_capital",
+            "n": 2,
+            "first_divergence": null,
+            "off_margin_nat": null,
+            "mean_abs_dlogprob": 0.0,
+            "max_abs_dlogprob": 0.0,
+            "ok": true
+          }
+        ],
+        "reasons": [],
+        "verdict": "PASS"
+      },
+      "on_default_interp": {
+        "rule": "greedy tokens identical or first divergence at an eager margin < 0.5 nat; mean |dlogprob| over shared tokens <= 0.05 nat",
+        "rows": [
+          {
+            "fixture": "image336_colors",
+            "n": 45,
+            "first_divergence": 1,
+            "off_margin_nat": 0.9999999701976776,
+            "mean_abs_dlogprob": 0.2917,
+            "max_abs_dlogprob": 0.2917,
+            "ok": false
+          },
+          {
+            "fixture": "image336_count",
+            "n": 48,
+            "first_divergence": 9,
+            "off_margin_nat": 0.25,
+            "mean_abs_dlogprob": 0.0892,
+            "max_abs_dlogprob": 0.5237,
+            "ok": false
+          },
+          {
+            "fixture": "image512_colors",
+            "n": 48,
+            "first_divergence": 6,
+            "off_margin_nat": 0.0,
+            "mean_abs_dlogprob": 0.0461,
+            "max_abs_dlogprob": 0.1652,
+            "ok": true
+          },
+          {
+            "fixture": "text_primes",
+            "n": 48,
+            "first_divergence": null,
+            "off_margin_nat": null,
+            "mean_abs_dlogprob": 0.0,
+            "max_abs_dlogprob": 0.0,
+            "ok": true
+          },
+          {
+            "fixture": "text_capital",
+            "n": 2,
+            "first_divergence": null,
+            "off_margin_nat": null,
+            "mean_abs_dlogprob": 0.0,
+            "max_abs_dlogprob": 0.0,
+            "ok": true
+          }
+        ],
+        "reasons": [
+          "image336_colors: divergence at 1 (margin 0.9999999701976776), mean |dlogprob| 0.2917",
+          "image336_count: divergence at 9 (margin 0.25), mean |dlogprob| 0.0892"
+        ],
+        "verdict": "FAIL"
+      }
+    }
+  },
+  "verdict_preregistered": "FAIL"
+}

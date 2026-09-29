@@ -11,7 +11,7 @@
 # carries its own cuda-toolkit 13.0 so JIT builds see a matching nvcc, exactly
 # like the official image (nvidia/cuda:13.0.3). flashinfer's prebuilt cubin and
 # jit-cache wheels are installed the same way docker/Dockerfile does it.
-set -euo pipefail
+set -Eeuo pipefail   # -E: the ERR trap below must also fire inside the phase functions
 
 SGL_ROOT="${SGL_ROOT:-$HOME/sgl}"
 export HF_HOME="${HF_HOME:-$HOME/hf}"
