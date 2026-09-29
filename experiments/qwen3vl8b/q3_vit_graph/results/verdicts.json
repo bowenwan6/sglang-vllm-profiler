@@ -1,0 +1,41 @@
+{
+  "H2": {
+    "verdict": "NOT SUPPORTED",
+    "conditions": {
+      "256\u00b2: encoder \u2265 40 % of TTFT": false,
+      "256\u00b2: un-overlapped \u2265 60 % of the encoder call": true,
+      "720p and 1080p: G_v > U* (compute-dominated)": true
+    }
+  },
+  "H1": {
+    "verdict": "NOT SUPPORTED",
+    "conditions": {
+      "informative_sizes>=4": true,
+      "misses<=1": false,
+      "text_control_inside_floor": true,
+      "saving_non_increasing": true,
+      "1080p_inside_floor": false
+    },
+    "informative": [
+      "R1_256",
+      "R2_360p",
+      "R3_512",
+      "R4_640",
+      "R5_720p",
+      "R6_1080p"
+    ],
+    "misses": [
+      "R5_720p",
+      "R6_1080p"
+    ],
+    "non_informative": []
+  },
+  "H3": {
+    "verdict": "SUPPORTED",
+    "conditions": {
+      "mean TTFT worse on the graph arm": true,
+      "hit rate within \u00b15 pp of 45 %": true,
+      "repeated shapes still gain": true
+    }
+  }
+}
