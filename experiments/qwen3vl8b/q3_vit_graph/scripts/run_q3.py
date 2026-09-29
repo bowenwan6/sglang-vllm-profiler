@@ -601,7 +601,10 @@ def cmd_sweep(a) -> int:
     def blocks_for(w: str) -> int:
         return a.blocks_large if w in C.LARGE_WORKLOADS else a.blocks
 
-    blocks = [(wid, b) for wid in wids for b in range(1, blocks_for(wid) + 1)]
+    max_b = max(blocks_for(w) for w in wids)
+    # block-major: block 1 of every size first, then block 2, ... so a time cutoff leaves
+    # every size with the same number of completed blocks (each block keeps its A/B order)
+    blocks = [(wid, b) for b in range(1, max_b + 1) for wid in wids if b <= blocks_for(wid)]
     # a block is done only when both of its cells are OK; a half block is re-run (O2)
     todo = []
     for wid, b in blocks:
