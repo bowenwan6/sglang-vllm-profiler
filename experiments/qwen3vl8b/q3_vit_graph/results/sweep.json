@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-09-29T14:46:33+00:00",
+  "generated_utc": "2026-09-29T14:49:56+00:00",
   "workloads": {
     "R0_text": {
       "blocks": [
@@ -84,6 +84,34 @@
       "gate": "SINGLE_BLOCK",
       "all_verified": true,
       "expected_patches": 880
+    },
+    "R3_512": {
+      "blocks": [
+        {
+          "block": 1,
+          "off_p50": 53.79,
+          "on_p50": 40.551,
+          "saving_ms": 13.239,
+          "effect_pct": -24.61,
+          "off_mean": 53.758,
+          "on_mean": 40.587,
+          "tpot_off": 5.57004149692754,
+          "tpot_on": 5.584033431174855,
+          "verified": true,
+          "status_ok": true,
+          "capture_ms": 74.8
+        }
+      ],
+      "n_blocks": 1,
+      "effect_pct_median": -24.61,
+      "saving_ms_median": 13.239,
+      "saving_ms_mean": 13.239,
+      "saving_ms_sd": null,
+      "saving_ms_se": null,
+      "spread_pp": null,
+      "gate": "SINGLE_BLOCK",
+      "all_verified": true,
+      "expected_patches": 1024
     }
   }
 }
