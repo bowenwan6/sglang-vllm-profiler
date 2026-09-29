@@ -1,0 +1,62 @@
+{
+  "cell": "R0_text__on__b3",
+  "workload": "R0_text",
+  "arm": "on",
+  "block": 3,
+  "num_prompts": 200,
+  "warmup": 20,
+  "output_len": 16,
+  "timestamp_utc": "2026-09-29T15:36:13+00:00",
+  "startup_s": 31.0,
+  "resolved": {
+    "mm_feature_transport": "cuda_ipc",
+    "mm_attention_backend": "fa3",
+    "cuda_graph_backend_prefill": "disabled",
+    "attention_backend": "flashinfer",
+    "mem_fraction_static": 0.75,
+    "skip_server_warmup": true,
+    "enable_precise_embedding_interpolation": true,
+    "mm_preprocess_cache_size_mb": 0,
+    "disable_radix_cache": true,
+    "chunked_prefill_size": 8192,
+    "prefill_graph_backend_resolved": "disabled"
+  },
+  "gpu_used_mib_after_warmup": 110730,
+  "bench": {
+    "status": "OK",
+    "completed": 200,
+    "failures": 0,
+    "failed_idx": [],
+    "ttft_p50": 28.127,
+    "ttft_mean": 28.295,
+    "ttft_p90": 28.809,
+    "ttft_p99": 31.083,
+    "tpot_p50": 5.156382569111884,
+    "e2e_p50": 105.47618649434298,
+    "total_input_vision_tokens": 0,
+    "total_input_text_tokens": 25600,
+    "elapsed_s": 37.0
+  },
+  "req_times": {
+    "n": 201,
+    "queue_ms_p50": 0.41,
+    "forward_ms_p50": 99.88
+  },
+  "captures": [],
+  "stats_last": null,
+  "effective": {
+    "mm_backend_fa3_log": false,
+    "hopper_override_log": false,
+    "prefill_graph_disabled_log": false
+  },
+  "verify": {
+    "verdict": "VERIFIED",
+    "reasons": [],
+    "evidence": "no_graph_lines",
+    "captures": 0,
+    "calls": 0,
+    "prefill_batches": 222
+  },
+  "status": "OK",
+  "elapsed_s": 94.2
+}
