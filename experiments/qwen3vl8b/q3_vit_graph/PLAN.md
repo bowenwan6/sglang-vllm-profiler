@@ -311,3 +311,66 @@ pre-registered parity gate: judging parity by the downstream rule implemented in
 |Δlogprob| ≤ 0.05 nat over shared tokens; the graph arm passes it, the default-flag arm fails it). The
 command records who approved it; the pre-registered FAIL stays in the record. The assignment expired at
 12:08 UTC (2 GPU-hours used of the 6 allowed), so continuing also needs a new assignment.
+
+## Outcome — 2026-09-29 (second node session, 13:57–16:17 UTC; 5 GPU-hours used in total)
+
+Full tables: [`results/q3_report.md`](results/q3_report.md); verdicts: `results/verdicts.json`; every cell in
+`results/cells/`. Every sweep cell VERIFIED (23 blocks, 46 servers, 200 prompts each, 16 output tokens);
+text control −1.19 %; G2 paired spread ≤ 2.5 pp except 720p (4.0 pp, WEAK) and 256² (4.2 pp, passes
+by the half-effect rule).
+
+**Parity (with the approved post-hoc downstream rule): PASS_WITH_DEVIATION.** See "Outcome so far".
+
+**H1 — NOT SUPPORTED as pre-registered; the launch-bound regime is predicted, the GPU-bound regime is not.**
+
+| workload | patches | pre-registered lo / point / hi (ms) | measured saving (median of blocks) | SE | post-hoc model* | residual |
+|---|---|---|---|---|---|---|
+| `R1_256` | 256 | 13.00 / 15.04 / 15.04 | **+13.52** (-29.41 %) | 0.70 | +13.00 | +0.52 |
+| `R2_360p` | 880 | 10.85 / 14.29 / 14.29 | **+12.89** (-24.42 %) | 0.30 | +10.85 | +2.04 |
+| `R3_512` | 1024 | 10.52 / 14.27 / 14.27 | **+12.96** (-24.04 %) | 0.10 | +10.52 | +2.44 |
+| `R4_640` | 1600 | 7.94 / 13.80 / 13.80 | **+11.89** (-19.97 %) | 0.50 | +7.94 | +3.95 |
+| `R5_720p` | 3520 | 0.48 / 4.52 / 12.54 | **-1.20** (+1.39 %) | 0.72 | +0.48 | -1.68 |
+| `R6_1080p` | 8160 | -26.79 / -26.79 / 8.27 | **-7.44** (+4.05 %) | 0.48 | -9.29 | +1.85 |
+
+\* post hoc, written after the data: `max(0, U*) − r − ΔG_rot`, i.e. the pre-registered lower bound with the
+un-overlapped time clamped at zero and **no overlap term**.
+
+- Four launch-bound sizes (256²–640²): measured savings 11.9–13.5 ms (−20 % to −29 % of TTFT), all inside the
+  pre-registered interval [lo, hi] and within tolerance of the point prediction (errors −1.3 … −1.9 ms). An
+  eager profile predicts the graph's gain there to within ~2 ms.
+- 720p: the point prediction (4.5 ms) assumed the graph arm hides LM launches behind the encoder's GPU work
+  (the D2 overlap term); measured −1.2 ± 0.7 ms. **The overlap term is refuted**: even the no-overlap bound
+  (0.5 ms) is above the measurement, because the graph arm pays 3.7 ms of extra rotary GPU work (ΔG_rot).
+- 1080p: the pre-registered formula has no floor at U* = 0 and produced a meaningless −26.8 ms; the graph arm
+  is **slower by 7.4 ± 0.5 ms (+4.1 %)**, outside the 3.6 % floor — a real cost, explained by ΔG_rot = 8.3 ms:
+  the graph path's unfused rotary adds GPU work that grows with the patch count.
+- The rule's verdict is therefore NOT SUPPORTED (two misses; 1080p outside the floor). The post-hoc model
+  above fits all six sizes to within 1.7 ms without the overlap term; it is a hypothesis for the next run,
+  not a result of this one.
+
+**H2 — NOT SUPPORTED as written; two of three conditions hold.** At 256² the encoder's critical path is 31 %
+of TTFT (the criterion said ≥ 40 %), but **88 %** of the encoder call is un-overlapped launch time (≥ 60 %
+✓), and from 720p the encoder is compute-dominated (G_v > U* ✓). The "fixed cost the graph cannot touch"
+of the v3 report is, at small images, mostly launch overhead that the ViT graph does recover; the rest is
+the encoder's GPU work (2–3.7 ms at ≤ 512²) and the outside-forward term (HTTP, PNG decode, processor,
+transport), which the report tabulates.
+
+**H3 — SUPPORTED.** Under resolutions drawn from 256–720 × 256–1280 px: 167 captures in 300 requests (hit
+rate 0.443; predicted 165, 0.45), mean TTFT **64.8 → 94.7 ms (+46 %)**, p99 94 → 189 ms, first-seen shapes
++22 ms (capture p50 27 ms, the first 4.6 s), repeated shapes still −8.2 ms, +15 GB of GPU memory held by
+the graphs. The exact-shape design is a net loss on varied traffic and a clear win only on recurring shapes.
+
+**Side findings.** (1) With default flags the ViT CUDA graph changes model outputs (encoder rel_fro
+0.31–0.47, greedy text diverging at token 1 with a 1.0-nat margin) because graph mode uses the legacy
+position-embedding interpolation, which follows `--enable-precise-embedding-interpolation` (default off)
+while eager always uses linspace — upstream issue material. (2) The bf16 encoder amplifies implementation
+differences (rotary kernel, table dtype) to 2–7 % of its output norm without changing greedy text; a 2e-2
+encoder-output tolerance is below that noise floor. (3) The graph path's unfused rotary costs 0.75 ms (256²)
+to 8.3 ms (1080p) of GPU time; with the fused kernel inside the graph, the large-image loss would vanish.
+(4) The pilot's 16-vs-128 output-token check differed by 7.5 % on 30 requests (drift-level); the sweep kept
+16 tokens as pre-registered, so absolute TTFT levels are not directly comparable with v3's 128-token cells.
+
+**Deviations from the pre-registration, all dated and recorded:** the parity rule (approved by Bowen in chat,
+13:55 UTC, `parity-judge`), the parity diagnostic arms, the block-major sweep order, and the mixed-stage
+re-verification after an `expect_shapes=-1` bug. No number was changed after the fact; the pre-registered
+verdicts stand as computed by `report_q3.py`.

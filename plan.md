@@ -2039,3 +2039,13 @@ to the Mac every two minutes. Amended 2026-09-29 after a two-window review, befo
 Not a deployment claim. The publishable version additionally needs the same predictor on the LM
 stage (PR #33726's branch), a second model (Qwen2.5-VL-7B shares the runner), a second GPU class,
 hit rates on a real resolution distribution, and a bucketed-ViT-graph prototype.
+
+**Outcome (2026-09-29).** Run in two node sessions (5 GPU-hours). H1 NOT SUPPORTED as pre-registered: the
+graph's gain is predicted within ~2 ms at 256²–640² (measured 11.9–13.5 ms, −20 % to −29 % of TTFT), but the
+overlap term is refuted at 720p (−1.2 ms) and the graph arm is 7.4 ms (+4 %) **slower** at 1080p because its
+unfused rotary adds 8.3 ms of GPU work; a no-overlap, clamped model fits all six sizes post hoc. H2 NOT
+SUPPORTED as written (encoder = 31 % of TTFT at 256², not ≥ 40 %), but 88 % of that encoder call is launch
+overhead the graph recovers. H3 SUPPORTED: mixed shapes give 167 captures/300, mean TTFT +46 %, +15 GB.
+Side findings: default-flag ViT graphs change outputs (interpolation flag), the bf16 encoder's 2–7 %
+implementation noise floor, and the rotary cost. Details and deviations: `q3_vit_graph/PLAN.md` "Outcome";
+tables: `q3_vit_graph/results/q3_report.md`.
