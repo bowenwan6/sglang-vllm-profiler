@@ -1,0 +1,62 @@
+{
+  "cell": "R6_1080p__off__b3",
+  "workload": "R6_1080p",
+  "arm": "off",
+  "block": 3,
+  "num_prompts": 200,
+  "warmup": 20,
+  "output_len": 16,
+  "timestamp_utc": "2026-09-29T15:56:14+00:00",
+  "startup_s": 43.0,
+  "resolved": {
+    "mm_feature_transport": "cuda_ipc",
+    "mm_attention_backend": "fa3",
+    "cuda_graph_backend_prefill": "disabled",
+    "attention_backend": "flashinfer",
+    "mem_fraction_static": 0.75,
+    "skip_server_warmup": true,
+    "enable_precise_embedding_interpolation": true,
+    "mm_preprocess_cache_size_mb": 0,
+    "disable_radix_cache": true,
+    "chunked_prefill_size": 8192,
+    "prefill_graph_backend_resolved": "disabled"
+  },
+  "gpu_used_mib_after_warmup": 111362,
+  "bench": {
+    "status": "OK",
+    "completed": 200,
+    "failures": 0,
+    "failed_idx": [],
+    "ttft_p50": 181.66,
+    "ttft_mean": 181.673,
+    "ttft_p90": 183.789,
+    "ttft_p99": 185.717,
+    "tpot_p50": 5.727242833624283,
+    "e2e_p50": 267.92471192311496,
+    "total_input_vision_tokens": 408400,
+    "total_input_text_tokens": 28572,
+    "elapsed_s": 148.3
+  },
+  "req_times": {
+    "n": 201,
+    "queue_ms_p50": 0.11,
+    "forward_ms_p50": 178.87
+  },
+  "captures": [],
+  "stats_last": null,
+  "effective": {
+    "mm_backend_fa3_log": false,
+    "hopper_override_log": false,
+    "prefill_graph_disabled_log": false
+  },
+  "verify": {
+    "verdict": "VERIFIED",
+    "reasons": [],
+    "evidence": "no_graph_lines",
+    "captures": 0,
+    "calls": 0,
+    "prefill_batches": 222
+  },
+  "status": "OK",
+  "elapsed_s": 226.7
+}
