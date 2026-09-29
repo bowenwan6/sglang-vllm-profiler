@@ -1,5 +1,5 @@
 {
-  "timestamp_utc": "2026-09-29T10:11:14+00:00",
+  "timestamp_utc": "2026-09-29T13:59:52+00:00",
   "hard_failures": [],
   "warnings": [],
   "python": "/data/bowenwan6/home/miniforge3/envs/sgl-profiler/bin/python3",
@@ -25,13 +25,13 @@
     " M python/sglang/srt/multimodal/vit_cuda_graph_runner.py"
   ],
   "visible_gpus": [
-    "GPU 0: NVIDIA H200 (UUID: GPU-166288d3-a850-bcc1-8716-96c33d3a5679)"
+    "GPU 0: NVIDIA H200 (UUID: GPU-4ac09667-48f7-6a03-b930-8338f78d441e)"
   ],
   "gpu": "NVIDIA H200, 595.71.05",
   "gpu_total_mib": 143771,
-  "gpu_used_mib": 4,
-  "disk_free_gb": 14274.6,
-  "profiler_commit": "4712638",
+  "gpu_used_mib": 0,
+  "disk_free_gb": 14237.1,
+  "profiler_commit": "cca07bf",
   "profiler_branch": "exp/q3-vit-graph",
   "paths": {
     "OUT": "/data/bowenwan6/home/sgl/profiler/experiments/qwen3vl8b/q3_vit_graph/results",

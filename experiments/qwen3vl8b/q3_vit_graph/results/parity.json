@@ -4272,6 +4272,172 @@
   "reasons": [
     "encoder outputs differ beyond 0.02: [{'i': 0, 'shape': [100, 16384], 'rel_fro': 0.05821667239069939, 'rel_max': 0.23099415004253387, 'max_abs': 1.234375}, {'i': 1, 'shape': [100, 16384], 'rel_fro': 0.05821667239069939, 'rel_max': 0.23099415004253387, 'max_abs': 1.234375}, {'i': 2, 'shape': [256, 16384], 'rel_fro': 0.06895607709884644, 'rel_max': 0.2975171208381653, 'max_abs': 1.357421875}]"
   ],
-  "deviation": null,
-  "verdict": "FAIL"
+  "deviation": "post-hoc downstream rule (approved by Bowen (chat, 2026-09-29 13:55 UTC)): the pre-registered encoder-output tolerance 2e-2 is below the eager-vs-eager implementation spread (off_rot vs off); the graph arm is LM-equivalent to eager",
+  "verdict": "PASS_WITH_DEVIATION",
+  "parity_judge": {
+    "approved_by": "Bowen (chat, 2026-09-29 13:55 UTC)",
+    "timestamp_utc": "2026-09-29T13:59:58+00:00",
+    "arms": {
+      "on": {
+        "rule": "greedy tokens identical or first divergence at an eager margin < 0.5 nat; mean |dlogprob| over shared tokens <= 0.05 nat",
+        "rows": [
+          {
+            "fixture": "image336_colors",
+            "n": 45,
+            "first_divergence": null,
+            "off_margin_nat": null,
+            "mean_abs_dlogprob": 0.0077,
+            "max_abs_dlogprob": 0.106,
+            "ok": true
+          },
+          {
+            "fixture": "image336_count",
+            "n": 48,
+            "first_divergence": null,
+            "off_margin_nat": null,
+            "mean_abs_dlogprob": 0.0061,
+            "max_abs_dlogprob": 0.0985,
+            "ok": true
+          },
+          {
+            "fixture": "image512_colors",
+            "n": 48,
+            "first_divergence": 6,
+            "off_margin_nat": 0.0,
+            "mean_abs_dlogprob": 0.0384,
+            "max_abs_dlogprob": 0.1091,
+            "ok": true
+          },
+          {
+            "fixture": "text_primes",
+            "n": 48,
+            "first_divergence": null,
+            "off_margin_nat": null,
+            "mean_abs_dlogprob": 0.0,
+            "max_abs_dlogprob": 0.0,
+            "ok": true
+          },
+          {
+            "fixture": "text_capital",
+            "n": 2,
+            "first_divergence": null,
+            "off_margin_nat": null,
+            "mean_abs_dlogprob": 0.0,
+            "max_abs_dlogprob": 0.0,
+            "ok": true
+          }
+        ],
+        "reasons": [],
+        "verdict": "PASS"
+      },
+      "off_rot": {
+        "rule": "greedy tokens identical or first divergence at an eager margin < 0.5 nat; mean |dlogprob| over shared tokens <= 0.05 nat",
+        "rows": [
+          {
+            "fixture": "image336_colors",
+            "n": 45,
+            "first_divergence": null,
+            "off_margin_nat": null,
+            "mean_abs_dlogprob": 0.0024,
+            "max_abs_dlogprob": 0.0734,
+            "ok": true
+          },
+          {
+            "fixture": "image336_count",
+            "n": 48,
+            "first_divergence": null,
+            "off_margin_nat": null,
+            "mean_abs_dlogprob": 0.0071,
+            "max_abs_dlogprob": 0.189,
+            "ok": true
+          },
+          {
+            "fixture": "image512_colors",
+            "n": 48,
+            "first_divergence": 6,
+            "off_margin_nat": 0.0,
+            "mean_abs_dlogprob": 0.0038,
+            "max_abs_dlogprob": 0.014,
+            "ok": true
+          },
+          {
+            "fixture": "text_primes",
+            "n": 48,
+            "first_divergence": null,
+            "off_margin_nat": null,
+            "mean_abs_dlogprob": 0.0,
+            "max_abs_dlogprob": 0.0,
+            "ok": true
+          },
+          {
+            "fixture": "text_capital",
+            "n": 2,
+            "first_divergence": null,
+            "off_margin_nat": null,
+            "mean_abs_dlogprob": 0.0,
+            "max_abs_dlogprob": 0.0,
+            "ok": true
+          }
+        ],
+        "reasons": [],
+        "verdict": "PASS"
+      },
+      "on_default_interp": {
+        "rule": "greedy tokens identical or first divergence at an eager margin < 0.5 nat; mean |dlogprob| over shared tokens <= 0.05 nat",
+        "rows": [
+          {
+            "fixture": "image336_colors",
+            "n": 45,
+            "first_divergence": 1,
+            "off_margin_nat": 0.9999999701976776,
+            "mean_abs_dlogprob": 0.2917,
+            "max_abs_dlogprob": 0.2917,
+            "ok": false
+          },
+          {
+            "fixture": "image336_count",
+            "n": 48,
+            "first_divergence": 9,
+            "off_margin_nat": 0.25,
+            "mean_abs_dlogprob": 0.0892,
+            "max_abs_dlogprob": 0.5237,
+            "ok": false
+          },
+          {
+            "fixture": "image512_colors",
+            "n": 48,
+            "first_divergence": 6,
+            "off_margin_nat": 0.0,
+            "mean_abs_dlogprob": 0.0461,
+            "max_abs_dlogprob": 0.1652,
+            "ok": true
+          },
+          {
+            "fixture": "text_primes",
+            "n": 48,
+            "first_divergence": null,
+            "off_margin_nat": null,
+            "mean_abs_dlogprob": 0.0,
+            "max_abs_dlogprob": 0.0,
+            "ok": true
+          },
+          {
+            "fixture": "text_capital",
+            "n": 2,
+            "first_divergence": null,
+            "off_margin_nat": null,
+            "mean_abs_dlogprob": 0.0,
+            "max_abs_dlogprob": 0.0,
+            "ok": true
+          }
+        ],
+        "reasons": [
+          "image336_colors: divergence at 1 (margin 0.9999999701976776), mean |dlogprob| 0.2917",
+          "image336_count: divergence at 9 (margin 0.25), mean |dlogprob| 0.0892"
+        ],
+        "verdict": "FAIL"
+      }
+    }
+  },
+  "verdict_preregistered": "FAIL"
 }
