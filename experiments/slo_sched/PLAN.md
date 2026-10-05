@@ -173,3 +173,22 @@ Nothing is posted upstream — issue, PR or comment — except by Bowen.
 | The per-request bound and a client disconnect overlap in U2 | U2's clients keep the connection open, which is the case the disconnect path cannot see |
 | Fork branch drifts from `upstream/main` | each branch is rebased before its PR is opened; sessions record the SHA they ran |
 | Two open PRs plus #33726 | upstream's idle-PR cap is five; PR-A is opened first and kept moving |
+
+## Outcome — stage 1, local part (2026-10-05)
+
+PR-A is implemented on the fork: `bowenwan6/sglang`, branch `feat/bench-goodput` @ `d132f6739e`, one
+commit on `upstream/main` @ `734cf3cf3b`: +134 lines in `python/sglang/benchmark/serving.py`, a
+127-line unit test (`test/registered/unit/bench/test_bench_serving_goodput.py`) and 20 lines in
+`docs/docs/developer_guide/bench_serving.mdx`.
+
+- **A1.1–A1.3: pass, with a caveat.** The unit file's eight cases pass on the Mac, but through a stub
+  harness that loads `serving.py` without the rest of the package, because the Mac's Python does not
+  have SGLang's pinned dependencies. The first run inside a real SGLang environment is step 0 of P1.
+- **A1.4: partly.** `ruff format`, `ruff check` (v0.15.1), `isort` 7.0.0 and `codespell` 2.4.1 are clean
+  on the changed files; the complete pre-commit suite has not been run.
+- The flag parses end to end (`cli_main`), and the printed block and result fields were exercised on
+  real metric objects.
+- Against §1.1: the per-SLO attainments are one dictionary field, `slo_attainment_by_metric`, and the
+  SLO values are echoed as `goodput_slos_ms`. Two cases were removed from the unit file to meet
+  upstream's unit-test admission rule (a duplicate and a print-format mirror).
+- Open: the P1 server tasks (A1.5–A1.7).
