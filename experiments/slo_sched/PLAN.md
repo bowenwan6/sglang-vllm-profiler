@@ -87,15 +87,17 @@ lines; two use cases where one global value cannot do the job. **Verdict: go to 
 
 ### 3.1 Patch
 Request field `waiting_timeout` (seconds); effective bound = the smaller of it and
-`SGLANG_REQ_WAITING_TIMEOUT` when both are set; same clock, same 503 response as the global timeout;
-enforced in `_poll_timeout_aborts`. Not in the first PR: PD mode (waits on #34457), gRPC and the Rust
-front end, the running timeout, a header form.
+`SGLANG_REQ_WAITING_TIMEOUT` when both are set; same clock and same abort response as the global
+timeout (503 for non-streaming, HTTP 200 with an in-stream error for streaming); enforced in
+`_poll_timeout_aborts`. Not in the first PR: the gRPC proto and the Rust front end, the running
+timeout, a header form. The detailed, source-grounded version of this stage is
+[`PRB_PLAN.md`](PRB_PLAN.md); where the two differ, that file wins.
 
 ### 3.2 Debug ladder
 | step | where | Accept |
 |---|---|---|
-| D1 unit tests | Mac | new cases beside `test_scheduler_timeouts.py`: per-request bound fires, the smaller-of-two rule, field absent = today's behaviour; the existing file still passes |
-| D2 dummy-weight server | node, session P2 | upstream's mock-model flags (`--load-format dummy --sampling-backend token_oracle`, Qwen3-0.6B): a request with `waiting_timeout=1` behind a full batch returns 503 after ≈ 1 s and produces no token; one without the field is served |
+| D1 unit tests | a real SGLang environment (the node, CPU only — the Mac cannot import the package) | the cases of `PRB_PLAN.md` §5.3 beside `test_scheduler_timeouts.py`; the existing file still passes |
+| D2 dummy-weight server | node, session P2 | upstream's mock-model flags, complete list in `PRB_PLAN.md` §7.3: a request with `waiting_timeout=1` behind a full batch is aborted after ≈ 1 s (503, or the in-stream error when streaming) and produces no token; one without the field is served. Greedy requests only (P1: the first sampled request stalls a fresh server) |
 | D3 real model | node, session P2 | the same on Qwen3-8B, plus U3 below |
 
 ### 3.3 Benchmark

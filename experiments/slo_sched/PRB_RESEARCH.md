@@ -3,6 +3,9 @@
 > Read-only research, 2026-10-05. Source: `sgl-project/sglang` `upstream/main` @ `734cf3cf3b`
 > (2026-10-04), the GitHub tracker of sglang and vllm, Triton's documentation. No GPU, no code yet.
 > Verdict in §6. The benchmark design of §5 is pre-registered in [`PLAN.md`](PLAN.md) stage 3.
+> **Corrected 2026-10-05** after the source study in [`PRB_PLAN.md`](PRB_PLAN.md) and session P1; the
+> corrections are listed in §7 and applied in the text. `PRB_PLAN.md` §1 is the authoritative list of
+> touch points.
 
 ## 1. What exists in SGLang today
 
@@ -11,10 +14,10 @@
 | Two **global** timeouts, set by environment variable, default off (−1): `SGLANG_REQ_WAITING_TIMEOUT` (seconds in the waiting queue) and `SGLANG_REQ_RUNNING_TIMEOUT` (seconds in the running batch). A hit aborts the request with 503 and "Request waiting timeout reached." | `srt/environ.py:639`; `Scheduler._poll_timeout_aborts` |
 | They began as `SGLANG_QUEUED_TIMEOUT_MS` / `SGLANG_FORWARD_TIMEOUT_MS` and were renamed on 2026-02-13 by a maintainer (hnyls2002) | [#18766](https://github.com/sgl-project/sglang/pull/18766) |
 | They are used in production: "GLM NVFP4, B200 TP4, 60k-300k token prompts, `SGLANG_REQ_WAITING_TIMEOUT=45`". That report led to the rank-consistent rewrite: the scan runs on rank 0 only and its aborts are broadcast, because per-rank clocks split the queue and hung the collectives | [#37143](https://github.com/sgl-project/sglang/pull/37143), merged 2026-09-08, reviewed by hnyls2002 |
-| In PD-disaggregation mode neither timeout is enforced; a PR that adds it has been open since 08-11 | [#34457](https://github.com/sgl-project/sglang/pull/34457) |
-| Neither variable is mentioned anywhere under `docs/` | `git grep` on the pin |
+| PR [#34457](https://github.com/sgl-project/sglang/pull/34457) (open since 08-11) says PD mode ignores both timeouts. At the pin the PD event loops call `ingest_requests()`, so the scan does run there on `waiting_queue`; what it does not see in PD mode is in `PRB_PLAN.md` §2.3 | `disaggregation/prefill.py:696`, `disaggregation/decode.py:2930,2977` |
+| Both variables are documented | `docs/docs/references/environment_variables.mdx:72,77` |
 | No generation request carries a timeout or deadline. Only `FlushCacheReqInput.timeout_s` and `OpenSessionReqInput.timeout` exist | `srt/managers/io_struct.py` |
-| A queued request whose client disconnects is found by a poll every `SGLANG_REQUEST_STATE_WAIT_TIMEOUT` (default 4 s); `POST /abort_request` with the request's `rid` removes it at once | `tokenizer_manager.py:190,1876`; `environ.py:1494`; `http_server.py` |
+| A queued request whose client disconnects is found by a poll every `SGLANG_REQUEST_STATE_WAIT_TIMEOUT` (default 4 s); `POST /abort_request` with the request's `rid` removes it at once — it matches rids **by prefix** (`req.rid.startswith(recv_req.rid)`), so client-chosen rids must be prefix-free | `tokenizer_manager.py:190,1876`; `environ.py:1494`; `http_server.py`; `scheduler.py:5305-5432` |
 | The engine already reads per-request headers for routing (`x-smg-routing-key`, `x-data-parallel-rank`) and a closed PR proposed `x-sglang-request-priority` | `entrypoints/openai/serving_base.py:259,271`; #19808 |
 | The router has a global proxy timeout (`--request-timeout-secs`, default 300) and SLO headers used for bucket selection; nothing is forwarded to the engine as a deadline | `experimental/sgl-router/src/config/cli.rs:143`; #40292 |
 
@@ -41,10 +44,10 @@ A per-request field follows the path `priority` already takes. Touch points on t
 
 | Step | Where `priority` passes today |
 |---|---|
-| OpenAI request models | `protocol.py`: `CompletionRequest`, `ChatCompletionRequest`, `ResponsesRequest` |
-| Request → `GenerateReqInput` | `serving_chat.py:1311`, `serving_completions.py:138`, `serving_responses.py:579` |
+| OpenAI request models | `protocol.py`: `CompletionRequest`, `ChatCompletionRequest` (`ResponsesRequest` has the field but does not pass it on) |
+| Request → `GenerateReqInput` | `serving_chat.py:1311`, `serving_completions.py:138` |
 | `GenerateReqInput` and its batch split, `TokenizedGenerateReqInput` | `io_struct.py` |
-| Tokenizer manager → scheduler | `tokenizer_manager.py:1535,1567` |
+| Tokenizer manager → scheduler | `tokenizer_manager.py:1535` (1567 is the embedding path) |
 | `Req` construction | `Scheduler.handle_generate_request`, `schedule_batch.py` |
 | Enforcement | `_poll_timeout_aborts`: one comparison per queued request, already rank 0 only |
 
@@ -60,7 +63,7 @@ Design choices to settle (working choice first; the rest go into the PR descript
 | Name and unit | body field `waiting_timeout`, seconds, float > 0 | mirrors `SGLANG_REQ_WAITING_TIMEOUT` |
 | Interaction with the global value | the smaller of the two when both are set | a client can tighten the operator's bound, never extend it |
 | Clock | the one the global timeout uses (`wait_queue_entry_time`) | no new time source, same behaviour after a retraction |
-| Response | identical to the global timeout (503, same message) | clients already handle it |
+| Response | identical to the global timeout: 503 for a non-streaming request, HTTP 200 with an in-stream error for a streaming one (captured in P1, `results/pra/abort_responses/`) | clients already handle it |
 | Header form | not in the first PR | the router's `x-sgl-*-slo` naming is still moving; propose in the description |
 | PD mode, gRPC proto, running timeout | out of scope | PD waits on #34457; the others are follow-ups |
 
@@ -101,3 +104,16 @@ Thresholds and the stop rule are in PLAN.md stage 3.
 **Go to implementation.** It is feasible in a small diff on top of a path a maintainer hardened a
 month ago, nobody has proposed it, a precedent exists in Triton, and there are two use cases in which
 a global timeout cannot do the same job. Whether it earns a PR is decided by U1 and U2, not here.
+
+## 7. Corrections (2026-10-05)
+
+Found by the source study behind `PRB_PLAN.md` and by session P1; each was re-checked against the pin.
+
+| First version said | Correct |
+|---|---|
+| the two environment variables are not documented | they are, in `docs/docs/references/environment_variables.mdx` |
+| PD mode enforces neither timeout | true when #34457 was written; at the pin the PD loops run the scan on `waiting_queue` |
+| the abort response is "503" | 503 only for non-streaming requests; a streaming request gets HTTP 200 and the error inside the stream |
+| `serving_responses.py:579` and `tokenizer_manager.py:1567` are on the path | the first does not feed `GenerateReqInput`, the second is the embedding path |
+| `/abort_request` removes "the request" | it removes every request whose rid starts with the given string |
+| under 150 changed lines without tests | `PRB_PLAN.md` §7.2 counts ≈ 39 added and 5 removed source lines in 7 files, ≈ 125 lines of tests |

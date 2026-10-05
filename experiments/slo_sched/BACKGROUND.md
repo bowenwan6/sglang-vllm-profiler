@@ -72,6 +72,13 @@ Four readings that shape this plan:
 | `sglang.benchmark.serving` reports TTFT / TPOT / ITL percentiles; it has no goodput or SLO attainment and its `--extra-request-body` is one value per run, so it cannot send a per-request priority or SLO | `python/sglang/benchmark/serving.py` |
 | Qwen3-VL carries scheduler-level overrides (`prefill_decode_interval = 22`, a `max_running_requests` adjustment); no file under `arg_groups/model_overrides/` targets dense Qwen3 | `model_overrides/qwen3_vl.py:42,127` |
 
+**Errata to the table above (2026-10-05, from `PRB_PLAN.md` and session P1).** `/abort_request` matches
+rids by prefix, so the client-chosen rids of the ladder must be prefix-free. Load shedding has a second
+global knob besides the waiting timeout: `--max-queued-requests`. The abort a waiting timeout produces
+is a 503 only for non-streaming requests; a streaming request gets HTTP 200 with the error inside the
+stream, so a client must classify by payload. The first sampled request on a fresh server stalled the
+scheduler for about 70 s on the node; the ladder's requests are greedy, which avoids it.
+
 ### 2.2 Where upstream is heading (GitHub, as of 2026-10-04)
 
 - **SLO and admission policy are being built in the router, not the engine.** `experimental/sgl-router`
