@@ -25,7 +25,7 @@
 | Field | `waiting_timeout`, seconds, `Optional[float]`, `None` = absent | §1.1, §8 Q1 |
 | Accepted on | native `/generate`, `/v1/completions`, `/v1/chat/completions`; inherited by `/invocations`, `/vertex_generate` and the gRPC OpenAI pass-through | §1.1, §1.2 |
 | Rule | effective bound = the smaller of the request's value and `SGLANG_REQ_WAITING_TIMEOUT`; a global value ≤ 0 means "off", not "zero seconds" | §2.6 |
-| Clock | `time.perf_counter()` against `req.time_stats.wait_queue_entry_time`: the **current stay** in `waiting_queue`, not time since arrival | §2.4, §2.5 |
+| Clock | `time.perf_counter()` against `req.time_stats.wait_queue_entry_time`: the **current stay** in `waiting_queue`, not time since arrival (PD decode: the clock restarts when a request is retracted, so its time in the retracted queue counts too) | §2.4, §2.5 |
 | Enforced in | `Scheduler._poll_timeout_aborts`, on the leader rank only; no other code compares the field with a clock | §2.2 |
 | Response | the existing abort path, unchanged: HTTP 503 for non-streaming requests, **HTTP 200 with an error event for streaming ones** | §3 |
 | Validation | positive and finite; declared on the two pydantic models and checked once in `GenerateReqInput._validate_inputs` for every entry path | §4 |
@@ -94,7 +94,7 @@ Why three rows deviate from "next to `priority`":
   append-only"), and `test/registered/unit/managers/test_io_struct.py:51-76` compares the two
   declarations. `priority` (1110) already sits behind the Rust prefix, so an insertion beside it would
   not break that test, but it would break the append-only rule the last three fields follow.
-- **Rows 5 and 11 keep positional signatures stable.** `GenerateReqInput` fields are positional except
+- **Rows 5 and 11 keep positional signatures stable.** `GenerateReqInput` fields are positional except `session_id` (183, `kw_only=True`),
   `rid` (180) and `http_worker_ipc` (309); `Req.__init__` parameters are positional-capable too. The
   two newest dataclass fields were appended (`cache_salt` 366, `kv_hints` 374).
 - Row 7 needs no `_normalize_*` step: like `priority`, the field is one scalar for the whole batch.
@@ -133,6 +133,7 @@ Why three rows deviate from "next to `priority`":
 | PD prefill and decode servers | **not a separate path.** Both build the `Req` in `handle_generate_request` (`disagg_mode=self.disaggregation_mode`, `scheduler.py:2807`) and both event loops run the scan (§2.2). The field would be enforced once the request is in `waiting_queue`; only the PD queues of §2.3 are outside. See §8 Q7 |
 | EPD encoder wait | requests waiting for embeddings sit in `mm_receiver.waiting_list` (`disaggregation/encoder/receiver.py:1898`) before the scheduler dispatches them (`managers/scheduler_components/request_receiver.py:227-245`) |
 | Sessions | `Session.create_req` builds its own `Req` (§1.3) |
+| `sgl-model-gateway` in front of the engine | **unknown.** It re-serialises typed request structs from the external crate `openai-protocol` (`sgl-model-gateway/src/routers/http/router.rs:514`); whether an unknown body field survives that round trip was not checked (§10) |
 | Internal builders | warm-up (`entrypoints/warmup.py:81, 114, 150`), health check (`http_server.py:735-740`): always `None` |
 
 Old servers and typos are a third silent case: FastAPI's dataclass parsing and pydantic's default both
@@ -233,7 +234,10 @@ stamped". The setter (741-760) stamps on the first call and, on any later call, 
 | PD prefill retry | `reset_prefill_retry_time` (729-739) | back to 0 |
 | Between prefill chunks | — | nothing: the request is not in the queue |
 
-So both the global bound and the new one mean "seconds in the current stay in `waiting_queue`". A
+So both the global bound and the new one mean "seconds in the current stay in `waiting_queue`" — with
+one exception in PD decode mode: the stamp is set when a request is retracted and
+`resume_retracted_reqs()` re-queues it without stamping again (`scheduler.py:3295-3297`), so the time
+it spent in the retracted queue is part of the stay. A
 request that already streamed tokens, is preempted or retracted, and then waits longer than its bound
 is aborted mid-stream. `queue_duration_s` (663-665) accumulates across stays but the scan does not use
 it. Decision in §8 Q6.
@@ -283,7 +287,8 @@ its indentation and content.
 | r | g > 0, g < r | g | g: a request cannot extend the operator's bound |
 | r | g > 0, g ≥ r | r | r |
 
-Invariant relied on: `Req.waiting_timeout` is `None` or positive and finite (§4). The trap this shape
+Invariant relied on: `Req.waiting_timeout` is `None` or a positive, finite `float` (§4; the `float`
+part matters, see §12 A1). The trap this shape
 avoids: `min(req.waiting_timeout, global)` with the default −1 gives −1 and would abort every request
 that carries the field at once.
 
@@ -381,17 +386,27 @@ allow_inf_nan=False)]` (841); `field_validator("max_tokens")` (424-429); cross-f
 1. *Authority, all paths* — appended to `_validate_inputs` after line 467:
 
    ```python
-           if self.waiting_timeout is not None and not (
-               isinstance(self.waiting_timeout, (int, float))
-               and 0 < self.waiting_timeout < float("inf")
-           ):
-               raise ValueError(
-                   "waiting_timeout should be a positive, finite number of seconds."
-               )
+           if self.waiting_timeout is not None:
+               try:
+                   # float() rejects an int too large for a double; kept as an int it
+                   # would overflow the scheduler's clock arithmetic and stop the server.
+                   bound = float(self.waiting_timeout)
+                   valid = isinstance(self.waiting_timeout, (int, float))
+               except (TypeError, ValueError, OverflowError):
+                   valid = False
+               if not (valid and 0 < bound < float("inf")):
+                   raise ValueError(
+                       "waiting_timeout should be a positive, finite number of seconds."
+                   )
+               self.waiting_timeout = bound
    ```
 
    It covers the paths pydantic never sees: `/vertex_generate`, the gRPC bridge, a future header
-   override or Engine argument. NaN fails both comparisons; a string fails the `isinstance`.
+   override or Engine argument. NaN fails both comparisons; a string fails the `isinstance`. **Corrected
+   2026-10-05 (§12 A1):** the first version compared the raw value with `float("inf")`; a JSON integer
+   of 400 digits is a Python `int`, passes that comparison, and then makes `now - timeout_s` in the scan
+   raise `OverflowError`, which the scheduler loop answers by signalling its parent
+   (`scheduler.py:5957-5960`). The value is therefore converted here and stored as a `float`.
 2. *Schema, OpenAI models* — `Field(default=None, gt=0, allow_inf_nan=False)` on rows 1-2: the house
    pattern, an OpenAPI entry, and a 400 before any template or tokenizer work.
 
@@ -432,8 +447,12 @@ way (`__new__`, 116-151) and covers the abort payload (376-420) and the status m
 ### 5.2 Changes the PR forces on existing tests
 
 - `_FakeReq` and `_req()` gain `waiting_timeout=None`; `_scheduler()` gains
-  `has_req_waiting_timeout=False`. Without the first the three existing waiting cases raise
-  `AttributeError` — the price of reading the attribute directly, which the rules require.
+  `_has_req_waiting_timeout=False`. Of the existing cases, the two that walk the queue need the request
+  attribute; the third waiting case (`override(0)`, line 134) and all six running-timeout cases
+  (142-232, waiting knob at −1) never walk it and need the flag default instead, because the new
+  condition reads `self._has_req_waiting_timeout` whenever the global value is ≤ 0. Either omission is an
+  `AttributeError` — the price of reading attributes directly, which the rules require. (Corrected
+  2026-10-05, §12 A2.)
 - No other unit test calls the real scan: the PD and MLX tests replace `_poll_timeout_aborts` or
   `ingest_requests` (`test/registered/unit/disaggregation/test_prefill_result_polling.py:215, 460`;
   `test/registered/unit/managers/test_disagg_idle_step_counters.py:494`). The two tests that call the
@@ -447,11 +466,11 @@ way (`__new__`, 116-151) and covers the abort payload (376-420) and the status m
 
 | Case | File, class | Set-up | Asserts | A future diff that turns it red | Category |
 |---|---|---|---|---|---|
-| `test_effective_bound_is_the_smaller_of_request_and_global` | `test_scheduler_timeouts.py`, `TestWaitingTimeout` | one fake request that has waited 10 s, scan armed; six `subTest` rows (request, global, expected): (1, 100, abort), (100, 1, abort), (100, 1000, none), (1, −1, abort), (100, −1, none), (`None`, −1, none) | emitted rids; `status_code == 503` on the aborting rows | row 1: "global only" or `max`; row 2: the request overriding the operator's bound; row 3: a predicate that fires whenever the field is present; row 4: restoring `if global > 0:` around the loop; row 5: `min(req, global)` with the −1 sentinel — every request carrying the field dies at once on a default server; row 6: naive defaulting once the scan is armed | derived property (boundary and sentinel math) |
+| `test_effective_bound_is_the_smaller_of_request_and_global` | `test_scheduler_timeouts.py`, `TestWaitingTimeout` | one fake request that has waited 10 s, scan armed; the scan is called inside `override(...)` and asserted on after leaving it (the context manager restores the value without `try/finally`, `environ.py:95-106`, so a failed assertion inside would leak the knob into the next row); six `subTest` rows (request, global, expected): (1, 100, abort), (100, 1, abort), (100, 1000, none), (1, −1, abort), (100, −1, none), (`None`, −1, none) | emitted rids; `status_code == 503` on the aborting rows | row 1: "global only" or `max`; row 2: the request overriding the operator's bound; row 3: a predicate that fires whenever the field is present; row 4: restoring `if global > 0:` around the loop; row 5: `min(req, global)` with the −1 sentinel — every request carrying the field dies at once on a default server; row 6: naive defaulting once the scan is armed | derived property (boundary and sentinel math) |
 | `test_queue_is_not_walked_until_a_request_carries_a_bound` | same class | `waiting_queue` is a list subclass whose `__iter__` raises; flag off; global −1 | the scan returns `[]` | removing the gate: no functional test notices an O(queue) walk on the default path | derived property with a silent failure mode |
 | `test_generate_request_carries_its_bound_and_arms_the_scan` | `test_scheduler_timeouts.py`, new class | `__new__` scheduler as in `test_scheduler_sampling_mask_validation.py:24-42`, unified mode, a real `TokenizedGenerateReqInput` (built as in `test_io_struct.py:115-127`, plus `bootstrap_port` so line 2765 needs no context) with `waiting_timeout=1.5`; `_add_request_to_queue` and `init_req_max_new_tokens` mocked; `mm_input_error` passed so the method returns at `scheduler.py:2912-2920`; topology published for `set_finish_with_abort` (`schedule_batch.py:2151`) | the `Req` handed to the queue has `waiting_timeout == 1.5` and the flag is `True`; without the field: `None` and `False` | dropping the keyword at 2812 or the arming lines: the field would be ignored with the global knob off and every other test would still pass | critical-path bookkeeping |
 | `test_getitem_preserves_waiting_timeout` | `test_io_struct.py`, `TestGenerateReqInputNormalization` | two prompts, `sampling_params={"n": 2}`, `waiting_timeout=1.5` | all four sub-requests carry 1.5 | dropping the `__getitem__` line: batched and `n > 1` requests lose the bound while single ones keep it. Precedents: `test_io_struct.py:1104-1115, 1270-1278, 1306-1320` | critical-path bookkeeping |
-| `test_waiting_timeout_must_be_positive_and_finite` | same class | `subTest` over `0`, `-1.0`, `inf`, `nan`, `"2"` | `normalize_batch_and_arguments()` raises `ValueError` | weakening the check: `0` would abort at once, `inf` and `nan` never fire, and `/vertex_generate` has no other guard | validation boundary |
+| `test_waiting_timeout_must_be_positive_and_finite` | same class | `subTest` over `0`, `-1.0`, `inf`, `nan`, `"2"`, `10**400`; plus `waiting_timeout=3` | each of the six raises `ValueError` in `normalize_batch_and_arguments()`; `3` is accepted and stored as the float `3.0` | weakening the check: `0` would abort at once, `inf` and `nan` never fire, and `/vertex_generate` has no other guard | validation boundary |
 | `test_waiting_timeout_reaches_internal_request` | `test/registered/unit/entrypoints/openai/test_serving_completions.py`, `ServingCompletionTestCase` (fixture at 69-91, model: 98-108) | `CompletionRequest(..., waiting_timeout=1.5)` | `internal.waiting_timeout == 1.5` | dropping the keyword at `serving_completions.py:138` | critical-path bookkeeping |
 | the same for chat | `test/registered/unit/entrypoints/openai/test_serving_chat.py` (pattern: 693-737) | `ChatCompletionRequest(..., waiting_timeout=1.5)`, `_process_messages` patched | `adapted.waiting_timeout == 1.5` | dropping the keyword at `serving_chat.py:1311`; a separate line, a separate failure | critical-path bookkeeping |
 
@@ -692,7 +711,7 @@ variables (`sglang serve --model-path Qwen/Qwen3-8B --max-running-requests 1 --h
 | PD behaviour is unexercised | §1.4 | Q7 |
 | The field is silently ignored by older servers, the Rust front end, a typo | §1.4 | D2.7; docs |
 | Unit tests cannot run on the Mac | §10 | a CI-like environment, or step 0 of the node session |
-| `scheduler.py` churn; the open PD-timeout PR (#34457, not read) may touch the same function | 15 small hunks | rebase before opening; re-grep every line of §1.1 |
+| `scheduler.py` churn; the open PD-timeout PR (#34457, not read) may touch the same function | four hunks in `scheduler.py`, fifteen touch points over seven files | rebase before opening; re-grep every line of §1.1 |
 | The existing test file needs a fixture edit | §5.2 | part of the PR, called out in its description |
 
 ## 9. Discrepancies found
@@ -702,7 +721,7 @@ variables (`sglang serve --model-path Qwen/Qwen3-8B --max-running-requests 1 --h
 | # | Claim | What the source shows |
 |---|---|---|
 | R1 | §1: "Neither variable is mentioned anywhere under `docs/`" | Both are documented at the pin: `docs/docs/references/environment_variables.mdx:72` (`SGLANG_REQ_WAITING_TIMEOUT`, "Timeout (in seconds) for requests waiting in the queue before being scheduled") and `:77`. The rename commit itself (`e6f7a372ef`, #18766, committed 2026-02-12) carried the two doc rows |
-| R2 | §1: "In PD-disaggregation mode neither timeout is enforced" | Every PD event loop calls `ingest_requests` and with it the scan (`disaggregation/prefill.py:696, 782`; `disaggregation/decode.py:2930, 2977`; `scheduler_pp_mixin.py:280, 431`), since #38389 (`b23d835048`, 2026-09-07) replaced the bare `recv_requests` calls there. Both timeouts apply in PD mode to requests in `waiting_queue` and in flight. What is not covered are the bootstrap, prealloc and transfer queues |
+| R2 | §1: "In PD-disaggregation mode neither timeout is enforced" | Every PD event loop calls `ingest_requests` and with it the scan (`disaggregation/prefill.py:696, 782`; `disaggregation/decode.py:2930, 2977`; `scheduler_pp_mixin.py:280, 431`), since #37143 (`792543f98c`, merged 2026-09-08) put the scan inside `recv_requests`; #38389 (`b23d835048`) only moved the call into `ingest_requests`. Both timeouts apply in PD mode to requests in `waiting_queue` and in flight. What is not covered are the bootstrap, prealloc and transfer queues |
 | R3 | §3: `serving_responses.py:579` listed under "Request → `GenerateReqInput`" | Line 579 passes `priority` to `_generate_with_builtin_tools`, not to `GenerateReqInput` (533-570 has no `priority`). Inside (2695-2774) the value is only rebound (2707, 2774) and never applied to the rebuilt request (2739-2754). On `/v1/responses` the field does not reach the engine. `ResponsesRequest.priority` is also `int = 0`, not optional (`protocol.py:1840`) |
 | R4 | §3: `tokenizer_manager.py:1535,1567` | 1567 is the embedding object; only 1535 concerns generation |
 | R5 | §3: `Req` construction "`Scheduler.handle_generate_request`, `schedule_batch.py`" | incomplete: `priority` also enters a `Req` in `Session.create_req` (`session/session_controller.py:326`), `handle_embedding_request` (`scheduler.py:3452`) and the EPD stub (`disaggregation/encoder/receiver.py:2537`); it is replayed in `build_rebootstrap_payload` (`schedule_batch.py:2115`) and exposed by the Engine API (`entrypoints/engine.py:460, 575`) and the gRPC proto (`sglang.proto:106, 134`) |
@@ -753,6 +772,7 @@ variables (`sglang serve --model-path Qwen/Qwen3-8B --max-running-requests 1 --h
 | Whether `--kv-canary raise` tolerates aborted requests, and how long 8192 oracle tokens hold the slot | not run | D2 |
 | What the open PD-timeout PR (#34457) changes | no network access in this study | Q7, §9 R2 |
 | The scan timings on the real `Req` | measured on a stand-in | §2.7 |
+| Whether `waiting_timeout` survives `sgl-model-gateway` | the gateway's request types live in an external crate | §1.4 |
 | Whether `uv pip install -e "python[dev]"` resolves on macOS | not attempted | D1 on the Mac |
 
 ## 11. Added after session P1 (2026-10-05) — measured, not read
@@ -768,5 +788,32 @@ PR-A). What it settles for this plan:
 | Clients | The stock benchmark counted an in-stream abort as a completed request with the requested output length. Fixed on the PR-A branch (`9eb681bef6`); `slo_client.py` must classify a response by its payload, not by the HTTP status | `results/pra_usage.md` §3.1 |
 | §5.5, where D1 runs | The Mac cannot import the package (it has transformers 4.51 against the pinned 5.17, and no `msgspec`). In P1 the node ran the registered CPU unit files in the real environment in 13 s; D1 is the first step of P2 | `results/pra/step0_summary.txt` |
 
-An independent check of this plan against the source was started on 2026-10-05; its findings are
-applied in a dated correction block below when it reports.
+## 12. Independent check (2026-10-05)
+
+A second reader, given only this file, the related documents and the source, was asked to find errors.
+Findings are applied in the text above and listed here.
+
+**A. Errors found in this plan**
+
+| # | Was | Is |
+|---|---|---|
+| A1 | §4 validated with `0 < x < float("inf")` on the raw value | an `int` of 2¹⁰²⁴ or more passes that test and overflows `now - timeout_s` in the scan; the loop's exception handler then signals the parent process. Reachable through `/vertex_generate`, whose parameters bypass pydantic (`http_server.py:2132-2136`, `io_struct.py:2385`), with the global knob at its default. Reproduced on Python 3.12: `10**400` passes the old test, `time.perf_counter() - 10**400` raises `OverflowError`. Fixed by converting with `float()` and storing the float; `10**400` added to the validation case. §7.2's source total grows by about six lines |
+| A2 | §5.2: the three existing waiting cases need the request attribute | two do; the third and the six running-timeout cases need the flag default in `_scheduler()` |
+| A3 | §5.3: assertions inside `override(...)` | call inside, assert outside: `override` has no `try/finally` |
+| A4 | §0, §2.4: "current stay in `waiting_queue`" | in PD decode the time in the retracted queue counts as well |
+| A5 | §1.1 omitted `session_id` as keyword-only; §8.2 said "15 small hunks" | corrected; `scheduler.py` has four hunks |
+
+**B. Checked and found correct.** The scan change of §2.6 applies at `scheduler.py:3390-3394`; 48
+simulated combinations of global value, request value and gate state match its table; the gate cannot
+miss a request (it is armed at 2827 before any queue entry and `init_running_status` runs once). All
+fifteen rows of §1.1 are at the stated lines and no generation site is missing. The tail-append rule
+(`test_io_struct.py:67-76`, `io_struct.rs:46-55`). The seven test cases are runnable as specified and
+none is a tautology. Every flag of the debug ladder exists at the pin, and `--max-running-requests=1`
+is upstream's own test set-up (`test_scheduler_control.py:320`). The diff totals add up.
+
+**C. The discrepancies of §9** were each confirmed against the source, with one correction of history
+(R2: the scan reached the PD loops with #37143, not #38389) and one caveat (with a single tokenizer
+worker, `/abort_request` for a rid that is no longer live never reaches the scheduler,
+`tokenizer_manager.py:2149-2150`).
+
+**D. Still unverified:** everything in §10, plus the `sgl-model-gateway` path added to §1.4.
