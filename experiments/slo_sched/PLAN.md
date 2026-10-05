@@ -174,6 +174,18 @@ Nothing is posted upstream — issue, PR or comment — except by Bowen.
 | Fork branch drifts from `upstream/main` | each branch is rebased before its PR is opened; sessions record the SHA they ran |
 | Two open PRs plus #33726 | upstream's idle-PR cap is five; PR-A is opened first and kept moving |
 
+## Amendment — 2026-10-05, before any P1 data
+
+Written while the node was still installing its environment; no cell had run.
+
+| id | change | reason |
+|---|---|---|
+| M1 | T3 compares `fcfs` and `hrrn` only; `lpm` is dropped | T3's prompts are random text with no shared prefixes, so `lpm` would order the queue like `fcfs` |
+| M2 | T3 is two concurrent clients, each with its own SLO set: short (256-token prompts, 128 out, 0.6 × c0, `ttft:1000 tpot:100`) and long (12k-token prompts, 256 out, 2 req/s, `e2el:30000`) | the stock benchmark sends one workload per process; two processes are also how a mixed deployment would be measured |
+| M3 | Load is defined from a closed-loop capacity probe c0 (concurrency 256, 1500 prompts) instead of a knee search: T1 sweeps {0.5, 0.8, 1.0, 1.25, 1.6, 2.0} × c0, T2 runs at 1.25 × c0, T4 at 1.5 × c0 with `--max-running-requests 128` | one probe costs a minute; a bisection would cost a quarter of the session |
+| M4 | A1.5 compares good-request **counts**; the offline value uses `latency = ttft + sum(itl)` | the benchmark's own latency is taken at the last stream chunk, which can be a few milliseconds after the last token, so a borderline request can differ; any difference is reported per cell |
+| M5 | The "halve the SLOs and rerun" fallback of §6 becomes an offline re-evaluation | `--output-details` keeps per-request timings, so another SLO set needs no rerun |
+
 ## Outcome — stage 1, local part (2026-10-05)
 
 PR-A is implemented on the fork: `bowenwan6/sglang`, branch `feat/bench-goodput` @ `d132f6739e`, one
