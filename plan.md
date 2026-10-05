@@ -2050,3 +2050,39 @@ overhead the graph recovers. H3 SUPPORTED: mixed shapes give 167 captures/300, m
 Side findings: default-flag ViT graphs change outputs (interpolation flag), the bf16 encoder's 2–7 %
 implementation noise floor, and the rotary cost. Details and deviations: `q3_vit_graph/PLAN.md` "Outcome";
 tables: `q3_vit_graph/results/q3_report.md`.
+
+# 13. S1 — SLO-aware serving on SGLang: goodput benchmark (PR-A) and per-request waiting timeout (PR-B)
+
+> Plan, acceptance criteria and server sessions: [`experiments/slo_sched/PLAN.md`](experiments/slo_sched/PLAN.md).
+> Paper and source facts, and the full client-emulated ladder kept as an optional later study:
+> [`BACKGROUND.md`](experiments/slo_sched/BACKGROUND.md). PR-B research:
+> [`PRB_RESEARCH.md`](experiments/slo_sched/PRB_RESEARCH.md). Branch `exp/slo-prs`.
+> This section is the pointer; it gets a dated outcome paragraph after each stage, nothing else.
+> A separate track: it does not belong to roadmap issues #1–#5.
+
+**Why.** JITServe (NSDI '26, arXiv 2504.20068) reports 1.4–6.3× goodput on mixed-SLO traffic. None of
+it is in SGLang, and a port is not realistic: the artifact subclasses vLLM's V0 scheduler, paper-sized
+scheduler PRs stall upstream, and upstream's own SLO work is in the router. Two pieces are small and
+useful by themselves. The benchmark cannot say how many requests met an SLO (vLLM's can, since
+2024-10). The engine can shed late work only with one global timeout, which cannot suit interactive
+and batch requests at once.
+
+**Stages (thresholds fixed before any server run; written 2026-10-05).**
+- **Stage 1 — PR-A.** `--goodput ttft:… tpot:… e2el:…` in `sglang.benchmark.serving`: request goodput,
+  SLO attainment, per-SLO attainment. Unit-tested on the Mac, then used on four tasks on one H200
+  with Qwen3-8B (load sweep, batch cap, queue policy under mixed lengths, global timeout). "Useful"
+  means: the sweep shows a knee (goodput ≥ 30 % below its peak while throughput is within 10 % of
+  its own), and in at least one other task the best configuration by throughput or mean TTFT is not
+  the best by goodput (gap ≥ max(5 %, 3 σ)).
+- **Stage 2 — PR-B research (done 2026-10-05).** Only global waiting/running timeouts exist; no
+  per-request proposal in sglang or vllm; Triton's queue policy is the precedent; the field follows
+  `priority`'s path and is enforced in the existing rank-0 scan, under 150 changed lines. Go.
+- **Stage 3 — PR-B.** Field `waiting_timeout`, effective bound the smaller of it and the global one.
+  Debug on unit tests, a dummy-weight server, then the real model. Benchmark against no timeout and
+  the best single global value on a two-class surge (accept: ≥ max(5 pp, 3 σ) attainment) and on
+  callers with budgets (accept: wasted tokens halved and ≥ 5 pp), with a no-op control inside A/A
+  noise and a one-class neutral case reported as it falls. Both use cases failing means no PR-B.
+
+**Scope.** One dense model, one GPU, TP = 1, text. Three server sessions of ≤ 3 h (≈ 6 GPU-hours,
+cap 9), each announced with its plan and started only after approval. Deadline-aware ordering, the
+length predictor, decode pacing and compound requests are out of the active scope.
