@@ -164,6 +164,33 @@ def main():
     d4 = disagreement("T4", t4, lambda r: f"timeout {r['params']['waiting_timeout_s']}",
                       "output_throughput")  # fmt: skip
 
+    # T4 as the benchmark reports it after the in-stream-error fix: a response with no token
+    # and no text is a request the server aborted, i.e. a failed request.
+    lines = []
+    for r in t4:
+        path = d / "cells" / f"{r['cell']}.jsonl"
+        if not path.exists():
+            continue
+        res = json.loads(path.read_text().strip().splitlines()[-1])
+        n = len(res["ttfts"])
+        aborted = {i for i in range(n) if not res["generated_texts"][i] and not res["itls"][i]}
+        if not aborted:
+            lines.append(("off" if r["params"]["waiting_timeout_s"] is None else r["params"]["waiting_timeout_s"],
+                          0, f"{r['request_throughput']:.2f}", f"{r['output_throughput']:.0f}",
+                          f"{r['request_goodput']:.2f}", f"{r['slo_attainment'] * 100:.1f}", "0"))  # fmt: skip
+            continue
+        phantom = sum(res["output_lens"][i] for i in aborted)
+        served = {**res, "errors": [e or ("aborted" if i in aborted else "") for i, e in enumerate(res["errors"])]}
+        good = recompute(served, r["slo_ms"])
+        dur = res["duration"]
+        lines.append((r["params"]["waiting_timeout_s"], len(aborted), f"{(n - len(aborted)) / dur:.2f}",
+                      f"{(res['total_output_tokens'] - phantom) / dur:.0f}", f"{good / dur:.2f}",
+                      f"{good / n * 100:.1f}", f"{phantom / res['total_output_tokens'] * 100:.0f}"))  # fmt: skip
+    if lines:
+        print("\nT4 with server-aborted responses counted as failed (what the fixed benchmark reports):\n")
+        print(table(["waiting timeout (s)", "aborted by the server", "req thr", "out tok/s",
+                     "goodput (req/s)", "attain %", "phantom output tokens in the stock report %"], lines))  # fmt: skip
+
     hits = [n for n, v in (("T2", d2), ("T3", d3), ("T4", d4)) if v]
     print(f"\n**A1.7**: decision differs in {', '.join(hits) or 'none'} → "
           f"{'PASS' if hits else 'FAIL'}.")  # fmt: skip

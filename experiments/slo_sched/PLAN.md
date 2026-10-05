@@ -204,3 +204,37 @@ commit on `upstream/main` @ `734cf3cf3b`: +134 lines in `python/sglang/benchmark
   SLO values are echoed as `goodput_slos_ms`. Two cases were removed from the unit file to meet
   upstream's unit-test admission rule (a duplicate and a print-format mirror).
 - Open: the P1 server tasks (A1.5–A1.7).
+
+## Outcome — session P1 (2026-10-05, 02:12–03:19 UTC)
+
+Full account: [`results/pra_usage.md`](results/pra_usage.md); tables:
+[`results/pra/p1_report.md`](results/pra/p1_report.md). One H200, `Qwen/Qwen3-8B`, fork branch at
+`d132f6739e`, 19 cells, every cell with `--output-details`.
+
+- **Step 0 (real environment): pass.** 10 unit tests, `ruff`, and the full pre-commit suite on the three
+  files. A1.1–A1.4 now hold without the Mac caveat.
+- **A1.5: 17 of 19 cells identical.** The two that differ are the T4 cells with a waiting timeout, and the
+  cause is a benchmark bug, not a rounding issue: a streaming request the server aborts arrives as HTTP
+  200 with an in-stream error, and the chat and native paths recorded it as a completed request with the
+  requested output length (735 phantom successes of 3017 and 25 % phantom output tokens in the 2 s
+  cell). Fixed in `9eb681bef6` on the same branch with a regression test that fails on the old code;
+  that commit has run only through the Mac stub harness.
+- **A1.6: PASS.** Output throughput rises to 9244 tok/s at 2.0 × c0 while goodput falls from 35.3 to 7.6
+  req/s (−79 %). Noise from three runs at 1.25 × c0: σ = 5.6 %.
+- **A1.7: FAIL as written.** In T2, T3 and T4 the winner by throughput (or mean TTFT) is also the winner
+  by goodput. Goodput added magnitude and cause instead: caps 128 and 512 are 1 % apart in throughput and
+  2.4× apart in goodput; under `hrrn` the per-SLO line shows TPOT, not TTFT, is what still fails.
+- **T4 with the fix applied offline:** no timeout 7.37 req/s, 2 s 22.95, 10 s 8.88 — a global bound helps
+  only when it matches the tightest objective, which is PR-B's motivation.
+- **Side finding:** the first sampled (top-k / top-p) request on a fresh server was scheduled about 70 s
+  late and blocked everything behind it; greedy requests are unaffected. Sessions P2 and P3 must use
+  `temperature: 0` or warm the sampler first.
+- **Deviations:** the event monitor on the Mac delivered nothing for 30 minutes (the run itself was
+  healthy); `scripts/p1_sync.sh` failed on a quoting error and the sync was done with the same `rsync`
+  command by hand; five short diagnostic servers were run after the tasks to capture the abort
+  responses. One extension was requested (1 credit) and turned out unnecessary for the tasks.
+
+**Consequences.** PR-A is two commits: the goodput option and the in-stream-error fix, which can be
+offered separately but must land first or together. Its description claims the knee and the per-SLO
+breakdown, not a changed winner. Before it is opened: one run of the fix commit's unit file in a real
+environment (first step of P2).

@@ -1,0 +1,10 @@
+HTTP/1.1 200 OK
+content-type: text/event-stream; charset=utf-8
+vary: Origin
+Transfer-Encoding: chunked
+
+data: {"text":"","output_ids":[],"meta_info":{"id":"627d7d76f74f4635a3921b0a903e482d","finish_reason":{"type":"abort","status_code":503,"message":"Request waiting timeout reached."},"weight_version":"default","e2e_latency":2.010192092988291,"weight_versions":[{"version":"default","start":0,"end":0}],"completion_tokens":0,"response_sent_to_client_ts":1791170054.965413}}
+
+data: [DONE]
+
+[curl_exit=0 after=2.024822737s]
