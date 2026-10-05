@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Turn session P1's summary.jsonl into the tables and acceptance checks of PLAN.md stage 1.
 
-  python p1_report.py <dir with summary.jsonl and cells/> [--alt ttft:2000,tpot:50,e2el:10000]
+  python p1_report.py <dir with summary.jsonl and cells/> [--alt ttft:2000,tpot:50,e2el:10000 ...]
 
-Prints Markdown. --alt re-evaluates the T1 sweep under another SLO set from the per-request
-details in cells/*.jsonl (no rerun needed).
+Prints Markdown. --alt re-evaluates the T1 sweep and the T2 caps under another SLO set from the
+per-request details in cells/*.jsonl (no rerun needed); it may be given several times.
 """
 
 import argparse
@@ -45,7 +45,7 @@ def table(header, lines):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("dir")
-    ap.add_argument("--alt", default="")
+    ap.add_argument("--alt", action="append", default=[])
     a = ap.parse_args()
     d = Path(a.dir)
     rows = load(d / "summary.jsonl")
@@ -77,7 +77,7 @@ def main():
           f"{r['request_goodput']:.2f}", f"{r['slo_attainment'] * 100:.1f}", by_metric(r),
           f"{r['mean_ttft_ms']:.0f}", f"{r['p99_ttft_ms']:.0f}", f"{r['mean_tpot_ms']:.1f}",
           f"{r['p99_e2e_latency_ms']:.0f}") for r in sweep]))  # fmt: skip
-    sigma_rel = None
+    sigma_rel = sigma_thr = None
     if sweep:
         best = max(sweep, key=lambda r: r["request_goodput"])
         same = [best] + reps
@@ -85,9 +85,13 @@ def main():
             g = [r["request_goodput"] for r in same]
             sigma_rel = statistics.stdev(g) / statistics.mean(g)
             att = [r["slo_attainment"] * 100 for r in same]
+            thr = [r["output_throughput"] for r in same]
+            sigma_thr = statistics.stdev(thr) / statistics.mean(thr)
             print(f"\nNoise at {best['params']['mult']:g} × c0 over {len(same)} runs: goodput "
                   f"{', '.join(f'{x:.2f}' for x in g)} req/s (σ = {sigma_rel * 100:.1f} % of the mean); "
-                  f"attainment {', '.join(f'{x:.1f}' for x in att)} %.")  # fmt: skip
+                  f"attainment {', '.join(f'{x:.1f}' for x in att)} % "
+                  f"(σ = {statistics.stdev(att) / statistics.mean(att) * 100:.1f} %); output throughput "
+                  f"{', '.join(f'{x:.0f}' for x in thr)} tok/s (σ = {sigma_thr * 100:.1f} %).")  # fmt: skip
         top, last = sweep[-1], best
         peak_thr = max(r["output_throughput"] for r in sweep)
         drop = 1 - top["request_goodput"] / last["request_goodput"]
@@ -111,6 +115,12 @@ def main():
         print(f"\n{name}: best by {by_key} = {label(best_other)}, best by goodput = "
               f"{label(best_good)}, goodput gap {gap * 100:.1f} % (threshold {thresh * 100:.1f} %) → "
               f"{'decision differs' if differs else 'same decision'}.")  # fmt: skip
+        if label(best_other) != label(best_good):
+            margin = abs(1 - best_good[by_key] / best_other[by_key])
+            noise = (f"; σ of output throughput is {sigma_thr * 100:.1f} %, so that ranking is "
+                     f"{'inside' if margin < 2 * sigma_thr else 'outside'} the noise"
+                     if by_key == "output_throughput" and sigma_thr else "")  # fmt: skip
+            print(f"The two differ by {margin * 100:.1f} % in {by_key}{noise}.")
         return differs
 
     # ---- T2 -----------------------------------------------------------------
@@ -161,12 +171,15 @@ def main():
           f"{r['output_throughput']:.0f}", f"{r['request_goodput']:.2f}",
           f"{r['slo_attainment'] * 100:.1f}", by_metric(r), f"{r['mean_ttft_ms']:.0f}",
           f"{r['p99_e2e_latency_ms']:.0f}") for r in t4]))  # fmt: skip
-    d4 = disagreement("T4", t4, lambda r: f"timeout {r['params']['waiting_timeout_s']}",
-                      "output_throughput")  # fmt: skip
+
+    def label4(r):
+        return f"timeout {r['params']['waiting_timeout_s'] or 'off'}"
+
+    d4 = disagreement("T4", t4, label4, "output_throughput")
 
     # T4 as the benchmark reports it after the in-stream-error fix: a response with no token
     # and no text is a request the server aborted, i.e. a failed request.
-    lines = []
+    lines, t4_fixed = [], []
     for r in t4:
         path = d / "cells" / f"{r['cell']}.jsonl"
         if not path.exists():
@@ -178,6 +191,7 @@ def main():
             lines.append(("off" if r["params"]["waiting_timeout_s"] is None else r["params"]["waiting_timeout_s"],
                           0, f"{r['request_throughput']:.2f}", f"{r['output_throughput']:.0f}",
                           f"{r['request_goodput']:.2f}", f"{r['slo_attainment'] * 100:.1f}", "0"))  # fmt: skip
+            t4_fixed.append(r)
             continue
         phantom = sum(res["output_lens"][i] for i in aborted)
         served = {**res, "errors": [e or ("aborted" if i in aborted else "") for i, e in enumerate(res["errors"])]}
@@ -186,29 +200,44 @@ def main():
         lines.append((r["params"]["waiting_timeout_s"], len(aborted), f"{(n - len(aborted)) / dur:.2f}",
                       f"{(res['total_output_tokens'] - phantom) / dur:.0f}", f"{good / dur:.2f}",
                       f"{good / n * 100:.1f}", f"{phantom / res['total_output_tokens'] * 100:.0f}"))  # fmt: skip
+        t4_fixed.append({**r, "output_throughput": (res["total_output_tokens"] - phantom) / dur,
+                         "request_goodput": good / dur})  # fmt: skip
+    d4_fixed = None
     if lines:
         print("\nT4 with server-aborted responses counted as failed (what the fixed benchmark reports):\n")
         print(table(["waiting timeout (s)", "aborted by the server", "req thr", "out tok/s",
                      "goodput (req/s)", "attain %", "phantom output tokens in the stock report %"], lines))  # fmt: skip
+        if len(t4_fixed) == len(t4):
+            d4_fixed = disagreement("T4, server-aborted requests counted as failed", t4_fixed,
+                                    label4, "output_throughput")  # fmt: skip
 
-    hits = [n for n, v in (("T2", d2), ("T3", d3), ("T4", d4)) if v]
-    print(f"\n**A1.7**: decision differs in {', '.join(hits) or 'none'} → "
-          f"{'PASS' if hits else 'FAIL'}.")  # fmt: skip
+    # The stock T4 numbers are inflated by the aborted requests, so A1.7 is stated for both.
+    for title, v4 in (("on the benchmark's stock output", d4),
+                      ("with server-aborted requests counted as failed", d4_fixed)):  # fmt: skip
+        if v4 is None:
+            continue
+        hits = [n for n, v in (("T2", d2), ("T3", d3), ("T4", v4)) if v]
+        print(f"\n**A1.7**, {title}: decision differs in {', '.join(hits) or 'none'} → "
+              f"{'PASS' if hits else 'FAIL'}.")  # fmt: skip
 
     # ---- alternative SLO set, offline ----------------------------------------
-    if a.alt:
-        slo = {k: float(v) for k, v in (kv.split(":") for kv in a.alt.split(","))}
-        print(f"\n## T1 re-evaluated offline under {a.alt}\n")
-        lines = []
-        for r in sweep:
-            path = d / "cells" / f"{r['cell']}.jsonl"
-            if not path.exists():
-                continue
-            res = json.loads(path.read_text().strip().splitlines()[-1])
-            good = recompute(res, slo)
-            lines.append((f"{r['params']['mult']:g}", f"{good / res['duration']:.2f}",
-                          f"{good / len(res['ttfts']) * 100:.1f}"))  # fmt: skip
-        print(table(["× c0", "goodput (req/s)", "attain %"], lines))
+    for alt in a.alt:
+        slo = {k: float(v) for k, v in (kv.split(":") for kv in alt.split(","))}
+        for title, column, cells, label in (
+            ("T1", "× c0", sweep, lambda r: f"{r['params']['mult']:g}"),
+            ("T2", "max running", t2, lambda r: r["params"]["max_running_requests"]),
+        ):
+            lines = []
+            for r in cells:
+                path = d / "cells" / f"{r['cell']}.jsonl"
+                if not path.exists():
+                    continue
+                res = json.loads(path.read_text().strip().splitlines()[-1])
+                good = recompute(res, slo)
+                lines.append((label(r), f"{good / res['duration']:.2f}",
+                              f"{good / len(res['ttfts']) * 100:.1f}"))  # fmt: skip
+            print(f"\n## {title} re-evaluated offline under {alt}\n")
+            print(table([column, "goodput (req/s)", "attain %"], lines))
 
 
 if __name__ == "__main__":
