@@ -223,11 +223,16 @@ Full account: [`results/pra_usage.md`](results/pra_usage.md); tables:
   that commit has run only through the Mac stub harness.
 - **A1.6: PASS.** Output throughput rises to 9244 tok/s at 2.0 × c0 while goodput falls from 35.3 to 7.6
   req/s (−79 %). Noise from three runs at 1.25 × c0: σ = 5.6 %.
-- **A1.7: FAIL as written.** In T2, T3 and T4 the winner by throughput (or mean TTFT) is also the winner
-  by goodput. Goodput added magnitude and cause instead: caps 128 and 512 are 1 % apart in throughput and
-  2.4× apart in goodput; under `hrrn` the per-SLO line shows TPOT, not TTFT, is what still fails.
-- **T4 with the fix applied offline:** no timeout 7.37 req/s, 2 s 22.95, 10 s 8.88 — a global bound helps
-  only when it matches the tightest objective, which is PR-B's motivation.
+- **A1.7: met in T4 once aborted requests are counted as failed; not met on the stock output, and not
+  in T2 or T3** (corrected later on 10-05, see below). In T2 and T3 the winner by throughput (or mean
+  TTFT) is also the winner by goodput; goodput added magnitude and cause instead: caps 128 and 512 are
+  1 % apart in throughput and 2.4× apart in goodput; under `hrrn` the per-SLO line shows TPOT, not TTFT,
+  is what still fails.
+- **T4 with the fix applied offline:** no timeout 7.37 req/s, 2 s 22.95, 10 s 8.88, with output throughput
+  at 7362, 7085 and 7162 tok/s — the three are within 3.8 %, one σ of throughput, so throughput does not
+  rank them and goodput separates them 3.1×. This is T4's stated expectation ("throughput barely moves,
+  goodput does"). A global bound helps only when it matches the tightest objective, which is PR-B's
+  motivation.
 - **Side finding:** the first sampled (top-k / top-p) request on a fresh server was scheduled about 70 s
   late and blocked everything behind it; greedy requests are unaffected. Sessions P2 and P3 must use
   `temperature: 0` or warm the sampler first.
@@ -240,3 +245,40 @@ Full account: [`results/pra_usage.md`](results/pra_usage.md); tables:
 offered separately but must land first or together. Its description claims the knee and the per-SLO
 breakdown, not a changed winner. Before it is opened: one run of the fix commit's unit file in a real
 environment (first step of P2).
+
+### Corrections to this outcome — 2026-10-05, after a second reading of the data
+
+Made while answering "did the experiment show the metric is useful"; no new run.
+
+1. **A1.7 was judged on the wrong T4 numbers.** `p1_report.py` compared the T4 settings on the
+   benchmark's stock output, which the abort-accounting bug inflates (the 2 s cell read 9427 tok/s).
+   On the corrected accounting the nominal winner by output throughput is "no timeout" and the winner
+   by goodput is the 2 s bound, with a 68 % goodput gap against a 16.7 % threshold: A1.7 is met in T4 by
+   its letter. The throughput ranking is inside the noise (3.8 % apart, σ = 3.8 %), so the supported
+   statement is that throughput cannot separate the settings, not that it picks the wrong one. The
+   script now prints A1.7 for both accountings and the throughput σ.
+2. **The in-stream-error fix overlaps an open upstream PR.** sgl-project/sglang#40881 (2026-09-23, no
+   review by 10-05) fixes the chat path the same way; the stage-2 prior-art search did not look for
+   benchmark fixes and missed it. Checked on the old code with the stub harness: chat and native (the
+   default backend) record a success, completions already records a failure with a traceback as its
+   message. So what remains ours is the native path plus the real-server reproduction. The fix is not
+   to be opened as a competing PR, and "must land first or together" above no longer holds: `--goodput`
+   is independent of the fix (aborted requests inflate it exactly as they already inflate throughput).
+3. **What the evidence does and does not show.** Shown: the numbers are computed correctly; the knee
+   (T1); throughput blind to a 3× difference in useful work (T4, offline re-count, one run per setting).
+   Not shown, and not showable: a case where goodput contradicts the latency columns — it is a summary
+   of the same per-request latencies. Its additions are the joint share (69.6 % where the three SLOs
+   are met by 100, 91 and 79 % one at a time) and failed requests counted as misses.
+4. **New limits recorded in `results/pra_usage.md` §5:** every cell sends for 50 s, so attainment above
+   saturation depends on run length; goodput in req/s is noisier than attainment (σ 5.6 % against
+   1.7 %).
+
+Post hoc, three recorded T2 runs under other SLO sets (`pra_usage.md` §2.2): with `ttft:10000 tpot:30`
+cap 128 beats cap 512 2.5× while throughput and mean TTFT point at cap 512. Chosen after seeing the
+data; an illustration, not a test.
+
+**Revised next steps.** (a) PR-A is the `--goodput` commit alone, rebased, with T1 and the T2 per-SLO
+table in its description. (b) The fix: Bowen decides between commenting on #40881 with the native-path
+gap and our reproduction, or waiting for it and following up with the native path. (c) P2, if approved,
+also reruns T4 three times with the fixed benchmark, so that T4's numbers come from a run and carry
+their own σ.
