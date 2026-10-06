@@ -41,3 +41,47 @@ four minutes left before the deadline (the runner skips the remaining cells by i
 
 Outputs: node `~/sgl/logs/p1/` → Mac `results/raw/p1/` (ignored). Tracked: `results/pra/summary.jsonl`,
 `results/pra/step0_summary.txt`, `results/pra_usage.md`.
+
+## Sessions P2 and P3 — PR-B (allowance from Bowen for 2026-10-06: 10 GPU-hours, 1–2 h per assignment)
+
+What runs: `scripts/prb_node.sh` on the node (environment, the unit tests of D1, a background sweep of
+the neighbouring unit files, then `scripts/prb_run.py` for the phases given). The plan of each session
+is posted in chat before its node is assigned.
+
+Builds: the node installs `bowenwan6/sglang` `exp/slo-node` (the pin `734cf3cf3b` + PR-B + the two
+benchmark commits) and adds a second worktree `~/sgl/sglang-base` at `feat/bench-goodput` (the same
+without PR-B). A server is started from the unpatched tree with `PYTHONPATH=~/sgl/sglang-base/python`;
+the runner checks which tree each server imports before it starts it.
+
+| Step | Where | Command / content |
+|---|---|---|
+| 1. assign | Mac | `radix assign <machine> --gpus 1 --duration 1h --json < /dev/null`; host keys → `~/.radix/known_hosts.d/<ip>` |
+| 2. copy | Mac | `tools/radix/setup_node.sh` → `~/sgl/`; `scripts/{prb_node.sh,prb_run.py,p1_bench.py,prb_ladder.py,slo_client.py,stub_server.py}` → `~/sgl/prb/` |
+| 3. start | node, tmux `sgl-install:prb` | `RUN_NAME=p2 EXPECT_SHA=… BASE_SHA=… DEADLINE_EPOCH=… PHASES=… bash ~/sgl/prb/prb_node.sh` |
+| 4. extend | Mac | `radix extend --by 1h` once the environment is up, if the phases do not fit the first hour |
+| 5. watch, sync | Mac | `tail ~/sgl/logs/<run>/progress.log`; `RUN_NAME=… NODE=… KNOWN_HOSTS=… bash scripts/prb_sync.sh`; stop with `touch ~/sgl/logs/<run>/STOP` |
+| 6. release | Mac | after the final sync: `radix release`, `radix credits` |
+
+Phases of `prb_run.py` (model `Qwen/Qwen3-8B`; every client request is greedy with `ignore_eos`):
+
+| Phase | Server | What it does |
+|---|---|---|
+| `ladder` | `--max-running-requests 1`; dummy-weight `Qwen/Qwen3-0.6B`, then the real model, then the real model with `SGLANG_REQ_WAITING_TIMEOUT=2`, then the unpatched build | `prb_ladder.py`: a long request holds the slot; bounded requests behind it must be refused after their bound on all three endpoints, streaming and not; bad values get a 4xx; loose and unbounded requests are served; the unpatched build ignores the field |
+| `calib` | `--max-running-requests 128` | closed-loop capacity of each class alone: c_chat (256-token prompt, 128 out), c_batch (1024, 256) |
+| `check` | same | `slo_client.py` against `bench_serving --goodput` at 0.5 × c_chat, same request shape |
+| `pilot` | cap 128 + `--enable-priority-scheduling --disable-priority-preemption` | U1 with one seed: `none`, `per_request`, `global_1.5` |
+| `u3` | cap 128, a fresh process per arm | 0.8 of capacity for 90 s: unpatched twice, patched without the field, patched with a 3600 s bound |
+| `u4` | cap 128 | chat alone at 1.3 × c_chat: the bound as a field against the bound as the global knob |
+| `t4rep`, `t1rep` | as in P1 | PR-A: P1's T4 three times with the fixed benchmark; two more seeds at three T1 points |
+| `u1` | as `pilot` | all arms of U1, two or three seeds |
+| `u2` | cap 128, default order | the FCFS case |
+
+P2 = `ladder,calib,check,pilot,u3,u4,t4rep,t1rep` (≈ 75 min of node time, one extension).
+P3 = `u1,u2` with `C_CHAT` and `C_BATCH` taken from P2's `capacity.json` (≈ 95 min, one extension).
+
+Stop conditions: the environment or the build check fails; the ladder fails on the real model (the
+later phases would measure a broken patch); a cell runs past twice its budget. A failing unit file does
+not stop the session — the ladder is the functional check — but is fixed before any PR is opened.
+
+`scripts/stub_server.py` stands in for the server on the Mac: `prb_run.py --dry-run` drives every
+phase against it (control flow only).
