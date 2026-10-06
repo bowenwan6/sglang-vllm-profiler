@@ -145,6 +145,16 @@ def main():
                       f"total {d_all:+.1f} pp against the best global arm, `{best_name}` "
                       f"(needs ≥ max(3, 3σ = {3 * (sd[None] or 0):.1f})) → {'PASS' if ok else 'FAIL'}.")  # fmt: skip
 
+    if any(r["task"] == "u1b" for r in rows):
+        print("\n## U1b — the same use case with heavier chat bursts (2.0 × c_chat)\n")
+        arms_table(rows, "u1b")
+    if any(r["task"] == "tp2" for r in rows):
+        print("\n## Two GPUs, tensor parallel (`--tp-size 2`): chat alone at 1.3 × the one-GPU c_chat, 1.5 s bound\n")
+        print(table(["form", "sent", "attainment %", "refused", "statuses", "mean TTFT ms", "out tok/s"], [
+            (r["arm"], r["all"]["sent"], f"{att(r):.1f}", r["all"]["refused"], r["classes"]["chat"]["status"],
+             f"{r['classes']['chat']['mean_ttft_ms'] or 0:.0f}", f"{r['all']['out_tokens_per_s']:.0f}")
+            for r in rows if r["task"] == "tp2"]))  # fmt: skip
+
     # ---- U2 ---------------------------------------------------------------------
     if any(r["task"] == "u2" for r in rows):
         print("\n## U2 — steady chat and a batch burst, first come first served (reported, not a gate)\n")

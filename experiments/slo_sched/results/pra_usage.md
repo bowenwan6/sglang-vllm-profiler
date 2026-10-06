@@ -216,3 +216,36 @@ re-count of the recorded responses, not a run of the fixed benchmark.
 The node was assigned for 67 minutes. The extension (1 credit) was requested on a 70-minute estimate;
 the tasks took 34 minutes and ended 23 minutes inside the first hour, and the follow-up captures of
 §3 used 7 minutes of the second.
+
+## 6. Addendum — session P2 (2026-10-06): repeats, and the fix run on a server
+
+Same node type, model and base commit; the benchmark is the branch with both commits (the goodput
+option and the in-stream-abort fix). Tables: [`prb/p2_report.md`](prb/p2_report.md).
+
+**The fix in a real environment.** `test_bench_serving_stream_error.py` passes there (it had run only
+through the Mac stub harness), and T4 was run again with the fixed benchmark, three seeds per setting:
+
+| `SGLANG_REQ_WAITING_TIMEOUT` | failed requests | output tok/s | goodput (req/s) | attainment | printed = recomputed |
+|---|---|---|---|---|---|
+| off | 0 | 7743 (346) | 7.33 (0.80) | 18.7 % (2.7) | yes |
+| 2 s | 732 (16) | 7493 (398) | 24.75 (1.65) | 48.7 % (1.5) | yes |
+| 10 s | 376 (29) | 7608 (386) | 8.36 (0.84) | 19.0 % (2.4) | yes |
+
+Mean and standard deviation over the three seeds. This replaces the offline re-count of §2.4 (7.37,
+22.95 and 8.88 req/s from one run each) with measured runs and agrees with it. The aborted requests
+are now reported as failed, and A1.5 holds in every cell. For A1.7 the reading of §4 stands with error
+bars: output throughput differs by 3 % between "off" and 2 s, less than one standard deviation, and
+goodput differs 3.4×.
+
+**T1 with repeats.** Two more seeds at 1.0, 1.6 and 2.0 × c0 (1.25 × c0 already had three runs):
+
+| load | runs | output tok/s | goodput (req/s) | attainment |
+|---|---|---|---|---|
+| 1.0 × c0 | 3 | 6984 | 35.76 (35.08–36.69) | 99.8–100.0 % |
+| 1.25 × c0 | 3 | 7727 | 37.56 (35.34–39.50) | 93.4–96.5 % |
+| 1.6 × c0 | 3 | 8808 | 26.73 (16.53–32.80) | 36.9–71.8 % |
+| 2.0 × c0 | 3 | 9668 | 9.02 (7.59–11.34) | 16.0–23.1 % |
+
+The knee is where it was. What the repeats add is the spread just past it: at 1.6 × c0 one seed gave
+36.9 % where the other two gave 69.6 and 71.8 %. A single 50-second run in that region is not a
+measurement of attainment; the PR description gives ranges.

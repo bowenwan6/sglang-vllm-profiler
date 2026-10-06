@@ -139,7 +139,11 @@ class Runner(p1_bench.Runner):
         if closed:
             cmd += ["--closed-loop", str(closed[0]), "--cls", closed[1], "--num", str(closed[2])]
         with open(self.out / "cells" / f"{cell}.log", "w") as log:
-            rc = subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT).returncode
+            try:
+                rc = subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT,
+                                    timeout=cfg["horizon_s"] + 600).returncode  # fmt: skip
+            except subprocess.TimeoutExpired:
+                rc = -9
         summary_path = Path(str(out) + ".summary.json")
         if rc != 0 or not summary_path.exists():
             self.say(f"cell {cell}: client FAILED rc={rc}")
@@ -159,7 +163,7 @@ class Runner(p1_bench.Runner):
         return row
 
     # ---- phases ----------------------------------------------------------------
-    def ladder(self, only=None, prefix=""):
+    def ladder(self, only=None, prefix="", flags=()):
         """D2 (dummy weights), D3 (real model), the global combination, the unpatched control."""
         runs = [
             ("ladder_dummy", "main", "patched", self.a.small_model, ("--load-format", "dummy"), {}),
@@ -173,7 +177,7 @@ class Runner(p1_bench.Runner):
             tag = prefix + tag
             if not self.room(240, tag):
                 return
-            if not self.start(tag, extra=(*extra, "--max-running-requests", "1"), env=env, build=build, model=model):
+            if not self.start(tag, extra=(*extra, *flags, "--max-running-requests", "1"), env=env, build=build, model=model):
                 self.record({"cell": tag, "task": "ladder", "failed": True, "reason": "server did not start"})
                 continue
             out = self.out / f"{tag}.json"
@@ -182,7 +186,11 @@ class Runner(p1_bench.Runner):
             if self.a.dry_run:
                 cmd += ["--hold-s", "12"]
             with open(self.out / f"{tag}.log", "w") as log:
-                rc = subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT).returncode
+                try:  # a ladder that does not end is a server that hangs: a failure, not a wait
+                    rc = subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT, timeout=420).returncode
+                except subprocess.TimeoutExpired:
+                    rc = -9
+                    log.write("\nTIMEOUT: the ladder did not finish in 420 s\n")
             rows = json.loads(out.read_text())["rows"] if out.exists() else []
             failed = [r["check"] for r in rows if not r["ok"]]
             self.say(f"{tag}: {len(rows) - len(failed)}/{len(rows)} checks passed rc={rc}" + (f" FAILED: {failed}" if failed else ""))
@@ -200,10 +208,13 @@ class Runner(p1_bench.Runner):
         self.flush()
         batch = self.client("calib_batch", "calib", config(1, batch=([], {}, None)), closed=(128, "batch", 512))
         if chat and batch:
-            self.c_chat = chat["all"]["req_per_s"]
-            self.c_batch = batch["all"]["req_per_s"]
-            self.say(f"capacity at cap 128: c_chat = {self.c_chat:.2f} req/s, c_batch = {self.c_batch:.2f} req/s")
-            (self.out / "capacity.json").write_text(json.dumps({"c_chat": self.c_chat, "c_batch": self.c_batch}))
+            m_chat, m_batch = chat["all"]["req_per_s"], batch["all"]["req_per_s"]
+            self.say(f"capacity at cap 128: c_chat = {m_chat:.2f} req/s, c_batch = {m_batch:.2f} req/s")
+            (self.out / "capacity.json").write_text(json.dumps({"c_chat": m_chat, "c_batch": m_batch}))
+            if self.a.c_chat and self.a.c_batch:  # an earlier session's values fix the load levels
+                self.say(f"load levels keep the given capacities {self.a.c_chat:.2f} / {self.a.c_batch:.2f} req/s")
+            else:
+                self.c_chat, self.c_batch = m_chat, m_batch
 
     def check(self):
         """The client against bench_serving --goodput on the same server and the same request shape."""
@@ -311,6 +322,37 @@ class Runner(p1_bench.Runner):
             ("g30", 30, [("global_30", {}, {}, None, (1,))]),
         ])  # fmt: skip
 
+    # U1b: the same use case with heavier chat bursts (2.0 instead of 1.5 of chat capacity).
+    def u1b_cfg(self, chat_body, batch_body):
+        cc, cb = self.c_chat, self.c_batch
+        return config(
+            self.a.horizon,
+            chat=([[0, 40, round(0.3 * cc, 3)], [40, 60, round(2.0 * cc, 3)]], {"priority": 1, **chat_body}, None),
+            batch=([[0, 60, round(0.5 * cb, 3)]], {"priority": 0, **batch_body}, None),
+        )
+
+    def u1b(self):
+        pr = ({"waiting_timeout": CHAT_BOUND}, {"waiting_timeout": BATCH_BOUND})
+        self.arms("u1b", self.u1b_cfg, PRIORITY, [
+            ("off", None, [("per_request", *pr, None, (1, 2))]),
+            ("g1.5", 1.5, [("global_1.5", {}, {}, None, (1, 2))]),
+            ("off2", None, [("none", {}, {}, None, (1,))]),
+        ])  # fmt: skip
+
+    def tp2(self):
+        """Two GPUs, tensor parallel: the ladder, the global combination, then many refusals under load."""
+        tp = ("--tp-size", "2")
+        self.ladder(only=("ladder_real", "ladder_global2"), prefix="tp2_", flags=tp)
+        rate = round(1.3 * self.c_chat, 3)
+        for tag, global_s, body in (("field", None, {"waiting_timeout": CHAT_BOUND}), ("global", CHAT_BOUND, {})):
+            if not self.room(330, f"tp2 load {tag}"):
+                return
+            env = {} if global_s is None else {"SGLANG_REQ_WAITING_TIMEOUT": str(global_s)}
+            if not self.start(f"tp2_load_{tag}", extra=(*CAP, *tp), env=env):
+                continue
+            self.client(f"tp2_load_{tag}", "tp2", config(60, chat=([[0, 60, rate]], body, None)), arm=tag,
+                        params={"rate": rate, "tp_size": 2})  # fmt: skip
+
     def u3(self):
         """No-op control at 0.8 of capacity, each arm on a fresh server process."""
         cc, cb = self.c_chat, self.c_batch
@@ -374,7 +416,7 @@ class Runner(p1_bench.Runner):
                                   "max_running_requests": 128})  # fmt: skip
 
     def run(self):
-        need_capacity = {"check", "pilot", "u1", "u2", "u3", "u4"}
+        need_capacity = {"check", "pilot", "u1", "u1b", "u2", "u3", "u4", "tp2"}
         try:
             for phase in self.a.phases.split(","):
                 if phase in need_capacity and not (self.c_chat and self.c_batch):
