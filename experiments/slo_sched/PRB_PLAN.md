@@ -817,3 +817,23 @@ worker, `/abort_request` for a rid that is no longer live never reaches the sche
 `tokenizer_manager.py:2149-2150`).
 
 **D. Still unverified:** everything in §10, plus the `sgl-model-gateway` path added to §1.4.
+
+## 13. Second check before implementation (2026-10-06)
+
+Bowen asked for the plan to be read again before any server time is spent. Source re-read at the pin;
+`upstream/main` fetched (`b524de2de6`, 60 commits after the pin).
+
+| # | Finding | Weight | Action |
+|---|---|---|---|
+| S1 | **The stage-3 use cases could not show a gain.** A queue model (`scripts/prb_sim.py`, `results/prb/sim.md`) puts `per-request` below a global bound tuned to the tightest class in both U1 and U2 as first planned (75.2 against 77.1 %, 66.6 against 77.6 %): under FCFS the requests that may wait take the slots and the impatient class absorbs all the shedding | high | PLAN.md amendment of 2026-10-06: U1 moves to priority scheduling, U2 becomes a reported FCFS result, acceptance rewritten |
+| S2 | The global grid {2, 5, 10, 20} did not contain the bound the per-request arm gives the chat class | medium | grid {1.5, 5, 20, 30} |
+| S3 | §4's validation needs no `try`: `isinstance(v, (int, float)) and 0 < v <= sys.float_info.max`, then `float(v)`. An int above the largest float fails the comparison (Python compares int with float exactly), `inf` and `nan` fail it, a string fails the `isinstance` first | low | used in the patch |
+| S4 | D2's token-oracle and KV-canary flags test KV integrity; a request dropped from the waiting queue never held KV | low | plain `--load-format dummy` |
+| S5 | Drift: none of the 15 touch points changed in the 60 commits after the pin; `scheduler.py` lines below 2356 moved up by two | info | node sessions stay on the pin (known-good environment, comparable with P1); rebase before the PR is opened |
+| S6 | Open upstream PRs on the same code: #34457 (PD waiting timeout; rewrites part of `_poll_timeout_aborts` and `test_scheduler_timeouts.py`; last updated 08-18, and its premise predates #37143) and #37260 (retracted requests against the queued-request limit; `_add_request_to_queue`) | info | named in the PR body; re-grep after any rebase |
+| S7 | The gate is sticky, so "field absent" is only the default path on a server process that has never seen the field | medium | U3 runs on fresh processes; in U1 and U2 the `none` arm never shares a process with a per-request arm |
+| S8 | A client that has stopped waiting can already hang up: the tokenizer manager notices a disconnected, still-queued request on its 4 s poll and aborts it. The PR text has to say what the field adds: it bounds waiting only (a client cannot tell queued from running), it answers with an explicit 503 the caller or a router can act on, and it is exact to one scheduler step | medium | PR text; optional `hang-up` arm (N6) |
+| S9 | Priority scheduling as U1 uses it: with `--enable-priority-scheduling` and the FCFS policy the queue is sorted by priority, then arrival (`managers/schedule_policy.py:290-294`); higher values go first; a request without a priority gets the lowest (`scheduler.py:3310-3314`); preemption needs a difference above `--priority-scheduling-preemption-threshold` (default 10) and can be switched off with `--disable-priority-preemption` | info | U1 flags |
+| S10 | Client rids must be prefix-free (§6 E10) | info | fixed-width rids in `slo_client.py` |
+
+Nothing in §1, §2 or §5 was found wrong on this pass.

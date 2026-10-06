@@ -282,3 +282,43 @@ table in its description. (b) The fix: Bowen decides between commenting on #4088
 gap and our reproduction, or waiting for it and following up with the native path. (c) P2, if approved,
 also reruns T4 three times with the fixed benchmark, so that T4's numbers come from a run and carry
 their own σ.
+
+## Amendment — 2026-10-06, before any PR-B data
+
+Written after re-reading stage 3 against a queue model; no PR-B code had run and no node was assigned.
+
+**What was wrong.** [`scripts/prb_sim.py`](scripts/prb_sim.py) (tables:
+[`results/prb/sim.md`](results/prb/sim.md)) models the server as 128 slots and a waiting queue. With
+the default first-come-first-served order a per-request bound cannot beat a global bound tuned to the
+tightest class: total attainment 75.2 % against 77.1 % in U1 as first planned, and 66.6 % against
+77.6 % in steady overload. Capacity is the limit either way; under FCFS the requests that are allowed
+to wait stay in the queue, age to its head and take the slots, so all the shedding moves to the
+impatient class — and total attainment even falls when the patient class is the expensive one. A3.1
+and A3.2 as written could not have held. The field does win where the queue is ordered by priority:
+low-priority requests are made to wait on purpose, and no single bound suits both them and the
+requests that must not wait.
+
+| id | change | reason |
+|---|---|---|
+| N1 | **U1 is now "chat bursts above capacity, steady batch, priority to chat".** Server: `--enable-priority-scheduling --disable-priority-preemption --max-running-requests 128`. Chat (`priority` 1): 0.3 × c_chat, rising to 1.5 × c_chat for the last 20 s of every 60 s. Batch (`priority` 0): 0.5 × c_batch throughout. Three cycles (180 s). c_chat and c_batch are the closed-loop capacities of each class alone, measured in P2 | the case in which one bound must fail one class. Model: per-request 83 % against 75 % for the best global value; batch 98 against 67; chat equal |
+| N2 | **U2 is now "steady chat and a batch burst, FCFS", and is a reported result, not a gate.** Chat 0.4 × c_chat throughout; batch 2.0 × c_batch for 15 s of every 60 s; default scheduling flags | what the field does not do has to be in the PR text. Model: a tie in total (72.9 against 72.4), chat lower (56 against 87), batch higher (100 against 49) |
+| N3 | Arms: `none`; `global` ∈ {1.5, 5, 20, 30} s; `per-request` (chat 1.5 s, batch 30 s); `per-request, chat only`. The global grid contains both per-request bounds | the first grid {2, 5, 10, 20} lacked the chat bound, which would have handed the per-request arm an edge it had not earned; P1 showed that a bound equal to the 2 s objective is too late by the prefill time |
+| N4 | Classes: chat = prompt of about 256 tokens, 128 output tokens, `ttft:2000 tpot:100`; batch = prompt of about 1024 tokens, 256 output tokens, `e2el:40000`. Greedy, `ignore_eos`, no two prompts alike, the same seeded request list on every arm | the work per request is fixed, so arms are paired and the radix cache cannot help one arm |
+| N5 | **U4 is now an equivalence check**: one class, every request carrying `waiting_timeout` 1.5 on a server without the global knob, against `SGLANG_REQ_WAITING_TIMEOUT=1.5` and no field | same clock and same rule should shed the same requests |
+| N6 | Optional arm in U1 if time allows, `hang-up`: no field; the client closes the connection when no first token has arrived after the class bound | the alternative available today (PRB_PLAN.md §13 S9) |
+| N7 | Acceptance for stage 3 is replaced by the table below | |
+| N8 | D2 uses plain `--load-format dummy`; the token-oracle and KV-canary flags are dropped | they check KV integrity, which this patch does not touch, and add ways for the ladder to fail |
+| N9 | Sessions: **P2** = D1, D2, D3, the client checked against `bench_serving --goodput`, c_chat and c_batch, U3, U4, the PR-A extras (repeats of three T1 points; T4 three times with the fixed benchmark), a one-seed pilot of U1. **P3** = U1 (7 arms × 3 seeds), U2 (5 arms × 2 seeds). Bowen's allowance for 2026-10-06: 10 GPU-hours, one to two hours per assignment; each session's plan is still posted before the node is assigned | |
+
+| # | Accept (replaces A3.1–A3.5) |
+|---|---|
+| A3.1′ | U1: batch attainment(`per-request`) − batch attainment(`global` 1.5) ≥ max(10 pp, 3 σ); chat attainment(`per-request`) ≥ chat attainment(`global` 1.5) − max(3 pp, 3 σ); total attainment(`per-request`) − the best global total ≥ max(3 pp, 3 σ). σ is pooled over the three seeds of those two arms |
+| A3.2′ | U2 is reported whatever it shows. If `per-request` beats the best global total by more than 3 σ there, the model is wrong and the cause is found before any claim is made |
+| A3.3 | U3, on fresh server processes: the patched build with the field absent, and with the field present but loose (3600 s), is within the A/A spread of the unpatched build (or ± 3 %) on mean and p99 TTFT, mean TPOT and output throughput |
+| A3.4′ | U4: attainment and the number of refused requests agree within max(2 pp, 3 σ) between the two forms |
+
+A3.5 is dropped: completed-token throughput is not comparable between arms that serve different
+mixes of the two classes.
+
+**Stop rule.** A3.1′ fails → PR-B is not offered with a performance claim; Bowen decides whether it is
+offered as an API change at all. A3.3 failing blocks the PR until fixed.
