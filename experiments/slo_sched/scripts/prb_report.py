@@ -86,6 +86,9 @@ def main():
     ap.add_argument("--p1", default="")
     a = ap.parse_args()
     rows = load(a.dirs)
+    # The pilot ran U1's configuration with seed 1; with U1 present its rows are U1 rows.
+    if any(r["task"] == "u1" for r in rows):
+        rows = [{**r, "task": "u1"} if r["task"] == "pilot" else r for r in rows]
 
     # ---- ladder ---------------------------------------------------------------
     lad = [r for r in rows if r["task"] == "ladder"]

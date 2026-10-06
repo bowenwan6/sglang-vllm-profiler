@@ -50,6 +50,7 @@ class Runner(p1_bench.Runner):
         super().__init__(args)
         self.c_chat, self.c_batch = args.c_chat, args.c_batch
         self.build = None
+        self.skip = {c for c in args.skip.split(",") if c}
 
     # ---- servers -------------------------------------------------------------
     def tree_env(self, build):
@@ -250,6 +251,10 @@ class Runner(p1_bench.Runner):
         """plan: list of (server tag, global timeout or None, [(arm, chat body, batch body, hangup, seeds)])."""
         need = self.a.horizon + 150
         for tag, global_s, runs in plan:
+            runs = [(arm, cb, bb, hu, [s for s in seeds if f"{task}_{arm}_s{s}" not in self.skip])
+                    for arm, cb, bb, hu, seeds in runs]  # fmt: skip
+            if not any(seeds for *_, seeds in runs):
+                continue
             if not self.room(need + 120, f"{task} server {tag}"):
                 return
             env = {} if global_s is None else {"SGLANG_REQ_WAITING_TIMEOUT": str(global_s)}
@@ -272,13 +277,18 @@ class Runner(p1_bench.Runner):
         ])  # fmt: skip
 
     def u1(self):
+        """The pilot's three runs are seed 1 of none, per_request and global_1.5; --skip names them.
+
+        The two arms of the acceptance test go first. The no-timeout arm gets a server that has
+        never seen the field and runs first on it: the gate is sticky (PRB_PLAN.md §13 S7).
+        """
         s3, s2 = (1, 2, 3), (1, 2)
         pr = ({"waiting_timeout": CHAT_BOUND}, {"waiting_timeout": BATCH_BOUND})
-        # The no-timeout arm runs first on its server: the gate is sticky (PRB_PLAN.md §13 S7).
         plan = [
-            ("off", None, [("none", {}, {}, None, s2), ("per_request", *pr, None, s3),
-                           ("per_request_chat_only", {"waiting_timeout": CHAT_BOUND}, {}, None, s2)]),
+            ("off", None, [("per_request", *pr, None, s3)]),
             ("g1.5", 1.5, [("global_1.5", {}, {}, None, s3)]),
+            ("off2", None, [("none", {}, {}, None, s2),
+                            ("per_request_chat_only", {"waiting_timeout": CHAT_BOUND}, {}, None, s2)]),
             ("g30", 30, [("global_30", {}, {}, None, s2)]),
             ("g5", 5, [("global_5", {}, {}, None, s2)]),
             ("g20", 20, [("global_20", {}, {}, None, s2)]),
@@ -386,6 +396,7 @@ def main():
     p.add_argument("--c-batch", type=float, default=0.0)
     p.add_argument("--horizon", type=int, default=180)
     p.add_argument("--hangup", action="store_true")
+    p.add_argument("--skip", default="", help="comma list of cells already run, e.g. u1_none_s1")
     p.add_argument("--dry-run", action="store_true")
     sys.exit(Runner(p.parse_args()).run())
 

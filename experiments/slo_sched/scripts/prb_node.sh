@@ -81,7 +81,8 @@ done
 # each failing file again on the unpatched tree, to separate what the patch broke from what
 # was already broken.
 cat > "$RUN/unit_sweep.sh" <<SWEEP
-set -uo pipefail
+# No "set -u" here: conda's activation scripts read unset variables.
+set -o pipefail
 source "$CONDA_ROOT/etc/profile.d/conda.sh"; conda activate sgl-profiler
 cd "$SGL/sglang"
 # An ordinal that does not exist hides the GPU the benchmark server is using.
