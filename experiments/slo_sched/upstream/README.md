@@ -11,6 +11,20 @@ has been posted; PRs and comments are opened by Bowen only.
 
 Apply a patch to a checkout of `sgl-project/sglang`: `git am < 0001-….patch`.
 
+## Before opening (checked 2026-10-06 23:01 UTC)
+
+- Both PR-ready branches still merge cleanly with `upstream/main` @ `6b737fd4c6` (41 commits after their
+  base; only `schedule_batch.py` and one line of `scheduler.py` changed among the files they touch).
+  Rebase on the day they are opened and re-run the unit files.
+- No other open PR adds goodput or a per-request waiting bound. Neighbours: #40881 (benchmark stream
+  errors, chat path, unreviewed), #34457 (PD waiting timeout, stale), #42453 (dLLM waiting timeout).
+- Review path upstream (`.github/MAINTAINER.md`): a bot assigns a Merge Oncall, a maintainer adds the
+  `run-ci` label, and each modified file needs one Codeowner's approval. PR-A's file
+  (`python/sglang/benchmark/serving.py`) has no Codeowner entry. PR-B touches
+  `python/sglang/srt/managers` (@merrymercy @Ying1123 @hnyls2002 @xiezhq-hermann) and
+  `python/sglang/srt/entrypoints/openai` (@JustinTong0323).
+- PR-B is two commits; upstream squashes on merge, so they can stay as they are.
+
 The node sessions run `exp/slo-node`, which carries PR-B and both benchmark commits on the pin
 `734cf3cf3b`, because measurements with a waiting timeout need the fix; `feat/bench-goodput` is the same
 without PR-B and serves as the unpatched build.
