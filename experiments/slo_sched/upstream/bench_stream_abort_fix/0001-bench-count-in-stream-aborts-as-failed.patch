@@ -1,0 +1,274 @@
+From 9eb681bef60b3b10be3a4fa1a2c13b3e876196d7 Mon Sep 17 00:00:00 2001
+From: Bowen Wang <wangbowen1001@yahoo.com>
+Date: Sun, 4 Oct 2026 23:18:29 -0400
+Subject: [PATCH] fix(bench): count requests the server aborts in-stream as
+ failed
+
+A server that fails a request after sending the 200 header reports it inside the stream: an OpenAI-style error event, or finish_reason.type == "abort" on the native endpoint. The chat and native streaming paths skipped that event and recorded a completed request with the requested output length, so a run against a server that sheds load (for example SGLANG_REQ_WAITING_TIMEOUT) reported completed requests and output tokens that were never produced. The completions path already failed such a request, with a KeyError traceback as the message. All three now record a failed request carrying the server's message.
+---
+ python/sglang/benchmark/serving.py            |  59 +++++++--
+ .../bench/test_bench_serving_stream_error.py  | 119 ++++++++++++++++++
+ 2 files changed, 166 insertions(+), 12 deletions(-)
+ create mode 100644 test/registered/unit/bench/test_bench_serving_stream_error.py
+
+diff --git a/python/sglang/benchmark/serving.py b/python/sglang/benchmark/serving.py
+index c1b46a6258..140720badf 100644
+--- a/python/sglang/benchmark/serving.py
++++ b/python/sglang/benchmark/serving.py
+@@ -255,6 +255,20 @@ def _extract_cache_from_sglext(data, output):
+         output.cached_tokens_details = details
+ 
+ 
++def _stream_error(data: Dict[str, Any]) -> Optional[str]:
++    # A server that fails a request after sending the 200 header (a waiting
++    # timeout, an abort) reports it inside the stream, not as an HTTP status.
++    error = data.get("error")
++    if error:
++        return (
++            str(error.get("message", error)) if isinstance(error, dict) else str(error)
++        )
++    finish_reason = (data.get("meta_info") or {}).get("finish_reason")
++    if isinstance(finish_reason, dict) and finish_reason.get("type") == "abort":
++        return str(finish_reason.get("message") or "aborted by the server")
++    return None
++
++
+ def _record_server_prompt_len(data, output):
+     """Take the prompt length from the server, the only side that knows it.
+ 
+@@ -341,6 +355,7 @@ async def async_request_openai_completions(
+                 url=api_url, json=payload, headers=headers
+             ) as response:
+                 if response.status == 200:
++                    stream_error = None
+                     async for chunk_bytes in response.content:
+                         chunk_bytes = chunk_bytes.strip()
+                         if not chunk_bytes:
+@@ -352,6 +367,9 @@ async def async_request_openai_completions(
+                             pass
+                         else:
+                             data = json.loads(chunk)
++                            stream_error = _stream_error(data)
++                            if stream_error is not None:
++                                break
+                             _record_server_prompt_len(data, output)
+ 
+                             if getattr(args, "cache_report", False):
+@@ -380,10 +398,13 @@ async def async_request_openai_completions(
+                                     "completion_tokens", output_len
+                                 )
+ 
+-                    output.generated_text = generated_text
+-                    output.success = True
+-                    output.latency = latency
+-                    output.output_len = output_len
++                    if stream_error is None:
++                        output.generated_text = generated_text
++                        output.success = True
++                        output.latency = latency
++                        output.output_len = output_len
++                    else:
++                        output.error = stream_error
+                 else:
+                     output.error = (
+                         (response.reason or "") + ": " + (await response.text())
+@@ -528,6 +549,7 @@ async def async_request_openai_chat_completions(
+                             _extract_cache_from_sglext(response_json, output)
+                     else:
+                         # Streaming response
++                        stream_error = None
+                         async for chunk_bytes in response.content:
+                             chunk_bytes = chunk_bytes.strip()
+                             if not chunk_bytes:
+@@ -539,6 +561,9 @@ async def async_request_openai_chat_completions(
+                                 pass
+                             else:
+                                 data = json.loads(chunk)
++                                stream_error = _stream_error(data)
++                                if stream_error is not None:
++                                    break
+                                 # Check for usage info in final chunks. OpenAI-compatible
+                                 # servers may emit usage-only chunks with choices=[].
+                                 output_len = (data.get("usage") or {}).get(
+@@ -575,10 +600,13 @@ async def async_request_openai_chat_completions(
+                                     most_recent_timestamp = timestamp
+                                     generated_text += content
+ 
+-                        output.generated_text = generated_text
+-                        output.success = True
+-                        output.latency = latency
+-                        output.output_len = output_len
++                        if stream_error is None:
++                            output.generated_text = generated_text
++                            output.success = True
++                            output.latency = latency
++                            output.output_len = output_len
++                        else:
++                            output.error = stream_error
+                 else:
+                     output.error = (
+                         (response.reason or "") + ": " + (await response.text())
+@@ -735,6 +763,7 @@ async def async_request_sglang_generate(
+                 url=api_url, json=payload, headers=headers
+             ) as response:
+                 if response.status == 200:
++                    stream_error = None
+                     async for chunk_bytes in response.content:
+                         chunk_bytes = chunk_bytes.strip()
+                         if not chunk_bytes:
+@@ -752,6 +781,9 @@ async def async_request_sglang_generate(
+                             pass
+                         else:
+                             data = orjson.loads(sse_data)
++                            stream_error = _stream_error(data)
++                            if stream_error is not None:
++                                break
+ 
+                             _meta_info = data.get("meta_info") or {}
+                             if _meta_info.get("spec_accept_length") is not None:
+@@ -793,10 +825,13 @@ async def async_request_sglang_generate(
+                                 most_recent_timestamp = timestamp
+                                 last_output_len = output_len
+ 
+-                    output.generated_text = generated_text
+-                    output.success = True
+-                    output.latency = latency
+-                    output.output_len = output_len
++                    if stream_error is None:
++                        output.generated_text = generated_text
++                        output.success = True
++                        output.latency = latency
++                        output.output_len = output_len
++                    else:
++                        output.error = stream_error
+                 else:
+                     output.error = (
+                         (response.reason or "") + ": " + (await response.text())
+diff --git a/test/registered/unit/bench/test_bench_serving_stream_error.py b/test/registered/unit/bench/test_bench_serving_stream_error.py
+new file mode 100644
+index 0000000000..c491b310f0
+--- /dev/null
++++ b/test/registered/unit/bench/test_bench_serving_stream_error.py
+@@ -0,0 +1,119 @@
++"""Unit tests for how bench_serving records a request the server fails inside a 200 stream."""
++
++import asyncio
++import json
++import threading
++import unittest
++from argparse import Namespace
++from http.server import BaseHTTPRequestHandler, HTTPServer
++
++from sglang.benchmark.serving import (
++    RequestFuncInput,
++    async_request_openai_chat_completions,
++    async_request_openai_completions,
++    async_request_sglang_generate,
++    set_global_args,
++)
++from sglang.test.ci.ci_register import register_cpu_ci
++from sglang.test.test_utils import CustomTestCase
++
++register_cpu_ci(est_time=10, suite="base-a-test-cpu")
++
++MESSAGE = "Request waiting timeout reached."
++# The events an SGLang server streams when SGLANG_REQ_WAITING_TIMEOUT expires on
++# a queued request: HTTP 200, then the error in-band.
++OPENAI_ERROR_EVENT = {
++    "error": {
++        "object": "error",
++        "message": MESSAGE,
++        "type": "SERVICE_UNAVAILABLE",
++        "param": None,
++        "code": 503,
++    }
++}
++NATIVE_ABORT_EVENT = {
++    "text": "",
++    "output_ids": [],
++    "meta_info": {
++        "id": "rid",
++        "finish_reason": {"type": "abort", "status_code": 503, "message": MESSAGE},
++        "completion_tokens": 0,
++    },
++}
++REQUESTED_OUTPUT_LEN = 64
++
++
++class _AbortingHandler(BaseHTTPRequestHandler):
++    def do_POST(self):  # noqa: N802
++        self.rfile.read(int(self.headers["Content-Length"]))
++        event = NATIVE_ABORT_EVENT if self.path == "/generate" else OPENAI_ERROR_EVENT
++        payload = f"data: {json.dumps(event)}\n\n".encode() + b"data: [DONE]\n\n"
++        self.send_response(200)
++        self.send_header("Content-Type", "text/event-stream")
++        self.end_headers()
++        self.wfile.write(payload)
++
++    def log_message(self, fmt, *args):
++        pass
++
++
++class TestBenchServingStreamError(CustomTestCase):
++    """A request the server aborts after the 200 header is a failed request.
++
++    Its stream carries an error event and no token. It used to be recorded as a
++    completed request with the requested output length, which inflated the
++    completed count and the output token throughput whenever a server shed load.
++    """
++
++    def setUp(self):
++        self.server = HTTPServer(("127.0.0.1", 0), _AbortingHandler)
++        threading.Thread(target=self.server.serve_forever, daemon=True).start()
++        self.addCleanup(self.server.server_close)
++        self.addCleanup(self.server.shutdown)
++        set_global_args(
++            Namespace(
++                disable_stream=False,
++                disable_ignore_eos=True,
++                print_requests=False,
++                tokenizer="",
++                header=None,
++                cache_report=False,
++                return_logprob=False,
++                return_routed_experts=False,
++                top_logprobs_num=0,
++                token_ids_logprob=None,
++                logprob_start_len=-1,
++                temperature=0.0,
++                top_p=1.0,
++            )
++        )
++
++    def _run(self, request_func, path):
++        request = RequestFuncInput(
++            prompt="hello",
++            api_url=f"http://127.0.0.1:{self.server.server_port}{path}",
++            prompt_len=1,
++            output_len=REQUESTED_OUTPUT_LEN,
++            model="dummy-model",
++            lora_name="",
++            image_data=None,
++            extra_request_body={},
++        )
++        return asyncio.run(request_func(request))
++
++    def test_in_stream_error_fails_the_request(self):
++        cases = [
++            ("chat", async_request_openai_chat_completions, "/v1/chat/completions"),
++            ("completions", async_request_openai_completions, "/v1/completions"),
++            ("native", async_request_sglang_generate, "/generate"),
++        ]
++        for name, request_func, path in cases:
++            with self.subTest(name):
++                output = self._run(request_func, path)
++                self.assertFalse(output.success)
++                self.assertEqual(output.error, MESSAGE)
++                self.assertEqual(output.output_len, 0)
++
++
++if __name__ == "__main__":
++    unittest.main()
+-- 
+2.39.0
+
