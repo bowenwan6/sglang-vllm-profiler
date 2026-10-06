@@ -1,0 +1,39 @@
+worktree at 9c84a2607 feat(scheduler): add a per-request waiting timeout on b524de2de 2026-10-06
+imports /data/bowenwan6/home/sgl/sglang-rebased/python/sglang/__init__.py
+PASS test/registered/unit/managers/test_scheduler_timeouts.py :: 13 passed, 22 warnings, 10 subtests passed in 12.32s
+PASS test/registered/unit/managers/test_io_struct.py :: 60 passed, 2 skipped, 24 warnings, 16 subtests passed in 10.25s
+PASS test/registered/unit/entrypoints/openai/test_serving_completions.py :: 22 passed, 21 warnings, 2 subtests passed in 10.26s
+PASS test/registered/unit/entrypoints/openai/test_serving_chat.py :: 151 passed, 70 warnings, 90 subtests passed in 48.98s
+pre-commit on 13 files: rc=0
+    check for broken symlinks..............................(no files to check)Skipped
+    detect destroyed symlinks..................................................Passed
+    trim trailing whitespace...................................................Passed
+    fix end of files...........................................................Passed
+    check yaml.............................................(no files to check)Skipped
+    check toml.............................................(no files to check)Skipped
+    check python ast...........................................................Passed
+    check for added large files................................................Passed
+    check for merge conflicts..................................................Passed
+    check that scripts with shebangs are executable............................Passed
+    detect private key.........................................................Passed
+    debug statements (python)..................................................Passed
+    don't commit to branch....................................................Skipped
+    isort......................................................................Passed
+    ruff (legacy alias)........................................................Passed
+    ruff format................................................................Passed
+    codespell..................................................................Passed
+    clang-format...........................................(no files to check)Skipped
+    nbstripout.............................................(no files to check)Skipped
+    forbid docs_new/ (renamed to docs/)....................(no files to check)Skipped
+    check chinese characters in multimodal_gen.............(no files to check)Skipped
+    sort CI_PERMISSIONS.json...............................(no files to check)Skipped
+    check for duplicate workflow job names.................(no files to check)Skipped
+    check rust-ext cache key prefix defaults match.........(no files to check)Skipped
+    reject bare pytest.main calls in __main__ blocks...........................Passed
+    validate registered test CI registries.....................................Passed
+    reject CI-registered tests inside the sglang package.......................Passed
+    rustfmt sgl-model-gateway (nightly)....................(no files to check)Skipped
+    rustfmt experimental/sgl-router........................(no files to check)Skipped
+    clippy rust/ workspace (auto-fix)......................(no files to check)Skipped
+    rustfmt rust/ workspace................................(no files to check)Skipped
+DONE

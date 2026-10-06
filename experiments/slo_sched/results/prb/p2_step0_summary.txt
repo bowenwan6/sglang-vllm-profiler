@@ -1,0 +1,9 @@
+environment                                  ok (patched 0b0e6b9189, base 9eb681bef6)
+unit test_scheduler_timeouts.py              PASS (13 passed, 20 warnings, 10 subtests passed in 16.24s)
+unit test_io_struct.py                       PASS (sys:1: DeprecationWarning: builtin type swigvarlink has no __module__ attribute)
+unit test_serving_completions.py             PASS (sys:1: DeprecationWarning: builtin type swigvarlink has no __module__ attribute)
+unit test_serving_chat.py                    PASS (sys:1: DeprecationWarning: builtin type swigvarlink has no __module__ attribute)
+unit test_bench_serving_goodput.py           PASS (sys:1: DeprecationWarning: builtin type swigvarlink has no __module__ attribute)
+unit test_bench_serving_stream_error.py      PASS (sys:1: DeprecationWarning: builtin type swigvarlink has no __module__ attribute)
+D1                                           PASS
+models                                       ok (17G)
