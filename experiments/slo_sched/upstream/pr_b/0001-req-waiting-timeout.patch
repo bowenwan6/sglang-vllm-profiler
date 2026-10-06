@@ -1,0 +1,510 @@
+From 9c84a2607c32cf03a84ace9f195450f3577c699f Mon Sep 17 00:00:00 2001
+From: Bowen Wang <wangbowen1001@yahoo.com>
+Date: Tue, 6 Oct 2026 00:47:51 -0400
+Subject: [PATCH 1/2] feat(scheduler): add a per-request waiting timeout
+
+A request may carry waiting_timeout (seconds). When it has sat in the
+scheduler's waiting queue longer than that, the existing timeout scan
+aborts it with the response SGLANG_REQ_WAITING_TIMEOUT already produces.
+The smaller of the two bounds applies, so a request can shorten the
+operator's bound but not extend it. Accepted on /generate,
+/v1/completions and /v1/chat/completions.
+
+A server that never receives the field keeps today's scan: the queue is
+walked only when the global bound is set or a request has carried one.
+---
+ docs/docs/basic_usage/sampling_params.mdx     |  5 +
+ .../docs/references/environment_variables.mdx |  2 +-
+ .../sglang/srt/entrypoints/openai/protocol.py |  4 +
+ .../srt/entrypoints/openai/serving_chat.py    |  1 +
+ .../entrypoints/openai/serving_completions.py |  1 +
+ python/sglang/srt/managers/io_struct.py       | 19 ++++
+ python/sglang/srt/managers/schedule_batch.py  |  3 +
+ python/sglang/srt/managers/scheduler.py       | 16 +++-
+ .../sglang/srt/managers/tokenizer_manager.py  |  1 +
+ .../entrypoints/openai/test_serving_chat.py   | 16 ++++
+ .../openai/test_serving_completions.py        |  7 ++
+ .../unit/managers/test_io_struct.py           | 26 ++++++
+ .../unit/managers/test_scheduler_timeouts.py  | 93 ++++++++++++++++++-
+ 13 files changed, 187 insertions(+), 7 deletions(-)
+
+diff --git a/docs/docs/basic_usage/sampling_params.mdx b/docs/docs/basic_usage/sampling_params.mdx
+index 1e586ac48d..7a1733f876 100644
+--- a/docs/docs/basic_usage/sampling_params.mdx
++++ b/docs/docs/basic_usage/sampling_params.mdx
+@@ -114,6 +114,11 @@ The `/generate` endpoint accepts the following parameters in JSON format. For de
+       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`int = 0`</td>
+       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>If `return_routed_experts`, the absolute start position for returned routed-experts rows. `0` preserves the default full sequence; set it to an accumulated prefix length to return only `[routed_experts_start_len, seqlen - 1)`. For example, in multi-turn RL rollouts, routed experts for tokens from previous turns have already been collected, so setting this value avoids unnecessary transfer that cause bottlenecks. Must be in `[0, prompt_tokens]`.</td>
+     </tr>
++    <tr>
++      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>waiting_timeout</td>
++      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`Optional[float] = None`</td>
++      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Seconds the request may wait in the scheduler queue. A request still queued after that is aborted with status 503 (`Request waiting timeout reached.`); a streaming request receives the error inside its stream. The smaller of this value and `SGLANG_REQ_WAITING_TIMEOUT` applies. Also accepted by `/v1/completions` and `/v1/chat/completions`.</td>
++    </tr>
+   </tbody>
+ </table>
+ 
+diff --git a/docs/docs/references/environment_variables.mdx b/docs/docs/references/environment_variables.mdx
+index ac93326d32..61b5719f9e 100644
+--- a/docs/docs/references/environment_variables.mdx
++++ b/docs/docs/references/environment_variables.mdx
+@@ -70,7 +70,7 @@ SGLang supports various environment variables that can be used to configure its
+     </tr>
+ <tr>
+       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>SGLANG_REQ_WAITING_TIMEOUT</code></td>
+-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Timeout (in seconds) for requests waiting in the queue before being scheduled</td>
++      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Timeout (in seconds) for requests waiting in the queue before being scheduled. A request can set a shorter one of its own with `waiting_timeout`</td>
+       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`-1`</td>
+     </tr>
+ <tr>
+diff --git a/python/sglang/srt/entrypoints/openai/protocol.py b/python/sglang/srt/entrypoints/openai/protocol.py
+index 419bb8f85e..ab43ed2675 100644
+--- a/python/sglang/srt/entrypoints/openai/protocol.py
++++ b/python/sglang/srt/entrypoints/openai/protocol.py
+@@ -412,6 +412,8 @@ class CompletionRequest(PDRoutingFields):
+     cache_salt: Optional[Union[List[str], str]] = None
+     # Priority for the request
+     priority: Optional[int] = None
++    # Seconds the request may wait in the scheduler queue before a 503 abort.
++    waiting_timeout: Optional[float] = Field(default=None, gt=0, allow_inf_nan=False)
+ 
+     # For custom metric labels
+     custom_labels: Optional[Dict[str, str]] = None
+@@ -972,6 +974,8 @@ class ChatCompletionRequest(PDRoutingFields):
+     cache_salt: Optional[Union[List[str], str]] = None
+     # Priority for the request
+     priority: Optional[int] = None
++    # Seconds the request may wait in the scheduler queue before a 503 abort.
++    waiting_timeout: Optional[float] = Field(default=None, gt=0, allow_inf_nan=False)
+ 
+     # Deprecated: use routed_dp_rank instead
+     data_parallel_rank: Optional[int] = None
+diff --git a/python/sglang/srt/entrypoints/openai/serving_chat.py b/python/sglang/srt/entrypoints/openai/serving_chat.py
+index d4b5010e27..5a757527f6 100644
+--- a/python/sglang/srt/entrypoints/openai/serving_chat.py
++++ b/python/sglang/srt/entrypoints/openai/serving_chat.py
+@@ -1309,6 +1309,7 @@ class OpenAIServingChat(OpenAIServingBase):
+             cache_salt=request.cache_salt,
+             require_reasoning=processed_messages.require_reasoning,
+             priority=request.priority,
++            waiting_timeout=request.waiting_timeout,
+             routing_key=self.extract_routing_key(raw_request),
+             custom_labels=custom_labels,
+             custom_logit_processor=request.custom_logit_processor,
+diff --git a/python/sglang/srt/entrypoints/openai/serving_completions.py b/python/sglang/srt/entrypoints/openai/serving_completions.py
+index 2347f5aeca..25aff68c5c 100644
+--- a/python/sglang/srt/entrypoints/openai/serving_completions.py
++++ b/python/sglang/srt/entrypoints/openai/serving_completions.py
+@@ -136,6 +136,7 @@ class OpenAIServingCompletion(OpenAIServingBase):
+             extra_key=request.extra_key,
+             cache_salt=request.cache_salt,
+             priority=request.priority,
++            waiting_timeout=request.waiting_timeout,
+             routing_key=self.extract_routing_key(raw_request),
+             custom_labels=custom_labels,
+             custom_logit_processor=request.custom_logit_processor,
+diff --git a/python/sglang/srt/managers/io_struct.py b/python/sglang/srt/managers/io_struct.py
+index 9629b7aab6..8e115da5c0 100644
+--- a/python/sglang/srt/managers/io_struct.py
++++ b/python/sglang/srt/managers/io_struct.py
+@@ -25,6 +25,7 @@ from __future__ import annotations
+ import copy
+ import logging
+ import pickle
++import sys
+ import uuid
+ from array import array
+ from collections import Counter
+@@ -375,6 +376,10 @@ class GenerateReqInput:
+         Union[List[Optional[Union[Dict, KvHintsEnvelope]]], Dict, KvHintsEnvelope]
+     ] = None
+ 
++    # Seconds the request may stay in the waiting queue before a 503 abort;
++    # SGLANG_REQ_WAITING_TIMEOUT still caps it. None means no bound of its own.
++    waiting_timeout: Optional[float] = None
++
+     def regenerate_rid(self):
+         """Generate a new request ID and return it."""
+         if isinstance(self.rid, list):
+@@ -465,6 +470,16 @@ class GenerateReqInput:
+             raise ValueError(
+                 "return_flat_raw_top_logprobs_b64 requires return_flat_raw_top_logprobs."
+             )
++        if self.waiting_timeout is not None:
++            # An int above the largest float would overflow the scheduler's clock math.
++            if not (
++                isinstance(self.waiting_timeout, (int, float))
++                and 0 < self.waiting_timeout <= sys.float_info.max
++            ):
++                raise ValueError(
++                    "waiting_timeout should be a positive, finite number of seconds."
++                )
++            self.waiting_timeout = float(self.waiting_timeout)
+ 
+     def _determine_batch_size(self):
+         """Determine if this is a single example or a batch and the batch size."""
+@@ -1016,6 +1031,7 @@ class GenerateReqInput:
+             extra_key=self.extra_key[i] if self.extra_key is not None else None,
+             cache_salt=(self.cache_salt[i] if self.cache_salt is not None else None),
+             kv_hints=(self.kv_hints[i] if self.kv_hints is not None else None),
++            waiting_timeout=self.waiting_timeout,
+             no_logs=self.no_logs,
+             custom_labels=self.custom_labels,
+             return_bytes=self.return_bytes,
+@@ -1151,6 +1167,9 @@ class TokenizedGenerateReqInput(BaseReq, kw_only=True):
+     # Shape of output_token_sampling_logprobs for each output token. This is a
+     # defaulted tail field so older IPC senders decode as selected mode.
+     sampling_logprobs_mode: SamplingLogprobsMode = "selected"
++    # See GenerateReqInput.waiting_timeout. Appended as a defaulted tail field,
++    # so the Rust server's shorter arrays decode it as None.
++    waiting_timeout: Optional[float] = None
+ 
+     def wrap_pickle_fields(self):
+         self.time_stats = wrap_as_pickle(self.time_stats)
+diff --git a/python/sglang/srt/managers/schedule_batch.py b/python/sglang/srt/managers/schedule_batch.py
+index d1e411660b..ee4df28077 100755
+--- a/python/sglang/srt/managers/schedule_batch.py
++++ b/python/sglang/srt/managers/schedule_batch.py
+@@ -1054,6 +1054,7 @@ class Req(ReqDllmMixin):
+         token_indices_to_pool: Optional[List[int]] = None,
+         session_id: Optional[str] = None,
+         cache_salt: Optional[str] = None,
++        waiting_timeout: Optional[float] = None,
+     ):
+         # Input and output info
+         self.rid = rid
+@@ -1154,6 +1155,8 @@ class Req(ReqDllmMixin):
+         self.eos_token_ids = eos_token_ids
+         self.vocab_size = vocab_size
+         self.priority = priority
++        # Seconds. Wall-clock comparisons against it must stay on the leader rank.
++        self.waiting_timeout = waiting_timeout
+ 
+         # For incremental decoding
+         # ----- | --------- read_ids -------|
+diff --git a/python/sglang/srt/managers/scheduler.py b/python/sglang/srt/managers/scheduler.py
+index 0aafc6baa5..7bb7f0ba69 100644
+--- a/python/sglang/srt/managers/scheduler.py
++++ b/python/sglang/srt/managers/scheduler.py
+@@ -1299,6 +1299,8 @@ class Scheduler(
+         self.forward_sleep_time = None
+         self._engine_paused = False
+         self._deferred_input_requests: List = []
++        # Sticky; servers that never see waiting_timeout skip the per-step queue walk.
++        self._has_req_waiting_timeout = False
+ 
+     def init_chunked_prefill(self):
+         self.chunked_prefill_size = get_schedule().chunked_prefill_size
+@@ -2808,6 +2810,7 @@ class Scheduler(
+                 kv_hints=recv_req.kv_hints,
+                 vocab_size=self.model_config.vocab_size,
+                 priority=recv_req.priority,
++                waiting_timeout=recv_req.waiting_timeout,
+                 metrics_collector=(
+                     self.metrics_collector
+                     if self.metrics_reporter.enable_metrics
+@@ -2823,6 +2826,8 @@ class Scheduler(
+                 token_indices_to_pool=recv_req.token_indices_to_pool,
+             )
+             req.tokenizer = self.tokenizer
++            if req.waiting_timeout is not None:
++                self._has_req_waiting_timeout = True
+ 
+             if radix_native_session:
+                 req.session_generation = self.tree_cache.ensure_session_generation(
+@@ -3385,11 +3390,16 @@ class Scheduler(
+         """
+         aborts: List[AbortReq] = []
+ 
+-        if (timeout_s := envs.SGLANG_REQ_WAITING_TIMEOUT.get()) > 0:
+-            deadline = time.perf_counter() - timeout_s
++        global_timeout_s = envs.SGLANG_REQ_WAITING_TIMEOUT.get()
++        if global_timeout_s > 0 or self._has_req_waiting_timeout:
++            now = time.perf_counter()
+             for req in self.waiting_queue:
++                timeout_s = req.waiting_timeout
++                # The global bound caps the request's own; <= 0 means it is off.
++                if timeout_s is None or 0 < global_timeout_s < timeout_s:
++                    timeout_s = global_timeout_s
+                 entry_time = req.time_stats.wait_queue_entry_time
+-                if 0 < entry_time < deadline:
++                if timeout_s > 0 and 0 < entry_time < now - timeout_s:
+                     aborts.append(
+                         AbortReq(
+                             rid=req.rid,
+diff --git a/python/sglang/srt/managers/tokenizer_manager.py b/python/sglang/srt/managers/tokenizer_manager.py
+index 2ccae590ef..c4ce7202b8 100644
+--- a/python/sglang/srt/managers/tokenizer_manager.py
++++ b/python/sglang/srt/managers/tokenizer_manager.py
+@@ -1534,6 +1534,7 @@ class TokenizerManager(TokenizerControlMixin, TokenizerManagerScoreMixin):
+                 disagg_prefill_dp_rank=obj.disagg_prefill_dp_rank,
+                 priority=obj.priority,
+                 kv_hints=obj.kv_hints,
++                waiting_timeout=obj.waiting_timeout,
+                 extra_key=obj.extra_key,
+                 cache_salt=obj.cache_salt,
+                 routing_key=obj.routing_key,
+diff --git a/test/registered/unit/entrypoints/openai/test_serving_chat.py b/test/registered/unit/entrypoints/openai/test_serving_chat.py
+index 5be3a11e29..55c5ef0de7 100644
+--- a/test/registered/unit/entrypoints/openai/test_serving_chat.py
++++ b/test/registered/unit/entrypoints/openai/test_serving_chat.py
+@@ -737,6 +737,22 @@ class ServingChatTestCase(CustomTestCase):
+         self.assertEqual(request.model_dump(), body)
+         self.assertFalse(hasattr(request, "conversation_id"))
+ 
++    def test_waiting_timeout_reaches_internal_request(self):
++        request = ChatCompletionRequest(
++            model="x",
++            messages=[{"role": "user", "content": "Hi?"}],
++            waiting_timeout=1.5,
++        )
++        processed_messages = MessageProcessingResult(
++            "Test prompt", [1, 2, 3], None, None, [], [], None
++        )
++        with patch.object(
++            self.chat, "_process_messages", return_value=processed_messages
++        ):
++            adapted, _ = self.chat._convert_to_internal_request(request)
++
++        self.assertEqual(adapted.waiting_timeout, 1.5)
++
+     def test_convert_to_internal_request_rejects_stream_token_ids(self):
+         for field in ("return_prompt_token_ids", "return_token_ids"):
+             req = ChatCompletionRequest(
+diff --git a/test/registered/unit/entrypoints/openai/test_serving_completions.py b/test/registered/unit/entrypoints/openai/test_serving_completions.py
+index 2ce597b1fe..80103120dd 100644
+--- a/test/registered/unit/entrypoints/openai/test_serving_completions.py
++++ b/test/registered/unit/entrypoints/openai/test_serving_completions.py
+@@ -107,6 +107,13 @@ class ServingCompletionTestCase(unittest.TestCase):
+         self.assertEqual(internal.cache_salt, "tenant-a")
+         self.assertEqual(internal.extra_key, "classification")
+ 
++    def test_waiting_timeout_reaches_internal_request(self):
++        req = CompletionRequest(
++            model="x", prompt=[1, 2, 3, 4], max_tokens=1, waiting_timeout=1.5
++        )
++        internal, _ = self.sc._convert_to_internal_request(req)
++        self.assertEqual(internal.waiting_timeout, 1.5)
++
+     def test_single_request_rejects_batched_cache_salt(self):
+         req = CompletionRequest(
+             model="x",
+diff --git a/test/registered/unit/managers/test_io_struct.py b/test/registered/unit/managers/test_io_struct.py
+index 59bb3c9283..0b2f88b21b 100644
+--- a/test/registered/unit/managers/test_io_struct.py
++++ b/test/registered/unit/managers/test_io_struct.py
+@@ -1114,6 +1114,32 @@ class TestGenerateReqInputNormalization(CustomTestCase):
+         self.assertTrue(req[0].return_prompt_token_ids)
+         self.assertTrue(req[1].return_prompt_token_ids)
+ 
++    def test_getitem_preserves_waiting_timeout(self):
++        req = GenerateReqInput(
++            input_ids=[[1, 2, 3], [4, 5, 6]],
++            sampling_params=[{}, {}],
++            rid=["id1", "id2"],
++            waiting_timeout=1.5,
++        )
++        req.normalize_batch_and_arguments()
++
++        self.assertEqual(req[0].waiting_timeout, 1.5)
++        self.assertEqual(req[1].waiting_timeout, 1.5)
++
++    def test_waiting_timeout_must_be_positive_and_finite(self):
++        # 10**400 is an int no float can hold; the scheduler subtracts the bound
++        # from a float clock, so it has to be refused here.
++        for bad in (0, -1.0, float("inf"), float("nan"), "2", 10**400):
++            with self.subTest(waiting_timeout=bad):
++                req = GenerateReqInput(input_ids=[1, 2, 3], waiting_timeout=bad)
++                with self.assertRaisesRegex(ValueError, "waiting_timeout"):
++                    req.normalize_batch_and_arguments()
++
++        req = GenerateReqInput(input_ids=[1, 2, 3], waiting_timeout=3)
++        req.normalize_batch_and_arguments()
++        self.assertIsInstance(req.waiting_timeout, float)
++        self.assertEqual(req.waiting_timeout, 3.0)
++
+     def test_regenerate_rid(self):
+         """Test the regenerate_rid method."""
+         req = GenerateReqInput(text="Hello")
+diff --git a/test/registered/unit/managers/test_scheduler_timeouts.py b/test/registered/unit/managers/test_scheduler_timeouts.py
+index 57f83fec6d..e67cdd4464 100644
+--- a/test/registered/unit/managers/test_scheduler_timeouts.py
++++ b/test/registered/unit/managers/test_scheduler_timeouts.py
+@@ -35,8 +35,16 @@ register_cpu_ci(est_time=12, suite="base-a-test-cpu")
+ 
+ 
+ class _FakeReq:
+-    def __init__(self, rid, wait_entry=0.0, forward_entry=0.0, is_finished=False):
++    def __init__(
++        self,
++        rid,
++        wait_entry=0.0,
++        forward_entry=0.0,
++        is_finished=False,
++        waiting_timeout=None,
++    ):
+         self.rid = rid
++        self.waiting_timeout = waiting_timeout
+         self.cache_request_handle = CacheRequestHandle(rid, 0)
+         self.to_finish = None
+         self.beam_group = None
+@@ -54,9 +62,14 @@ class _FakeReq:
+ 
+ 
+ def _req(
+-    rid: str, *, wait_entry: float = 0.0, forward_entry: float = 0.0, finished=False
++    rid: str,
++    *,
++    wait_entry: float = 0.0,
++    forward_entry: float = 0.0,
++    finished=False,
++    waiting_timeout=None,
+ ):
+-    return _FakeReq(rid, wait_entry, forward_entry, finished)
++    return _FakeReq(rid, wait_entry, forward_entry, finished, waiting_timeout)
+ 
+ 
+ def _batch(reqs):
+@@ -68,6 +81,7 @@ def _scheduler(waiting_queue, running_reqs=(), last_batch_reqs=()):
+     s.enable_continuous_input_polling = False
+     s.result_queue = deque()
+     s.waiting_queue = waiting_queue
++    s._has_req_waiting_timeout = False
+     s.enable_hierarchical_cache = False
+     s.enable_hicache_storage = False
+     s.enable_unified_cache_external_linker = False
+@@ -134,6 +148,79 @@ class TestWaitingTimeout(CustomTestCase):
+         with envs.SGLANG_REQ_WAITING_TIMEOUT.override(0):
+             self.assertEqual(s._poll_timeout_aborts(), [])
+ 
++    def test_effective_bound_is_the_smaller_of_request_and_global(self):
++        # (request bound, global bound, aborted) for a request that waited 10 s.
++        # A global value <= 0 is "off", so it must not win a plain min().
++        cases = [
++            (1.0, 100.0, True),
++            (100.0, 1.0, True),
++            (100.0, 1000.0, False),
++            (1.0, -1, True),
++            (100.0, -1, False),
++            (None, -1, False),
++        ]
++        for req_timeout, global_timeout, aborted in cases:
++            with self.subTest(request=req_timeout, global_timeout=global_timeout):
++                req = _req(
++                    "r",
++                    wait_entry=time.perf_counter() - 10,
++                    waiting_timeout=req_timeout,
++                )
++                s = _scheduler([req])
++                s._has_req_waiting_timeout = True
++                with envs.SGLANG_REQ_WAITING_TIMEOUT.override(global_timeout):
++                    aborts = s._poll_timeout_aborts()
++                self.assertEqual([a.rid for a in aborts], ["r"] if aborted else [])
++
++    def test_queue_is_not_walked_until_a_request_carries_a_bound(self):
++        class _NoWalk(list):
++            def __iter__(self):
++                raise AssertionError("the waiting queue was walked")
++
++        s = _scheduler(_NoWalk([_req("r", wait_entry=time.perf_counter() - 10)]))
++        with envs.SGLANG_REQ_WAITING_TIMEOUT.override(-1):
++            self.assertEqual(s._poll_timeout_aborts(), [])
++
++    def test_generate_request_carries_its_bound_and_arms_the_scan(self):
++        for waiting_timeout, armed in ((1.5, True), (None, False)):
++            with self.subTest(waiting_timeout=waiting_timeout):
++                s = Scheduler.__new__(Scheduler)
++                s.enable_session_radix_cache = False
++                s.model_config = SimpleNamespace(hf_eos_token_id={1}, vocab_size=128)
++                s.disaggregation_mode = DisaggregationMode.NULL
++                s.metrics_reporter = SimpleNamespace(enable_metrics=False)
++                s.tokenizer = None
++                s.dllm_config = None
++                s._maybe_namespace_elastic_radix_cache = MagicMock()
++                s.init_req_max_new_tokens = MagicMock()
++                s._add_request_to_queue = MagicMock()
++                s._has_req_waiting_timeout = False
++                recv_req = MagicMock(
++                    session_params=None,
++                    session_id=None,
++                    input_embeds=None,
++                    bootstrap_port=1,
++                    waiting_timeout=waiting_timeout,
++                )
++                with (
++                    patch(
++                        "sglang.srt.managers.scheduler.BeamCoordinator.request_beam_width",
++                        return_value=1,
++                    ),
++                    patch(
++                        "sglang.srt.managers.scheduler.Req",
++                        side_effect=lambda *args, **kwargs: MagicMock(
++                            waiting_timeout=kwargs["waiting_timeout"]
++                        ),
++                    ) as req_cls,
++                ):
++                    # The error argument only ends the call right after intake.
++                    s.handle_generate_request(recv_req, mm_input_error="stop here")
++                self.assertEqual(
++                    req_cls.call_args.kwargs["waiting_timeout"], waiting_timeout
++                )
++                self.assertIs(s._has_req_waiting_timeout, armed)
++
+ 
+ class TestRunningTimeout(CustomTestCase):
+     def setUp(self):
+-- 
+2.39.0
+
+
+From 6baf9e5d7e1ebddbd991d303895aa5877c3db7b8 Mon Sep 17 00:00:00 2001
+From: Bowen Wang <wangbowen1001@yahoo.com>
+Date: Tue, 6 Oct 2026 02:01:56 -0400
+Subject: [PATCH 2/2] perf(scheduler): test the two waiting bounds separately
+ in the timeout scan
+
+A queued request is dropped once it has outstayed either the global bound
+or its own, which is the same rule as taking the smaller of the two without
+the special case for a global value that is off. The request's bound is read
+only on servers that have seen the field, so a server that uses only
+SGLANG_REQ_WAITING_TIMEOUT pays one local check per queued request.
+---
+ python/sglang/srt/managers/scheduler.py | 19 +++++++++++++------
+ 1 file changed, 13 insertions(+), 6 deletions(-)
+
+diff --git a/python/sglang/srt/managers/scheduler.py b/python/sglang/srt/managers/scheduler.py
+index 7bb7f0ba69..46a024cf91 100644
+--- a/python/sglang/srt/managers/scheduler.py
++++ b/python/sglang/srt/managers/scheduler.py
+@@ -3391,15 +3391,22 @@ class Scheduler(
+         aborts: List[AbortReq] = []
+ 
+         global_timeout_s = envs.SGLANG_REQ_WAITING_TIMEOUT.get()
+-        if global_timeout_s > 0 or self._has_req_waiting_timeout:
++        has_req_timeout = self._has_req_waiting_timeout
++        if global_timeout_s > 0 or has_req_timeout:
+             now = time.perf_counter()
++            # A request is dropped once it has outstayed either bound. A stamped
++            # entry time is > 0, so a deadline of 0 turns the global bound off.
++            global_deadline = now - global_timeout_s if global_timeout_s > 0 else 0
+             for req in self.waiting_queue:
+-                timeout_s = req.waiting_timeout
+-                # The global bound caps the request's own; <= 0 means it is off.
+-                if timeout_s is None or 0 < global_timeout_s < timeout_s:
+-                    timeout_s = global_timeout_s
+                 entry_time = req.time_stats.wait_queue_entry_time
+-                if timeout_s > 0 and 0 < entry_time < now - timeout_s:
++                if 0 < entry_time and (
++                    entry_time < global_deadline
++                    or (
++                        has_req_timeout
++                        and req.waiting_timeout is not None
++                        and entry_time < now - req.waiting_timeout
++                    )
++                ):
+                     aborts.append(
+                         AbortReq(
+                             rid=req.rid,
+-- 
+2.39.0
+

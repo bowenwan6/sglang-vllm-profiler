@@ -322,3 +322,45 @@ mixes of the two classes.
 
 **Stop rule.** A3.1′ fails → PR-B is not offered with a performance claim; Bowen decides whether it is
 offered as an API change at all. A3.3 failing blocks the PR until fixed.
+
+## Outcome — stage 3 (sessions P2 and P3, 2026-10-06)
+
+Full account: [`results/prb_results.md`](results/prb_results.md); tables:
+[`results/prb/report.md`](results/prb/report.md). `Qwen/Qwen3-8B`, H200, SGLang `734cf3cf3b` plus the
+patch. P2: 05:17–07:13 UTC, one GPU, one extension. P3: 12:44–14:29 UTC, two GPUs (Bowen asked for a
+tensor-parallel run), one extension.
+
+- **D1–D3: pass.** Unit files in a real environment on the pin and on current `upstream/main` (with the
+  full pre-commit suite); the ladder on dummy weights, on the real model, with the global bound and
+  against the unpatched build, on one GPU and with `--tp-size 2`. A 1 s bound is enforced at
+  1.00–1.02 s on all three endpoints.
+- **A3.1′: pass.** U1, 19 runs of about 10 000 requests: per-request 82.6 % in total (chat 79.0, batch
+  100.0) against 77.0 % for the best global bound, 1.5 s (78.9, 67.5); the other global values and no
+  bound give 35–42 %. Bounding only the chat class does as well (82.5 %); a client that hangs up
+  instead reaches 75.0 %.
+- **A3.2′: reported.** U2 under FCFS: per-request 71.1 % against 78.5 % for the global 1.5 s bound —
+  batch 100.0 against 52.7 %, chat 60.8 against 87.7 %. No gain, as the model said; a loss of 7.4 pp
+  in total because the batch class is 3.4 times as expensive as chat here.
+- **A3.3: pass**, on the first version and on the final build. **A3.4′: pass** (82.4 / 80.5 % as a field,
+  82.2 / 80.3 % as the global knob).
+- The queue model's predictions for U1 were within 2 pp of the measurements on every arm.
+
+**Deviations from the amendment.**
+
+| What | Why |
+|---|---|
+| The scan was rewritten during P2 (`4e04090272`): a request is dropped once it has outstayed either bound | measured on the node, the first version cost servers that use only the global bound 56 % more per scan; the rewrite costs 3 %. Same rule (150 combinations compared), the ladder passed again, and the pilot's per-request run repeated on it gave 82.4 against 82.5 % |
+| Nine U1 runs ran in P2's assignment, on the rewritten scan loaded from a second source tree | the hour was already paid for; the tree each server imports is checked before it starts |
+| P3 ran on a two-GPU assignment; a tensor-parallel ladder and two load runs were added | Bowen's request. With the usual batch cap two GPUs absorbed the load and nothing was refused, so two more runs with `--max-running-requests 32` were added: 2059 and 2034 of 5127 requests refused, no hang |
+| U1b added (chat bursts at 2.0 of capacity; five runs) | to see whether U1 depends on the burst height. Not in the amendment; decided before its data. Chat equal, batch +32.7 pp, total +4.5 pp |
+| U3 repeated on the final build | the first U3 ran on the first version of the scan |
+| U2's global 30 s run was skipped by a reordering of the runner's phases and run last | my error in the stop condition; same server flags, same seed |
+| P2's background unit sweep started 25 minutes late | it died under `set -u` when conda activated; restarted by hand, fixed in `prb_node.sh` |
+| Seeds: three for the two arms of A3.1′, two for the others, one for "no bound" in U2 and U1b | time |
+
+**Not done.** PD mode, the msgpack IPC path, the Rust front end and `sgl-model-gateway`, more than two
+GPUs. A second model.
+
+**Consequences.** PR-B's description (`upstream/pr_b/PR_DESCRIPTION.md`) claims the priority use case
+and states the FCFS result as what the field does not do. Nothing is opened: Bowen reviews PR-A and
+PR-B together.

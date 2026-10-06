@@ -1,21 +1,21 @@
 ## Debug ladder (one slot, a long request holding it)
 
-| run | build | checks passed | failed |
-|---|---|---|---|
-| ladder_dummy | patched | 17 of 17 | — |
-| ladder_real | patched | 17 of 17 | — |
-| ladder_global2 | patched | 5 of 5 | — |
-| ladder_control | base | 2 of 2 | — |
-| v2_ladder_real | patched | 17 of 17 | — |
-| v2_ladder_global2 | patched | 5 of 5 | — |
-| ladder_dummy | patched | 17 of 17 | — |
-| ladder_real | patched | 17 of 17 | — |
-| ladder_global2 | patched | 5 of 5 | — |
-| ladder_control | base | 2 of 2 | — |
-| tp2_ladder_real | patched | 17 of 17 | — |
-| tp2_ladder_global2 | patched | 5 of 5 | — |
+| session | run | build | checks passed | failed |
+|---|---|---|---|---|
+| p2 | ladder_dummy | patched | 17 of 17 | — |
+| p2 | ladder_real | patched | 17 of 17 | — |
+| p2 | ladder_global2 | patched | 5 of 5 | — |
+| p2 | ladder_control | base | 2 of 2 | — |
+| p3 | v2_ladder_real | patched | 17 of 17 | — |
+| p3 | v2_ladder_global2 | patched | 5 of 5 | — |
+| p3b | ladder_dummy | patched | 17 of 17 | — |
+| p3b | ladder_real | patched | 17 of 17 | — |
+| p3b | ladder_global2 | patched | 5 of 5 | — |
+| p3b | ladder_control | base | 2 of 2 | — |
+| p3b | tp2_ladder_real | patched | 17 of 17 | — |
+| p3b | tp2_ladder_global2 | patched | 5 of 5 | — |
 
-**ladder_dummy**
+**p2 / ladder_dummy**
 
 | check | result | observed |
 |---|---|---|
@@ -39,7 +39,7 @@
 | R8 no bound is served once the slot frees | pass | http 200, 16 tokens after 8.5 s |
 | server healthy at the end | pass | http 200 |
 
-**ladder_real**
+**p2 / ladder_real**
 
 | check | result | observed |
 |---|---|---|
@@ -63,7 +63,7 @@
 | R8 no bound is served once the slot frees | pass | http 200, 16 tokens after 21.5 s |
 | server healthy at the end | pass | http 200 |
 
-**ladder_global2**
+**p2 / ladder_global2**
 
 | check | result | observed |
 |---|---|---|
@@ -73,14 +73,14 @@
 | G4 request 0.5 s, streaming chat | pass | http 200, abort event True, token False, after 0.51 s |
 | server healthy at the end | pass | http 200 |
 
-**ladder_control**
+**p2 / ladder_control**
 
 | check | result | observed |
 |---|---|---|
 | C1 unpatched build ignores the field | pass | http 200, 16 tokens after 8.8 s (bound 1.0 s) |
 | server healthy at the end | pass | http 200 |
 
-**v2_ladder_real**
+**p3 / v2_ladder_real**
 
 | check | result | observed |
 |---|---|---|
@@ -104,7 +104,7 @@
 | R8 no bound is served once the slot frees | pass | http 200, 16 tokens after 21.5 s |
 | server healthy at the end | pass | http 200 |
 
-**v2_ladder_global2**
+**p3 / v2_ladder_global2**
 
 | check | result | observed |
 |---|---|---|
@@ -114,7 +114,7 @@
 | G4 request 0.5 s, streaming chat | pass | http 200, abort event True, token False, after 0.51 s |
 | server healthy at the end | pass | http 200 |
 
-**ladder_dummy**
+**p3b / ladder_dummy**
 
 | check | result | observed |
 |---|---|---|
@@ -138,7 +138,7 @@
 | R8 no bound is served once the slot frees | pass | http 200, 16 tokens after 8.7 s |
 | server healthy at the end | pass | http 200 |
 
-**ladder_real**
+**p3b / ladder_real**
 
 | check | result | observed |
 |---|---|---|
@@ -162,7 +162,7 @@
 | R8 no bound is served once the slot frees | pass | http 200, 16 tokens after 21.7 s |
 | server healthy at the end | pass | http 200 |
 
-**ladder_global2**
+**p3b / ladder_global2**
 
 | check | result | observed |
 |---|---|---|
@@ -172,14 +172,14 @@
 | G4 request 0.5 s, streaming chat | pass | http 200, abort event True, token False, after 0.51 s |
 | server healthy at the end | pass | http 200 |
 
-**ladder_control**
+**p3b / ladder_control**
 
 | check | result | observed |
 |---|---|---|
 | C1 unpatched build ignores the field | pass | http 200, 16 tokens after 8.8 s (bound 1.0 s) |
 | server healthy at the end | pass | http 200 |
 
-**tp2_ladder_real**
+**p3b / tp2_ladder_real**
 
 | check | result | observed |
 |---|---|---|
@@ -203,7 +203,7 @@
 | R8 no bound is served once the slot frees | pass | http 200, 16 tokens after 19.8 s |
 | server healthy at the end | pass | http 200 |
 
-**tp2_ladder_global2**
+**p3b / tp2_ladder_global2**
 
 | check | result | observed |
 |---|---|---|
@@ -215,10 +215,12 @@
 
 ## Capacity of each class alone (closed loop, concurrency 128, `--max-running-requests 128`)
 
-| class | requests | req/s | output tok/s | mean TTFT ms | mean TPOT ms |
-|---|---|---|---|---|---|
-| chat | 1280 | 66.59 | 8524 | 446 | 11.2 |
-| batch | 512 | 19.49 | 4991 | 1646 | 17.9 |
+| session | class | requests | req/s | output tok/s | mean TTFT ms | mean TPOT ms |
+|---|---|---|---|---|---|---|
+| p2 | chat | 1280 | 65.70 | 8410 | 461 | 11.2 |
+| p2 | batch | 512 | 19.13 | 4898 | 1735 | 18.1 |
+| p3b | chat | 1280 | 66.59 | 8524 | 446 | 11.2 |
+| p3b | batch | 512 | 19.49 | 4991 | 1646 | 17.9 |
 
 ## The client against `bench_serving --goodput` (32.851 req/s, 256-token prompts, 128 output tokens)
 
@@ -248,14 +250,35 @@
 
 **A3.1′**: batch +32.5 pp against `global_1.5` (needs ≥ max(10, 3σ = 2.1)); chat +0.1 pp (needs ≥ −max(3, 3σ = 1.3)); total +5.6 pp against the best global arm, `global_1.5` (needs ≥ max(3, 3σ = 1.0)) → PASS.
 
+## U1b — the same use case with heavier chat bursts (2.0 × c_chat)
+
+| arm | runs | chat % | batch % | all % | refused % | wasted tokens % | chat mean TTFT ms | batch p99 E2E s | out tok/s |
+|---|---|---|---|---|---|---|---|---|---|
+| per_request | 2 | 64.6 (0.4) | 100.0 (0.0) | 69.6 (0.2) | 30.4 | 0 | 1014 (18) | 28.2 (1.2) | 6692 (14) |
+| global_1.5 | 2 | 64.7 (0.9) | 67.3 (0.6) | 65.1 (0.9) | 34.9 | 0 | 949 (13) | 5.0 (0.4) | 6263 (1) |
+| none | 1 | 19.3 | 23.8 | 19.9 | 0.0 | 80 | 8705 | 123.2 | 7133 |
+
 ## Two GPUs, tensor parallel (`--tp-size 2`): chat alone at 1.3 × the one-GPU c_chat, 1.5 s bound
 
 | form | sent | attainment % | refused | statuses | mean TTFT ms | out tok/s |
 |---|---|---|---|---|---|---|
 | field | 5127 | 100.0 | 0 | {'ok': 5127} | 39 | 10798 |
 | global | 5127 | 100.0 | 0 | {'ok': 5127} | 37 | 10785 |
+| field, cap 32 | 5127 | 59.8 | 2059 | {'ok': 3068, 'aborted': 2059} | 1384 | 6343 |
+| global, cap 32 | 5127 | 60.3 | 2034 | {'ok': 3093, 'aborted': 2034} | 1378 | 6392 |
 
-## U3 — no-op control at 0.8 of capacity, a fresh server process per arm
+## U2 — steady chat and a batch burst, first come first served (reported, not a gate)
+
+| arm | runs | chat % | batch % | all % | refused % | wasted tokens % | chat mean TTFT ms | batch p99 E2E s | out tok/s |
+|---|---|---|---|---|---|---|---|---|---|
+| none | 1 | 38.2 | 100.0 | 54.3 | 0.0 | 36 | 6369 | 21.5 | 5613 |
+| per_request | 2 | 60.8 (0.4) | 100.0 (0.0) | 71.1 (0.1) | 28.9 | 0 | 148 (12) | 17.0 (0.1) | 4455 (71) |
+| global_1.5 | 2 | 87.7 (0.2) | 52.7 (0.8) | 78.5 (0.2) | 21.5 | 0 | 254 (5) | 7.3 (0.0) | 4225 (41) |
+| global_30 | 1 | 38.3 | 100.0 | 54.3 | 0.0 | 36 | 6365 | 21.4 | 5612 |
+
+**A3.2′**: `per_request` is -7.4 pp against the best global arm (`global_1.5`) in total. The queue model predicted a tie.
+
+## U3 — no-op control at 0.8 of capacity, a fresh server process per arm (session p2)
 
 | arm | build | attainment % | chat mean ttft ms | chat p99 ttft ms | chat mean tpot ms | batch mean ttft ms | batch p99 ttft ms | batch mean tpot ms | out tok/s |
 |---|---|---|---|---|---|---|---|---|---|
@@ -265,6 +288,17 @@
 | base_b | base | 100.0 | 27.6 | 70.8 | 12.1 | 43.0 | 90.1 | 12.0 | 5236 |
 
 **A3.3**: the largest excess over the allowance (the A/A spread of the unpatched build, or 3 %) is patched_loose batch mean_ttft_ms: 0.8 % from the unpatched mean, A/A spread 1.6 % → PASS.
+
+## U3 — no-op control at 0.8 of capacity, a fresh server process per arm (session p3b)
+
+| arm | build | attainment % | chat mean ttft ms | chat p99 ttft ms | chat mean tpot ms | batch mean ttft ms | batch p99 ttft ms | batch mean tpot ms | out tok/s |
+|---|---|---|---|---|---|---|---|---|---|
+| base_a | base | 100.0 | 27.4 | 72.1 | 12.1 | 43.1 | 91.8 | 12.0 | 5236 |
+| patched_absent | patched | 100.0 | 27.3 | 72.9 | 12.2 | 43.1 | 92.1 | 12.1 | 5237 |
+| patched_loose | patched | 100.0 | 27.3 | 74.7 | 12.2 | 43.1 | 92.4 | 12.1 | 5236 |
+| base_b | base | 100.0 | 27.5 | 74.4 | 12.1 | 43.0 | 91.1 | 12.0 | 5236 |
+
+**A3.3**: the largest excess over the allowance (the A/A spread of the unpatched build, or 3 %) is patched_loose chat p99_ttft_ms: 2.0 % from the unpatched mean, A/A spread 3.2 % → PASS.
 
 ## U4 — the same 1.5 s bound as a request field and as the global knob (chat alone, 1.3 × c_chat)
 

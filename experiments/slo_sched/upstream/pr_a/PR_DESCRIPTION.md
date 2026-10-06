@@ -4,9 +4,8 @@
   @ `b524de2de6` (2026-10-06). Patch: [`0001-bench-goodput.patch`](0001-bench-goodput.patch).
 - Same diff as `d132f6739e`, the commit session P1 measured at `734cf3cf3b`; `benchmark/serving.py`
   did not change upstream between the two bases.
-- Checked: 8 unit cases, `ruff`, and the full pre-commit suite in a real SGLang environment at
-  `734cf3cf3b` (P1 step 0); the 8 cases again on the rebased file through the Mac stub harness.
-  Not yet re-run in a real environment on the rebased commit.
+- Checked on this head in a real SGLang environment (session P3, 2026-10-06): the 8 unit cases and the
+  full pre-commit suite on the three files. Before that at `734cf3cf3b` in P1.
 - Evidence and limits: [`../../results/pra_usage.md`](../../results/pra_usage.md). The load sweep below
   carries the repeats of session P2 (2026-10-06): three runs at each of the four highest rates.
 

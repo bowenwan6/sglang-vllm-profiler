@@ -17,7 +17,7 @@ def load(dirs):
     for d in dirs:
         p = Path(d) / "summary.jsonl"
         if p.exists():
-            rows += [json.loads(line) for line in p.read_text().splitlines() if line.strip()]
+            rows += [{**json.loads(line), "run": Path(d).name} for line in p.read_text().splitlines() if line.strip()]
     return [r for r in rows if not r.get("failed")]
 
 
@@ -97,22 +97,22 @@ def main():
     lad = [r for r in rows if r["task"] == "ladder"]
     if lad:
         print("## Debug ladder (one slot, a long request holding it)\n")
-        print(table(["run", "build", "checks passed", "failed"], [
-            (r["cell"], r.get("build"), f"{sum(x['ok'] for x in r['rows'])} of {len(r['rows'])}",
+        print(table(["session", "run", "build", "checks passed", "failed"], [
+            (r["run"], r["cell"], r.get("build"), f"{sum(x['ok'] for x in r['rows'])} of {len(r['rows'])}",
              "; ".join(x["check"] for x in r["rows"] if not x["ok"]) or "—") for r in lad]))  # fmt: skip
         for r in lad:
-            print(f"\n**{r['cell']}**\n")
+            print(f"\n**{r['run']} / {r['cell']}**\n")
             print(table(["check", "result", "observed"],
                         [(x["check"], "pass" if x["ok"] else "**FAIL**", x["detail"]) for x in r["rows"]]))  # fmt: skip
 
     # ---- capacity and client check ---------------------------------------------
-    cal = {r["cell"]: r for r in rows if r["task"] == "calib"}
+    cal = [r for r in rows if r["task"] == "calib"]
     if cal:
         print("\n## Capacity of each class alone (closed loop, concurrency 128, `--max-running-requests 128`)\n")
-        print(table(["class", "requests", "req/s", "output tok/s", "mean TTFT ms", "mean TPOT ms"], [
-            (n, r["all"]["sent"], f"{r['all']['req_per_s']:.2f}", f"{r['all']['out_tokens_per_s']:.0f}",
+        print(table(["session", "class", "requests", "req/s", "output tok/s", "mean TTFT ms", "mean TPOT ms"], [
+            (r["run"], n, r["all"]["sent"], f"{r['all']['req_per_s']:.2f}", f"{r['all']['out_tokens_per_s']:.0f}",
              f"{c['mean_ttft_ms']:.0f}", f"{c['mean_tpot_ms']:.1f}")
-            for r in cal.values() for n, c in r["classes"].items()]))  # fmt: skip
+            for r in cal for n, c in r["classes"].items()]))  # fmt: skip
     chk = {r["cell"]: r for r in rows if r["task"] == "check"}
     if "check_client" in chk and "check_bench" in chk:
         c, b = chk["check_client"], chk["check_bench"]
@@ -168,9 +168,9 @@ def main():
                   f"The queue model predicted a tie.")  # fmt: skip
 
     # ---- U3 ---------------------------------------------------------------------
-    u3 = [r for r in rows if r["task"] == "u3"]
-    if u3:
-        print("\n## U3 — no-op control at 0.8 of capacity, a fresh server process per arm\n")
+    for run in sorted({r["run"] for r in rows if r["task"] == "u3"}):
+        u3 = [r for r in rows if r["task"] == "u3" and r["run"] == run]
+        print(f"\n## U3 — no-op control at 0.8 of capacity, a fresh server process per arm (session {run})\n")
         keys = [("chat", "mean_ttft_ms"), ("chat", "p99_ttft_ms"), ("chat", "mean_tpot_ms"),
                 ("batch", "mean_ttft_ms"), ("batch", "p99_ttft_ms"), ("batch", "mean_tpot_ms")]  # fmt: skip
         print(table(["arm", "build", "attainment %", *[f"{c} {k[:-3].replace('_', ' ')} ms" for c, k in keys], "out tok/s"], [
