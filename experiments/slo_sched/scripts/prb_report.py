@@ -87,8 +87,11 @@ def main():
     a = ap.parse_args()
     rows = load(a.dirs)
     # The pilot ran U1's configuration with seed 1; with U1 present its rows are U1 rows.
+    # A pilot run that was repeated under U1 (same arm and seed) stays a pilot row.
     if any(r["task"] == "u1" for r in rows):
-        rows = [{**r, "task": "u1"} if r["task"] == "pilot" else r for r in rows]
+        done = {(r["arm"], r["seed"]) for r in rows if r["task"] == "u1"}
+        rows = [{**r, "task": "u1"} if r["task"] == "pilot" and (r["arm"], r["seed"]) not in done else r
+                for r in rows]  # fmt: skip
 
     # ---- ladder ---------------------------------------------------------------
     lad = [r for r in rows if r["task"] == "ladder"]

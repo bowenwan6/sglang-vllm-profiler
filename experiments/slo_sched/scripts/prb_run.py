@@ -54,9 +54,8 @@ class Runner(p1_bench.Runner):
 
     # ---- servers -------------------------------------------------------------
     def tree_env(self, build):
-        if build == "base":
-            return {"PYTHONPATH": str(Path(self.a.base_tree).expanduser() / "python")}
-        return {}
+        tree = self.a.base_tree if build == "base" else self.a.patched_tree
+        return {"PYTHONPATH": str(Path(tree).expanduser() / "python")} if tree else {}
 
     def start(self, tag, extra=(), env=None, build="patched", model=None):
         """Start a server from the given build; checks which source tree it imports."""
@@ -160,7 +159,7 @@ class Runner(p1_bench.Runner):
         return row
 
     # ---- phases ----------------------------------------------------------------
-    def ladder(self):
+    def ladder(self, only=None, prefix=""):
         """D2 (dummy weights), D3 (real model), the global combination, the unpatched control."""
         runs = [
             ("ladder_dummy", "main", "patched", self.a.small_model, ("--load-format", "dummy"), {}),
@@ -169,6 +168,9 @@ class Runner(p1_bench.Runner):
             ("ladder_control", "control", "base", None, (), {}),
         ]
         for tag, mode, build, model, extra, env in runs:
+            if only and tag not in only:
+                continue
+            tag = prefix + tag
             if not self.room(240, tag):
                 return
             if not self.start(tag, extra=(*extra, "--max-running-requests", "1"), env=env, build=build, model=model):
@@ -185,6 +187,10 @@ class Runner(p1_bench.Runner):
             failed = [r["check"] for r in rows if not r["ok"]]
             self.say(f"{tag}: {len(rows) - len(failed)}/{len(rows)} checks passed rc={rc}" + (f" FAILED: {failed}" if failed else ""))
             self.record({"cell": tag, "task": "ladder", "build": build, "rc": rc, "rows": rows})
+
+    def ladder2(self):
+        """The real-model ladder and the global combination again, for a later build of the patch."""
+        self.ladder(only=("ladder_real", "ladder_global2"), prefix="v2_")
 
     def calib(self):
         """Closed-loop capacity of each class alone at the batch cap."""
@@ -392,6 +398,7 @@ def main():
     p.add_argument("--deadline-epoch", type=float, default=0.0)
     p.add_argument("--phases", required=True)
     p.add_argument("--base-tree", default="~/sgl/sglang-base")
+    p.add_argument("--patched-tree", default="", help="source tree of the patched build, if not the installed one")
     p.add_argument("--c-chat", type=float, default=0.0)
     p.add_argument("--c-batch", type=float, default=0.0)
     p.add_argument("--horizon", type=int, default=180)
