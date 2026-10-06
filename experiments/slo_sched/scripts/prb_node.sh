@@ -99,7 +99,9 @@ for f in \$(ls test/registered/unit/managers/test_*.py test/registered/unit/entr
 done
 echo "DONE \$(grep -c '^PASS' "$RUN/unit_sweep.txt") passed, \$(grep -c '^FAIL' "$RUN/unit_sweep.txt") failed, \$(grep -c 'new failure' "$RUN/unit_sweep.txt") new" >> "$RUN/unit_sweep.txt"
 SWEEP
-tmux new-window -d -t sgl-install: -n sweep "bash '$RUN/unit_sweep.sh'; exec bash" 2>/dev/null || say "note: could not open the 'sweep' window"
+if [ "${SWEEP:-1}" = 1 ]; then
+  tmux new-window -d -t sgl-install: -n sweep "bash '$RUN/unit_sweep.sh'; exec bash" 2>/dev/null || say "note: could not open the 'sweep' window"
+fi
 
 # ---- wait for the models -----------------------------------------------------
 n=0
@@ -115,7 +117,7 @@ say "===== phases: $PHASES (prb_run.py) ====="
 cd "$HERE"
 python "$HERE/prb_run.py" --out "$RUN" --model "$MODEL" --small-model "$SMALL_MODEL" \
   --deadline-epoch "$DEADLINE_EPOCH" --phases "$PHASES" --base-tree "$SGL/sglang-base" \
-  ${C_CHAT:+--c-chat "$C_CHAT"} ${C_BATCH:+--c-batch "$C_BATCH"} ${HANGUP:+--hangup}
+  ${C_CHAT:+--c-chat "$C_CHAT"} ${C_BATCH:+--c-batch "$C_BATCH"} ${HANGUP:+--hangup} ${SKIP_CELLS:+--skip "$SKIP_CELLS"}
 RC=$?
 nvidia-smi > "$RUN/nvidia_smi_end.txt" 2>&1
 say "prb_run.py exit $RC"
