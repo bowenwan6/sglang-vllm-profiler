@@ -353,6 +353,19 @@ class Runner(p1_bench.Runner):
             self.client(f"tp2_load_{tag}", "tp2", config(60, chat=([[0, 60, rate]], body, None)), arm=tag,
                         params={"rate": rate, "tp_size": 2})  # fmt: skip
 
+    def tp2b(self):
+        """Two GPUs with a small batch cap, so that the same load overflows and many requests are refused."""
+        flags = ("--tp-size", "2", "--max-running-requests", "32")
+        rate = round(1.3 * self.c_chat, 3)
+        for tag, global_s, body in (("field", None, {"waiting_timeout": CHAT_BOUND}), ("global", CHAT_BOUND, {})):
+            if not self.room(240, f"tp2b load {tag}"):
+                return
+            env = {} if global_s is None else {"SGLANG_REQ_WAITING_TIMEOUT": str(global_s)}
+            if not self.start(f"tp2b_load_{tag}", extra=flags, env=env):
+                continue
+            self.client(f"tp2b_load_{tag}", "tp2", config(60, chat=([[0, 60, rate]], body, None)), arm=f"{tag}, cap 32",
+                        params={"rate": rate, "tp_size": 2, "max_running_requests": 32})  # fmt: skip
+
     def u3(self):
         """No-op control at 0.8 of capacity, each arm on a fresh server process."""
         cc, cb = self.c_chat, self.c_batch
@@ -416,7 +429,7 @@ class Runner(p1_bench.Runner):
                                   "max_running_requests": 128})  # fmt: skip
 
     def run(self):
-        need_capacity = {"check", "pilot", "u1", "u1b", "u2", "u3", "u4", "tp2"}
+        need_capacity = {"check", "pilot", "u1", "u1b", "u2", "u3", "u4", "tp2", "tp2b"}
         try:
             for phase in self.a.phases.split(","):
                 if phase in need_capacity and not (self.c_chat and self.c_batch):
