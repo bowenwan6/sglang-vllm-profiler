@@ -364,3 +364,25 @@ GPUs. A second model.
 **Consequences.** PR-B's description (`upstream/pr_b/PR_DESCRIPTION.md`) claims the priority use case
 and states the FCFS result as what the field does not do. Nothing is opened: Bowen reviews PR-A and
 PR-B together.
+
+## Outcome — session P4: PR-A's head for upstream (2026-10-13, 00:53–01:19 UTC)
+
+Bowen: "我们先发PR-A". Before opening, the patch was read against upstream's own rules for the first
+time (`.claude/rules/*.md`, the code-style list of the contribution guide), rebased over 486 upstream
+commits to `7224fce1b5` and verified on a node. Account: section 7 of
+[`results/pra_usage.md`](results/pra_usage.md); package:
+[`upstream/pr_a/`](upstream/pr_a/PR_DESCRIPTION.md).
+
+- **Deviation from the measured patch:** same arithmetic, new structure. The scoring moved to
+  `python/sglang/benchmark/goodput.py`; `serving.py` gains 36 lines instead of 134; the unit file has 3
+  cases instead of 8. Sessions P1 and P2 measured `d132f6739e`, which stays on the fork as
+  `feat/bench-goodput`. The result keys and the printed block did not change.
+- **Verified at the new head:** 6 CPU unit files, 15 of 15 mutations caught, lint and pre-commit, and
+  9 runs against `Qwen/Qwen3-8B` with 50 of 50 checks (reported = printed = recount). The sweep
+  reproduces P1/P2 within their spread.
+- **Changed upstream since 10-06:** #40881 (the benchmark's in-stream abort accounting, chat path) was
+  closed unmerged by its author. The fix held in `upstream/bench_stream_abort_fix/` has no competitor
+  any more; the PR text says the problem exists and is independent.
+- **Process:** the unit file and one mutation run were first run on the Mac; Bowen stopped that and the
+  checks moved to the node. Tests for this track run on a RADIX node from now on.
+- **Not done:** PR-B has not been rebased or read against the same rules.

@@ -1,0 +1,17 @@
+red   | good if any SLO is met | FAIL: test_request_is_good_only_if_it_meets_every_listed_slo
+red   | attainment over completed requests | FAIL: test_request_is_good_only_if_it_meets_every_listed_slo
+red   | tpot divides by output_len | FAIL: test_request_is_good_only_if_it_meets_every_listed_slo
+red   | no single-token guard | ERROR: test_request_is_good_only_if_it_meets_every_listed_slo
+red   | failed request is scored | FAIL: test_request_is_good_only_if_it_meets_every_listed_slo
+red   | unlisted SLOs applied as 0 | FAIL: test_request_is_good_only_if_it_meets_every_listed_slo
+red   | seconds compared with milliseconds | FAIL: test_request_is_good_only_if_it_meets_every_listed_slo
+red   | goodput per request, not per second | FAIL: test_request_is_good_only_if_it_meets_every_listed_slo
+red   | int() instead of float() | ERROR: test_request_is_good_only_if_it_meets_every_listed_slo
+red   | unknown key accepted | FAIL: test_invalid_slo_entries_are_rejected
+red   | non-numeric value skipped | FAIL: test_invalid_slo_entries_are_rejected
+red   | duplicate accepted | FAIL: test_invalid_slo_entries_are_rejected
+red   | non-positive accepted | FAIL: test_invalid_slo_entries_are_rejected
+red   | non-finite accepted | FAIL: test_invalid_slo_entries_are_rejected
+red   | no flag raises | ERROR: test_no_slos_without_the_flag
+restored file passes: True
+MUTATIONS 15, survivors 0: none

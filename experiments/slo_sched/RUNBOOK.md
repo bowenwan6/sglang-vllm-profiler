@@ -85,3 +85,22 @@ not stop the session — the ladder is the functional check — but is fixed bef
 
 `scripts/stub_server.py` stands in for the server on the Mac: `prb_run.py --dry-run` drives every
 phase against it (control flow only).
+
+## Session P4 — the head of a PR branch before it is opened (first used 2026-10-13 for PR-A)
+
+What runs: `scripts/pra_node.sh` on the node — environment, the branch head from a git bundle, CPU unit
+files one process each, `scripts/pra_mutate.py`, lint and pre-commit at upstream's pins, the option in
+`--help`, then `scripts/pra_verify.py` (a capacity probe, six request rates, the native backend and a
+run without the flag against `Qwen/Qwen3-8B`). 21 minutes on one H200; one 1 h assignment, no extension.
+
+| Step | Where | Command / content |
+|---|---|---|
+| 1. bundle | Mac | `git bundle create pra.bundle pr/bench-goodput ^upstream/main` in the sglang checkout |
+| 2. assign | Mac | as in P1; compare the returned host keys with the saved ones type by type (the service also offers rsa and dss keys that are not saved) |
+| 3. copy | Mac | `tools/radix/setup_node.sh` → `~/sgl/`; `scripts/pra_node.sh`, `pra_verify.py`, `pra_mutate.py`, `p1_bench.py` and the bundle → `~/sgl/pra/` |
+| 4. start | node, tmux `sgl-install:pra` | `EXPECT_SHA=<branch head> BASE_SHA=<commit under it> DEADLINE_EPOCH=<assignment end − 10 min> bash ~/sgl/pra/pra_node.sh` |
+| 5. sync | Mac | `NODE=… KNOWN_HOSTS=… WATCH_UNTIL=<unix time> bash scripts/pra_sync.sh` (bash: in zsh `$NODE:sgl` is read as a modifier) |
+| 6. later head | node | only if nothing under `python/` or `docs/` changed: `PREV_SHA=… EXPECT_SHA=… BUNDLE=… bash ~/sgl/pra/pra_recheck.sh` |
+| 7. release | Mac | after file count and byte total match on both sides: `radix release`, `radix whoami` |
+
+Nothing of this runs on the Mac except lint (pinned `ruff`, `isort`, `codespell` through `uvx`).

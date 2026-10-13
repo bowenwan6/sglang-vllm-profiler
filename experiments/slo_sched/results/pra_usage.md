@@ -249,3 +249,53 @@ goodput differs 3.4×.
 The knee is where it was. What the repeats add is the spread just past it: at 1.6 × c0 one seed gave
 36.9 % where the other two gave 69.6 and 71.8 %. A single 50-second run in that region is not a
 measurement of attainment; the PR description gives ranges.
+
+## 7. Addendum — the head that goes upstream (2026-10-13)
+
+The patch was restructured before opening, for upstream's own code rules (`.claude/rules/*.md` in the
+sglang repository and the code-style list of its contribution guide), and rebased from `b524de2de6`
+to `upstream/main` @ `7224fce1b5`. The arithmetic is the same line for line; what moved:
+
+- the scoring is `python/sglang/benchmark/goodput.py` (118 lines) and `serving.py` gains 36 lines
+  instead of 134; `calculate_metrics` and `BenchmarkMetrics` are untouched;
+- `calculate_goodput()` returns a frozen `msgspec.Struct` whose field names are the result keys, so the
+  keys of sections 1 to 6 are unchanged;
+- the unit file went from 8 cases to 3 table-driven ones under upstream's admission rule ("what future
+  diff turns this red?"). `scripts/pra_mutate.py` applies 15 regressions one at a time; each turns the
+  file red. One row of the first draft guarded nothing and was dropped: an entry without a separator is
+  rejected with or without the separator check, which only gives the better message.
+
+Verified on a node (`scripts/pra_node.sh`, 1× H200, python 3.12.15, torch 2.14.1+cu130,
+transformers 5.19.0, flashinfer 0.7.1): six CPU unit files one process each (ours and five neighbours
+that import the benchmark), the mutation run, lint and pre-commit at upstream's pins, the option in
+`--help`, then `Qwen/Qwen3-8B` on a live server. Outputs: [`pra/final_head/`](pra/final_head/).
+
+| run | backend | rate (req/s) | sent | output tok/s | goodput (req/s) | attainment | ttft / tpot / e2el met | good: reported = recount |
+|---|---|---|---|---|---|---|---|---|
+| probe, concurrency 256 | `sglang-oai-chat` | inf | 1500 | 7782 | 38.15 | 94.1 % | 99.0 / 96.5 / 98.5 | 1412 = 1412 |
+| 0.5 × c0 | `sglang-oai-chat` | 20.3 | 1013 | 3636 | 18.60 | 100.0 % | 100.0 / 100.0 / 100.0 | 1013 = 1013 |
+| 0.8 × c0 | `sglang-oai-chat` | 32.4 | 1621 | 5474 | 28.38 | 99.8 % | 100.0 / 99.9 / 99.8 | 1617 = 1617 |
+| 1.0 × c0 | `sglang-oai-chat` | 40.5 | 2026 | 6762 | 34.85 | 99.7 % | 100.0 / 99.9 / 99.8 | 2020 = 2020 |
+| 1.25 × c0 | `sglang-oai-chat` | 50.7 | 2533 | 7586 | 38.30 | 98.5 % | 100.0 / 99.9 / 98.7 | 2496 = 2496 |
+| 1.6 × c0 | `sglang-oai-chat` | 64.8 | 3242 | 8552 | 22.70 | 52.2 % | 99.8 / 74.4 / 72.4 | 1693 = 1693 |
+| 1.6 × c0 | `sglang` | 64.8 | 3242 | 8785 | 31.58 | 70.7 % | 100.0 / 91.2 / 79.5 | 2293 = 2293 |
+| 2.0 × c0 | `sglang-oai-chat` | 81.0 | 4052 | 9664 | 8.41 | 17.2 % | 71.5 / 51.1 / 59.6 | 696 = 696 |
+| 1.0 × c0, no `--goodput` | `sglang-oai-chat` | 40.5 | 2026 | 6807 | — | — | — | no block, no field |
+
+c0 = 40.52 req/s (40.2 in P1, eight days of upstream commits earlier). In every run with the flag the
+result fields, the block printed to the console and the recount (good requests and each SLO alone)
+agree: 50 checks, none failed. Without the flag the only trace is `goodput=None` in the argument
+namespace the benchmark prints at start.
+
+The sweep agrees with sections 2.1 and 6: 100.0, 99.8, 99.7, 98.5, 52.2 and 17.2 % attainment here
+against 100.0, 99.8, 99.8–100.0, 93.4–96.5, 36.9–71.8 and 16.0–23.1 %. The two runs at 1.6 × c0 through
+different backends (52.2 and 70.7 %) fall inside the spread three seeds showed there.
+
+These runs were made at `15f3c7007f`. The pushed head `74e78591a3` differs in one comment of the test
+file; `scripts/pra_recheck.sh` refused to proceed unless no file under `python/` or `docs/` differed,
+then repeated the unit file, the mutation run and pre-commit on it.
+
+Where it ran: the unit file and one mutation run had first been run on the Mac in a scratch
+environment; Bowen stopped that ("Don't run test in my Mac!!! Run on the server Radix"). The
+environment was deleted and everything above was run on the node. One assignment, 26 minutes, no
+extension.

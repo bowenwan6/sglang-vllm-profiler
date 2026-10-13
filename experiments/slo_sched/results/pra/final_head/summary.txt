@@ -1,0 +1,12 @@
+setup conda/env/repos                        ok
+branch head installed                        ok (15f3c7007f on 7224fce1b5)
+unit files (ours + 5 neighbours)             PASS (6 of 6 files)
+mutation check                               PASS (15 of 15 mutations caught)
+ruff format --check                          PASS
+ruff check                                   PASS
+isort --check                                PASS
+codespell                                    PASS
+pre-commit (4 files)                         PASS (16 hooks passed, 15 skipped as not applicable)
+--goodput in --help                          PASS
+model                                        ok (16G)
+live server: reported == recount             PASS (50 checks in 9 runs)

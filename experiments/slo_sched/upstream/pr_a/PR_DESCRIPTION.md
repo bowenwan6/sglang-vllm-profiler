@@ -1,91 +1,93 @@
-# PR-A — draft description (not opened; Bowen reviews it together with PR-B, then opens it)
+# PR-A — ready to open (Bowen opens it; nothing has been posted upstream)
 
-- Branch: `bowenwan6/sglang` `pr/bench-goodput` @ `fd40750d7b` — one commit on `upstream/main`
-  @ `b524de2de6` (2026-10-06). Patch: [`0001-bench-goodput.patch`](0001-bench-goodput.patch).
-- Same diff as `d132f6739e`, the commit session P1 measured at `734cf3cf3b`; `benchmark/serving.py`
-  did not change upstream between the two bases.
-- Checked on this head in a real SGLang environment (session P3, 2026-10-06): the 8 unit cases and the
-  full pre-commit suite on the three files. Before that at `734cf3cf3b` in P1.
-- Evidence and limits: [`../../results/pra_usage.md`](../../results/pra_usage.md). The load sweep below
-  carries the repeats of session P2 (2026-10-06): three runs at each of the four highest rates.
+- **Title:** `[Benchmark] Report goodput and SLO attainment in bench_serving`
+- **Body:** [`PR_BODY.md`](PR_BODY.md), exactly as it goes to GitHub (upstream's template, all five
+  sections and its "Review and Merge Process" block).
+- **Branch:** `bowenwan6/sglang` `pr/bench-goodput` @ `74e78591a3` — one commit on `upstream/main`
+  @ `7224fce1b5` (2026-10-12), ahead 1 / behind 0 when pushed (2026-10-13).
+  Patch: [`0001-bench-goodput.patch`](0001-bench-goodput.patch).
+- **Diff:** 4 files, +246: `python/sglang/benchmark/goodput.py` (new, 118), `serving.py` (+36),
+  `test/registered/unit/bench/test_bench_serving_goodput.py` (new, 72), `bench_serving.mdx` (+20).
 
-Everything below the line is the text for GitHub.
+## How to open it
 
----
+Web: <https://github.com/sgl-project/sglang/compare/main...bowenwan6:sglang:pr/bench-goodput?expand=1>.
+The title is pre-filled from the commit subject; replace the body with `PR_BODY.md`; leave "Allow
+edits by maintainers" ticked; create it as a normal pull request, not a draft.
 
-**Title:** `[Bench] Report goodput and SLO attainment in bench_serving`
+Command line, from the workspace root:
 
-## Motivation
-
-`bench_serving` reports throughput and latency percentiles, but not how much of the served load met a
-latency target. The per-request data is already collected; the share of requests that met a target has
-to be computed by hand from `--output-details`.
-
-This adds the `--goodput` option that vLLM's `benchmark_serving.py` has (same spelling, so command
-lines carry over). #5495 proposed it for the old `bench_serving.py` and was closed for inactivity after
-a request to rebase; this is a fresh implementation on `sglang.benchmark.serving`.
-
-## Modifications
-
-- `--goodput KEY:VALUE [KEY:VALUE ...]` with keys `ttft`, `tpot`, `e2el` and values in milliseconds,
-  any subset. Unknown keys, missing or non-positive values and duplicate keys are rejected.
-- A request is *good* if it succeeded and met every listed SLO. Failed requests count as misses.
-- New output, printed and written to the result JSON: request goodput (good requests per second), SLO
-  attainment (good / sent), and one attainment per listed SLO, which shows which SLO binds.
-- Without the flag the console output and the result fields are unchanged (covered by a test).
-- One section in `docs/docs/developer_guide/bench_serving.mdx`, and
-  `test/registered/unit/bench/test_bench_serving_goodput.py` (8 cases).
-
-```
----------------------Goodput----------------------
-SLOs (ms):                               ttft:2000 tpot:100 e2el:20000
-Request goodput (req/s):                 30.87
-SLO attainment (%):                      69.64
-TTFT SLO attainment (%):                 100.00
-TPOT SLO attainment (%):                 91.11
-E2EL SLO attainment (%):                 78.53
+```bash
+gh pr create --repo sgl-project/sglang --base main --head bowenwan6:pr/bench-goodput --title "[Benchmark] Report goodput and SLO attainment in bench_serving" --body-file sglang-vllm-profiler/experiments/slo_sched/upstream/pr_a/PR_BODY.md
 ```
 
-It is a summary of the per-request latencies the benchmark already has, not a new measurement. What
-the existing lines cannot give is the joint figure: in the block above the three SLOs are met by 100,
-91 and 79 % of the requests one at a time and by 70 % together.
+What happens next, from upstream's `MAINTAINER.md`, `CODEOWNERS` and the history of similar PRs:
 
-## Accuracy Tests
+- Lint runs at once. The test workflows stop at "Missing required label run-ci" until someone listed in
+  `.github/CI_PERMISSIONS.json` comments `/tag-and-rerun-ci`; `bowenwan6` is not listed. As the author
+  Bowen can only use `/rerun-failed-ci`.
+- GitHub requests a review from the `/docs` Codeowners (@wisclmy0611 @zijiexia @Richardczl98
+  @JustinTong0323 @sogalin) because of the docs page. The other three files have no Codeowner, and
+  `python/sglang/benchmark` is in no Merge Oncall area, so the bot assigns nobody: #40881, #39889,
+  #39398 and #30918 all had no assignee.
+- Who merged serving-benchmark PRs lately: @Fridge003 (#30918, #39398), @BBuf (#39889),
+  @merrymercy with @xiezhq-hermann's approval (#39284), @b8zhong (#33663). If nothing moves in a few
+  days, ask one of them for `run-ci` and a review in the PR or in Slack `#pull-request`. #40881 (same
+  file, no docs change, so no reviewer was requested) got no maintainer answer in 16 days; its author
+  closed it two days after pinging @BBuf.
+- After review starts, add commits instead of force-pushing; upstream squashes on merge.
+- If `upstream/main` moves under the files (it did not between 10-06 and 10-12 for `serving.py`),
+  rebase and repeat the node check with `scripts/pra_node.sh`.
 
-No model or server code is touched.
+## What changed since the version measured in sessions P1 and P2
 
-For the metric itself: the unit cases use hand-computed values (failed requests, a one-token response,
-each SLO alone and together, the no-flag path). On 23 runs against a live server the printed number of
-good requests equals an independent recount from `--output-details` exactly.
+The arithmetic is the same line for line; the structure follows upstream's own rules, which had not
+been read when the first version was written (`.claude/rules/*.md` and the code-style section of the
+contribution guide):
 
-One thing the metric inherits: a streaming request that the server aborts inside a 200 response (a
-waiting timeout, for example) is currently recorded as a successful one by the chat and native request
-functions, so it is counted in request throughput and can be counted as good. #40881 fixes the chat
-path.
+| Rule | Before | Now |
+|---|---|---|
+| files under ~2000 lines, new components in new files | +134 lines in `serving.py` (2807 lines) | `goodput.py`, +36 lines of wiring in `serving.py`; the layout `steady_state.py` uses (#30918) |
+| pure functions, small functions | three new fields on `BenchmarkMetrics`, 14 lines inside `calculate_metrics` | both untouched; `calculate_goodput()` returns a frozen `msgspec.Struct` whose field names are the result keys |
+| `msgspec.Struct`, not `@dataclass` | fields added to an existing dataclass | one new Struct |
+| keyword arguments for calls with two or more arguments | one positional call | all by keyword |
+| unit-test admission: every case answers "what future diff turns this red?" | 8 cases | 3 cases (table-driven); a mutation run shows each guards something |
 
-## Speed Tests and Profiling
+The result keys, the printed block and the option are unchanged, so the P1/P2 result files are what
+this head would have written.
 
-No inference path is touched. An example of what the option shows, on a load sweep: `Qwen/Qwen3-8B`,
-one H200, ShareGPT, `--goodput ttft:2000 tpot:100 e2el:20000`, 50 s of requests per row.
+## Verified on a node (2026-10-13, `node-radixark-16-0000`, 1× H200, 26 min, no extension)
 
-| request rate (req/s) | runs | output tok/s | goodput (req/s) | SLO attainment |
-|---|---|---|---|---|
-| 20.1 | 1 | 3586 | 18.30 | 100.0 % |
-| 32.2 | 1 | 5412 | 28.13 | 99.8 % |
-| 40.2 | 3 | 6984 | 35.76 (35.08–36.69) | 99.8–100.0 % |
-| 50.3 | 3 | 7727 | 37.56 (35.34–39.50) | 93.4–96.5 % |
-| 64.4 | 3 | 8808 | 26.73 (16.53–32.80) | 36.9–71.8 % |
-| 80.4 | 3 | 9668 | 9.02 (7.59–11.34) | 16.0–23.1 % |
+`scripts/pra_node.sh`, then `scripts/pra_recheck.sh` for the last head. Small outputs are in
+[`../../results/pra/final_head/`](../../results/pra/final_head/); the raw run is in `results/raw/pra/`
+(git-ignored, 110 MB).
 
-Means, with the range over the runs in brackets. Output throughput is highest in the last row; goodput
-peaks around 40–50 req/s. Just past that point a 50-second run is noisy: the three runs at 64.4 req/s
-gave 36.9, 69.6 and 71.8 % attainment. The block shown above is the 69.6 % run.
+| Check | Result |
+|---|---|
+| Environment | python 3.12.15, torch 2.14.1+cu130, transformers 5.19.0, flashinfer 0.7.1, sgl_kernel 0.4.9 |
+| Unit files, one process each as CI runs them | 6 of 6 pass: ours (3 cases) and five neighbours that import the benchmark (2 + 1 + 10 + 4 + 44 cases) |
+| Mutation check (`scripts/pra_mutate.py`) | 15 of 15 regressions turn the file red |
+| ruff format, ruff check, isort, codespell at upstream's pins | pass |
+| pre-commit on the four files | 16 hooks pass; 14 have no matching file; `no-commit-to-branch` skipped on purpose (it guards the name of the local branch) |
+| `--goodput` in `--help` of both entry points | present |
+| Live server, 8 runs with the flag and 1 without | 50 of 50 checks: result fields, printed block and recount agree; without the flag no block and no field |
 
-## Checklist
+The live-server runs and the first pass of every other check ran at `15f3c7007f`. The pushed head
+`74e78591a3` differs from it in one comment of the test file (checked on the node: no file under
+`python/` or `docs/` differs); the unit file, the mutation check and pre-commit were repeated on it.
 
-- [x] Format your code according to the Format code with pre-commit.
-- [x] Add unit tests according to the Run and add unit tests.
-- [x] Update documentation according to Write documentations.
-- [ ] Provide accuracy and speed benchmark results (not applicable: benchmark client only; an example
-      run is above).
-- [x] Follow the SGLang code style guidance.
+Capacity at concurrency 256 was 40.52 req/s (40.2 on main of 10-05), and the sweep agrees with the one
+of P1/P2: 100.0, 99.8, 99.7, 98.5, 52.2 and 17.2 % attainment against 100.0, 99.8, 99.8–100.0,
+93.4–96.5, 36.9–71.8 and 16.0–23.1 %.
+
+## Questions a reviewer may raise
+
+| Question | Position taken | Alternative |
+|---|---|---|
+| Why `if not hasattr(args, "goodput")` when the rules discourage `hasattr`? | `run_benchmark` receives namespaces built by hand in tests and other scripts; the function already fills in 19 fields this way, the latest in #33663 (2026-08-06, after the rule was added) | set the field in every caller that builds a namespace |
+| Why not fields on `BenchmarkMetrics`, as vLLM does? | keeps `calculate_metrics` (wrapped by `steady_state_serving.py` through its signature) and the dataclass unchanged | three `Optional` fields and one parameter; 20 more lines in `serving.py` |
+| Why a new test file? | no HTTP stub is needed, unlike `test_bench_serving_prompt_len.py`, whose fixture starts a server in `setUp` | a second class in that file |
+| Flat result keys or a nested `goodput` object? | flat, like vLLM's `request_goodput` | `result["goodput"] = {...}`, like `cache_report` |
+| `<=` or `<` at the SLO? | `<=`, as in vLLM | — |
+| An `itl` key? | not included; vLLM has `ttft`, `tpot`, `e2el` | one more entry in the tuple and the observed-values dict |
+| Requests the server aborts in-stream count as good | true and independent of this PR (see the body); our fix for the chat and the native path is held in `../bench_stream_abort_fix/` | open it as its own PR now that #40881 is closed |
