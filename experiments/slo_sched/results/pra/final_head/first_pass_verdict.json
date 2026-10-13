@@ -1,0 +1,7 @@
+{
+  "verdict": "FAIL",
+  "checks": 50,
+  "failures": [
+    "fin_x2_chat: per-SLO counts: reported == recount {'ttft': 2949, 'tpot': 2216, 'e2el': 2465} / {'ttft': 2949, 'tpot': 2217, 'e2el': 2465}"
+  ]
+}

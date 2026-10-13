@@ -1,8 +1,8 @@
-generated: 2026-10-13T00:56:01Z
+generated: 2026-10-13T01:51:02Z
 gpu: NVIDIA H200, 595.71.05
 nvcc: Build cuda_13.0.r13.0/compiler.36424714_0
 profiler: e5c5f75b34333cb0c2e25443b939658ab4760d97 main
-sglang: 15f3c7007f74ae87806f63f5b7a744edeab4b169 main-upstream (ref pr-a-head)
+sglang: 0dcb7e0bae6e0e32baa88cd9adb9ee1839f1cfce main-upstream (ref pr-a-head)
 flashinfer-cubin==0.7.1
 flashinfer-jit-cache==0.7.1+cu130
 flashinfer-python==0.7.1

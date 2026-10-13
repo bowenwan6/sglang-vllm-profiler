@@ -386,3 +386,10 @@ commits to `7224fce1b5` and verified on a node. Account: section 7 of
 - **Process:** the unit file and one mutation run were first run on the Mac; Bowen stopped that and the
   checks moved to the node. Tests for this track run on a RADIX node from now on.
 - **Not done:** PR-B has not been rebased or read against the same rules.
+- **Second pass the same night, after Bowen's review** (cite JITServe; shorter text with a one-line
+  summary; no needless comments, code in SGLang's own idiom): head `0dcb7e0bae` on `e775fa7253`, +190
+  lines. The option is parsed by an argparse type that reuses the file's `_finite_positive_float` and is
+  wired like `--cache-report`; 2 unit cases, 11 of 11 mutations caught. Node 01:48–02:26 UTC. A recount
+  from `--output-details` disagreed by one request in one per-SLO count (latency is not in the details;
+  the request sits 20 µs from the line); `scripts/pra_capture.py` makes the recount exact, and nine runs
+  pass 59 of 59 checks. Section 8 of `results/pra_usage.md`.

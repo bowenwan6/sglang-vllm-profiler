@@ -299,3 +299,51 @@ Where it ran: the unit file and one mutation run had first been run on the Mac i
 environment; Bowen stopped that ("Don't run test in my Mac!!! Run on the server Radix"). The
 environment was deleted and everything above was run on the node. One assignment, 26 minutes, no
 extension.
+
+## 8. Addendum — after Bowen's review of the head (2026-10-13, later the same night)
+
+Three requests: cite JITServe, make the PR text shorter with a one-line summary, and make sure the code
+has no needless comments and reads like the rest of SGLang. The head is now `0dcb7e0bae` on
+`upstream/main` @ `e775fa7253`; the account of section 7 holds except where this section says otherwise.
+
+- **Code, +190 lines instead of +246.** Each `--goodput` entry is parsed by an argparse `type`
+  (`_goodput_slo`) that reuses the file's own `_finite_positive_float`; a bad entry is an argparse
+  error. The option is wired like `--cache-report`: read from `args` inside `benchmark()`, default-filled
+  in `run_benchmark`, no new parameter anywhere. `goodput.py` (68 lines) holds the struct
+  (`GoodputMetrics`), one scoring loop and the print function. A repeated key takes the last value
+  instead of being an error. The unit file has 2 cases; `pra_mutate.py` applies 11 regressions and each
+  turns it red.
+- **Text.** One-line summary, upstream's five sections and checklist, 51 lines instead of 66; JITServe
+  (NSDI '26, arXiv 2504.20068; title and venue checked against arXiv and the artifact repository) is
+  cited in the motivation.
+- **Node, 01:48–02:26 UTC, 1× H200, no extension.** `pra_node.sh`: 6 unit files, 11 of 11 mutations,
+  lint, pre-commit, the option in `--help`: pass. Live server: 49 of 50 checks.
+- **The one failing check, and what it was.** At 2.0 × c0 the TPOT-alone count was 2216 reported and
+  2217 recounted. The recount of every session so far rebuilt latency as `ttft + sum(itl)` because
+  `--output-details` does not keep the end-to-end latency; the benchmark reads the clock again after
+  later chunks, so the two differ by microseconds. Request 3834 of that run has two output tokens and a
+  recounted TPOT of 99.9797 ms, 20 µs of latency below the 100 ms line. The reported value is the one
+  consistent with the benchmark's own latency columns.
+- **Exact recount.** `scripts/pra_capture.py` runs the benchmark in-process and keeps the per-request
+  `success`, `ttft`, `latency` and `output_len` that are scored, and the duration. `pra_verify.py`
+  recounts from those. Second set of nine runs at the same head: 59 of 59 checks.
+
+| run | backend | rate (req/s) | sent | output tok/s | goodput (req/s) | attainment | ttft / tpot / e2el met | good: reported = recount |
+|---|---|---|---|---|---|---|---|---|
+| probe, concurrency 256 | `sglang-oai-chat` | inf | 1500 | 7861 | 39.25 | 95.9 % | 100.0 / 97.3 / 98.5 | 1438 = 1438 |
+| 0.5 × c0 | `sglang-oai-chat` | 20.5 | 1023 | 3684 | 18.89 | 100.0 % | 100.0 / 100.0 / 100.0 | 1023 = 1023 |
+| 0.8 × c0 | `sglang-oai-chat` | 32.8 | 1638 | 5516 | 28.74 | 99.8 % | 100.0 / 99.9 / 99.8 | 1634 = 1634 |
+| 1.0 × c0 | `sglang-oai-chat` | 40.9 | 2047 | 6488 | 33.20 | 99.6 % | 100.0 / 99.8 / 99.8 | 2038 = 2038 |
+| 1.25 × c0 | `sglang-oai-chat` | 51.2 | 2559 | 7480 | 35.55 | 93.0 % | 100.0 / 99.7 / 93.3 | 2381 = 2381 |
+| 1.6 × c0 | `sglang-oai-chat` | 65.5 | 3275 | 8785 | 28.37 | 63.5 % | 100.0 / 86.7 / 76.5 | 2079 = 2079 |
+| 1.6 × c0 | `sglang` | 65.5 | 3275 | 8788 | 30.96 | 69.3 % | 100.0 / 91.2 / 78.0 | 2268 = 2268 |
+| 2.0 × c0 | `sglang-oai-chat` | 81.9 | 4094 | 9688 | 9.23 | 18.8 % | 71.0 / 54.3 / 60.1 | 770 = 770 |
+| 1.0 × c0, no `--goodput` | `sglang-oai-chat` | 40.9 | 2047 | 6502 | — | — | — | no block, no field |
+
+c0 = 40.94 req/s. The first set of nine runs at this head (approximate recount) gave 100.0, 99.8, 99.7,
+93.3, 66.7 and 19.3 % on the chat backend; with the 52.2 % of section 7 the 1.6 × c0 point has now been
+seen at 52, 64 and 67 % on current main, inside the 36.9–71.8 % of section 6.
+
+What the earlier sections claimed still stands as far as it went: their recount compared the number of
+good requests, and that number agreed in every run. What they could not exclude is a one-request
+difference in a per-SLO count from the approximation; the exact recount can.

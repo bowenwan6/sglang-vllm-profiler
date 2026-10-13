@@ -5,7 +5,7 @@ has been posted; PRs and comments are opened by Bowen only.
 
 | Package | State | Fork branch | Files |
 |---|---|---|---|
-| **PR-A** — `--goodput` in `bench_serving` | **ready to open, goes first** (Bowen, 2026-10-13); one commit on `upstream/main` @ `7224fce1b5`, verified on a node at that head | `pr/bench-goodput` @ `74e78591a3` | [`pr_a/PR_BODY.md`](pr_a/PR_BODY.md) (the text for GitHub), [`pr_a/PR_DESCRIPTION.md`](pr_a/PR_DESCRIPTION.md) (how to open it, what was verified, likely questions), [`pr_a/0001-bench-goodput.patch`](pr_a/0001-bench-goodput.patch) |
+| **PR-A** — `--goodput` in `bench_serving` | **ready to open, goes first** (Bowen, 2026-10-13); one commit on `upstream/main` @ `e775fa7253`, verified on a node at that head after Bowen's review (JITServe cited, shorter text, code in the file's own idiom) | `pr/bench-goodput` @ `0dcb7e0bae` | [`pr_a/PR_BODY.md`](pr_a/PR_BODY.md) (the text for GitHub), [`pr_a/PR_DESCRIPTION.md`](pr_a/PR_DESCRIPTION.md) (how to open it, what was verified, likely questions), [`pr_a/0001-bench-goodput.patch`](pr_a/0001-bench-goodput.patch) |
 | Benchmark fix — a request the server aborts in-stream is counted as failed | **held, and now without a competitor**: #40881 was closed unmerged by its author on 2026-10-09 after 16 days without a review, so the comment drafted for it is moot and the fix (chat and native path) could go out as its own PR after PR-A — Bowen's call | `feat/bench-goodput` @ `9eb681bef6` (second commit) | [`bench_stream_abort_fix/0001-bench-count-in-stream-aborts-as-failed.patch`](bench_stream_abort_fix/0001-bench-count-in-stream-aborts-as-failed.patch) |
 | **PR-B** — per-request `waiting_timeout` | built and measured; draft description ready for review; two commits on `upstream/main` @ `b524de2de6`, **not rebased yet and not yet checked against upstream's `.claude/rules`** (PR-A needed a restructuring for them) | `pr/req-waiting-timeout` @ `6baf9e5d7e` | [`pr_b/PR_DESCRIPTION.md`](pr_b/PR_DESCRIPTION.md), [`pr_b/0001-req-waiting-timeout.patch`](pr_b/0001-req-waiting-timeout.patch), evidence in [`../results/prb_results.md`](../results/prb_results.md) |
 
@@ -14,7 +14,8 @@ Apply a patch to a checkout of `sgl-project/sglang`: `git am < 0001-….patch`.
 ## Before opening (checked 2026-10-13)
 
 - `upstream/main` moved 486 commits between 10-06 and 10-12 (`b524de2de6` to `7224fce1b5`); none touched
-  `benchmark/serving.py` or the docs page. PR-A is rebased and verified there. PR-B still sits on the
+  `benchmark/serving.py` or the docs page. PR-A is rebased and verified on `e775fa7253` (two commits
+  later; one of them changed a line of the docs page, no conflict). PR-B still sits on the
   old base.
 - Upstream's own rules decide what reviewers ask for: `.claude/rules/*.md` in the sglang repository
   (`general-code-style`, `comment-style`, `unit-test-admission`, `no-dataclasses`,
