@@ -1,0 +1,452 @@
+From f0593274f9ef5bcbdcc11fdff331d9d4ce310f97 Mon Sep 17 00:00:00 2001
+From: Bowen Wang <wangbowen1001@yahoo.com>
+Date: Tue, 13 Oct 2026 02:20:24 -0400
+Subject: [PATCH] feat(metrics): count requests that meet latency SLOs for
+ goodput
+
+---
+ .../advanced_features/server_arguments.mdx    |  6 +++
+ docs/docs/references/production_metrics.mdx   | 24 +++++++++
+ .../srt/arg_groups/fields/observability.py    |  7 +++
+ .../sglang/srt/arg_groups/validation_hook.py  | 13 +++++
+ .../sglang/srt/managers/tokenizer_manager.py  | 16 ++++--
+ .../srt/observability/metrics_collector.py    | 25 ++++++++-
+ python/sglang/srt/observability/utils.py      | 12 ++++-
+ test/registered/observability/test_metrics.py |  3 ++
+ .../test_tokenizer_manager_rid_cleanup.py     | 10 +++-
+ .../unit/observability/test_metrics_utils.py  | 13 +++++
+ .../observability/test_stat_loggers_di.py     | 52 +++++++++++++++++++
+ .../unit/server_args/test_server_args.py      | 20 +++++++
+ 12 files changed, 193 insertions(+), 8 deletions(-)
+
+diff --git a/docs/docs/advanced_features/server_arguments.mdx b/docs/docs/advanced_features/server_arguments.mdx
+index 61845fc2ca..5080e56e3f 100644
+--- a/docs/docs/advanced_features/server_arguments.mdx
++++ b/docs/docs/advanced_features/server_arguments.mdx
+@@ -943,6 +943,12 @@ Please consult the documentation below and [server_args.py](https://github.com/s
+       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>The buckets rule for generation tokens histogram. Supports 3 rule types: 'default' uses predefined buckets; 'tse &lt;middle&gt; &lt;base&gt; &lt;count&gt;' generates two sides exponential distributed buckets (e.g., 'tse 1000 2 8' generates buckets [984.0, 992.0, 996.0, 998.0, 1000.0, 1002.0, 1004.0, 1008.0, 1016.0]).); 'custom &lt;value1&gt; &lt;value2&gt; ...' uses custom bucket values (e.g., 'custom 10 50 100 500').</td>
+       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code></td>
+       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>List[str]</td>
++    </tr>
++        <tr>
++      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--goodput-slo`</td>
++      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Latency SLOs in milliseconds for sglang:num_good_requests_total, as a JSON dict with keys from ttft, tpot and e2el, e.g. '&#123;"ttft": 500, "tpot": 50&#125;'. A request is good if it finishes normally and meets every given SLO.</td>
++      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`None`</td>
++      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Type: JSON / Dict</td>
+     </tr>
+         <tr>
+       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--gc-warning-threshold-secs`</td>
+diff --git a/docs/docs/references/production_metrics.mdx b/docs/docs/references/production_metrics.mdx
+index edf96a17de..d17e15d1b6 100644
+--- a/docs/docs/references/production_metrics.mdx
++++ b/docs/docs/references/production_metrics.mdx
+@@ -141,6 +141,30 @@ histogram_quantile(
+ 
+ Mean TPOT is `rate(..._sum[5m]) / rate(..._count[5m])`. Per-request decode tokens/s is its reciprocal, so p5 TPS is `1 / p95 TPOT`; the reciprocal of mean TPOT is not mean TPS.
+ 
++## Goodput and SLO attainment
++
++`--goodput-slo` takes latency SLOs in milliseconds for `ttft` (time to first token), `tpot` (request-level time per output token) and `e2el` (end-to-end latency):
++
++```bash
++python -m sglang.launch_server --model-path meta-llama/Llama-3.1-8B-Instruct --enable-metrics \
++  --goodput-slo '{"ttft": 500, "tpot": 50}'
++```
++
++`sglang:num_good_requests_total` then counts the requests that finished normally and met every given SLO, with the labels of `sglang:num_requests_total`. A request without a request-level TPOT meets the `tpot` SLO. Aborted requests and PD prefill workers do not contribute.
++
++Request goodput in requests/s, and SLO attainment among the requests the engine finished:
++
++```promql
++sum by (model_name) (rate(sglang:num_good_requests_total[5m]))
++
++sum by (model_name) (rate(sglang:num_good_requests_total[5m]))
++  / sum by (model_name) (rate(sglang:num_requests_total[5m]))
++```
++
++A request rejected before it runs, for example by `--max-queued-requests`, is in neither counter. To count those as misses, divide by `sglang:http_requests_total` of the serving endpoint instead.
++
++The latency histograms cannot give this number: each one covers a single latency, so they do not show how many requests met all SLOs at once.
++
+ ## Diffusion metrics
+ 
+ SGLang Diffusion exposes request, queue, stage and LoRA metrics with
+diff --git a/python/sglang/srt/arg_groups/fields/observability.py b/python/sglang/srt/arg_groups/fields/observability.py
+index 2b7fda4000..49365ca28b 100644
+--- a/python/sglang/srt/arg_groups/fields/observability.py
++++ b/python/sglang/srt/arg_groups/fields/observability.py
+@@ -129,6 +129,13 @@ class Observability(msgspec.Struct):
+         "[984.0, 992.0, 996.0, 998.0, 1000.0, 1002.0, 1004.0, 1008.0, 1016.0]).); 'custom <value1> "
+         "<value2> ...' uses custom bucket values (e.g., 'custom 10 50 100 500').",
+     ] = None
++    goodput_slo: A[
++        Optional[Dict[str, float]],
++        Arg(
++            help='Latency SLOs in milliseconds for sglang:num_good_requests_total, as a JSON dict with keys from ttft, tpot and e2el, e.g. \'{"ttft": 500, "tpot": 50}\'. A request is good if it finishes normally and meets every given SLO.',
++            type_parser=json.loads,
++        ),
++    ] = None
+     gc_warning_threshold_secs: A[
+         float,
+         "The threshold for long GC warning. If a GC takes longer than this, a warning will be logged. Set to 0 to disable.",
+diff --git a/python/sglang/srt/arg_groups/validation_hook.py b/python/sglang/srt/arg_groups/validation_hook.py
+index 54ee84ae67..b94629cc96 100644
+--- a/python/sglang/srt/arg_groups/validation_hook.py
++++ b/python/sglang/srt/arg_groups/validation_hook.py
+@@ -18,6 +18,7 @@ from sglang.srt.distributed.device_communicators.mooncake_transfer_engine import
+     parse_ib_device_config,
+ )
+ from sglang.srt.environ import envs
++from sglang.srt.observability.utils import GOODPUT_SLO_METRICS
+ from sglang.srt.runtime_context import attn_dp_enabled_of, get_platform, num_dp_ranks_of
+ from sglang.srt.utils.common import torch_release
+ from sglang.srt.utils.runai_utils import is_runai_obj_uri
+@@ -195,6 +196,7 @@ def check_server_args(server_args: Any):
+     assert cfg.mm_io_worker_num >= 0, "Multimodal I/O worker num must >= 0"
+     validate_buckets_rule("--prompt-tokens-buckets", cfg.prompt_tokens_buckets)
+     validate_buckets_rule("--generation-tokens-buckets", cfg.generation_tokens_buckets)
++    validate_goodput_slo(cfg.goodput_slo)
+ 
+     # Check scheduling policy
+     if cfg.enable_priority_scheduling:
+@@ -349,6 +351,17 @@ def validate_buckets_rule(arg_name: str, buckets_rule: List[str]):
+         )
+ 
+ 
++def validate_goodput_slo(goodput_slo: Optional[Dict[str, float]]):
++    if not goodput_slo:
++        return
++
++    for name, slo_ms in goodput_slo.items():
++        assert name in GOODPUT_SLO_METRICS, (
++            f"Unsupported --goodput-slo key: '{name}'. Must be one of: {', '.join(GOODPUT_SLO_METRICS)}"
++        )
++        assert slo_ms > 0, f"--goodput-slo {name} must be positive, got: {slo_ms}"
++
++
+ def check_load_publish_args(server_args: Any):
+     """Fail fast at the entrypoint on a --load-publish-endpoint the
+     scheduler would decline (no active kv-events publisher to advertise
+diff --git a/python/sglang/srt/managers/tokenizer_manager.py b/python/sglang/srt/managers/tokenizer_manager.py
+index 023745c6b6..32e58ceafc 100644
+--- a/python/sglang/srt/managers/tokenizer_manager.py
++++ b/python/sglang/srt/managers/tokenizer_manager.py
+@@ -819,6 +819,7 @@ class TokenizerManager(TokenizerControlMixin, TokenizerManagerScoreMixin):
+                 bucket_time_to_first_token=get_observability().bucket_time_to_first_token,
+                 bucket_e2e_request_latency=get_observability().bucket_e2e_request_latency,
+                 bucket_inter_token_latency=get_observability().bucket_inter_token_latency,
++                goodput_slo=get_observability().goodput_slo,
+             )
+ 
+             start_cpu_monitor_thread("tokenizer")
+@@ -3175,12 +3176,16 @@ class TokenizerManager(TokenizerControlMixin, TokenizerManagerScoreMixin):
+ 
+             # Aborts have a truncated decode period; PD prefill workers have none.
+             finish_reason = recv_obj.finished_reasons[i] or {}
+-            time_per_output_token = (
+-                state.time_stats.get_time_per_output_token(completion_tokens)
+-                if self.disaggregation_mode != DisaggregationMode.PREFILL
++            time_to_first_token = None
++            time_per_output_token = None
++            if (
++                self.disaggregation_mode != DisaggregationMode.PREFILL
+                 and finish_reason.get("type") in ("stop", "length")
+-                else None
+-            )
++            ):
++                time_to_first_token = state.time_stats.get_first_token_latency()
++                time_per_output_token = state.time_stats.get_time_per_output_token(
++                    completion_tokens
++                )
+ 
+             self.metrics_collector.observe_one_finished_request(
+                 labels,
+@@ -3193,6 +3198,7 @@ class TokenizerManager(TokenizerControlMixin, TokenizerManagerScoreMixin):
+                 spec_verify_ct=spec_verify_ct,
+                 is_streaming=getattr(state.obj, "stream", False),
+                 time_per_output_token=time_per_output_token,
++                time_to_first_token=time_to_first_token,
+             )
+ 
+     def dump_requests(self, state: ReqState, out_dict: dict):
+diff --git a/python/sglang/srt/observability/metrics_collector.py b/python/sglang/srt/observability/metrics_collector.py
+index 7f74a5a203..a3d792ff5e 100644
+--- a/python/sglang/srt/observability/metrics_collector.py
++++ b/python/sglang/srt/observability/metrics_collector.py
+@@ -32,7 +32,11 @@ from sglang.srt.observability.scheduler_stage_metrics import (
+     FORWARD_OVERLAP_NONE,
+     SCHEDULER_STAGE_CATEGORIES,
+ )
+-from sglang.srt.observability.utils import exponential_buckets, generate_buckets
++from sglang.srt.observability.utils import (
++    exponential_buckets,
++    generate_buckets,
++    meets_goodput_slo,
++)
+ from sglang.srt.runtime_context import (
+     exports_expert_balancedness_to_prometheus,
+     get_context,
+@@ -1762,6 +1766,7 @@ class TokenizerMetricsCollector(_StatLoggerDIMixin):
+         bucket_time_to_first_token: Optional[List[float]] = None,
+         bucket_inter_token_latency: Optional[List[float]] = None,
+         bucket_e2e_request_latency: Optional[List[float]] = None,
++        goodput_slo: Optional[Dict[str, float]] = None,
+     ) -> None:
+         # We need to import prometheus_client after setting the env variable `PROMETHEUS_MULTIPROC_DIR`
+         from prometheus_client import Counter as _PromCounter
+@@ -1773,6 +1778,7 @@ class TokenizerMetricsCollector(_StatLoggerDIMixin):
+         Histogram = self._histogram_cls or _PromHistogram
+ 
+         self.labels = labels or {}
++        self.goodput_slo = goodput_slo
+ 
+         self.startup_time_seconds = Gauge(
+             name="sglang:startup_time_seconds",
+@@ -1878,6 +1884,12 @@ class TokenizerMetricsCollector(_StatLoggerDIMixin):
+             labelnames=list(labels.keys()) + ["is_streaming"],
+         )
+ 
++        self.num_good_requests_total = Counter(
++            name="sglang:num_good_requests_total",
++            documentation="Number of requests that finished normally and met every SLO in --goodput-slo.",
++            labelnames=list(labels.keys()) + ["is_streaming"],
++        )
++
+         self.get_loads_duration_seconds = Histogram(
+             name="sglang:get_loads_duration_seconds",
+             documentation="Time spent serving /v1/loads requests (seconds).",
+@@ -2036,6 +2048,7 @@ class TokenizerMetricsCollector(_StatLoggerDIMixin):
+         spec_verify_ct: int = 0,
+         is_streaming: bool = False,
+         time_per_output_token: Optional[float] = None,
++        time_to_first_token: Optional[float] = None,
+     ):
+         stream_labels = {
+             **labels,
+@@ -2069,6 +2082,16 @@ class TokenizerMetricsCollector(_StatLoggerDIMixin):
+                 self.cached_tokens_total.labels(**labels_total).inc(cached_tokens)
+ 
+         self.num_requests_total.labels(**stream_labels).inc(1)
++        # time_to_first_token is None for aborted requests and on PD prefill workers.
++        if self.goodput_slo and time_to_first_token is not None:
++            if meets_goodput_slo(
++                goodput_slo=self.goodput_slo,
++                ttft=time_to_first_token,
++                # No decode interval to hold to the SLO, e.g. a single-token response.
++                tpot=time_per_output_token or 0.0,
++                e2el=e2e_latency,
++            ):
++                self.num_good_requests_total.labels(**stream_labels).inc(1)
+         if has_grammar:
+             self.num_so_requests_total.labels(**labels).inc(1)
+         self.histogram_e2e_request_latency.labels(**stream_labels).observe(
+diff --git a/python/sglang/srt/observability/utils.py b/python/sglang/srt/observability/utils.py
+index 71141341df..ea99c395bf 100644
+--- a/python/sglang/srt/observability/utils.py
++++ b/python/sglang/srt/observability/utils.py
+@@ -14,7 +14,9 @@
+ """Utilities for Prometheus Metrics."""
+ 
+ import math
+-from typing import List
++from typing import Dict, List
++
++GOODPUT_SLO_METRICS = ("ttft", "tpot", "e2el")
+ 
+ 
+ def two_sides_exponential_buckets(
+@@ -54,3 +56,11 @@ def exponential_buckets(start: float, width: float, length: int) -> List[float]:
+     for i in range(length):
+         buckets.append(start * (width**i))
+     return buckets
++
++
++def meets_goodput_slo(
++    goodput_slo: Dict[str, float], ttft: float, tpot: float, e2el: float
++) -> bool:
++    # SLOs are in milliseconds, observed latencies in seconds.
++    observed_ms = {"ttft": ttft * 1000, "tpot": tpot * 1000, "e2el": e2el * 1000}
++    return all(observed_ms[name] <= slo_ms for name, slo_ms in goodput_slo.items())
+diff --git a/test/registered/observability/test_metrics.py b/test/registered/observability/test_metrics.py
+index 220e03ea76..7a529dcbef 100644
+--- a/test/registered/observability/test_metrics.py
++++ b/test/registered/observability/test_metrics.py
+@@ -115,6 +115,8 @@ class TestEnableMetrics(CustomTestCase):
+         ):
+             launch_args = [
+                 "--enable-metrics",
++                "--goodput-slo",
++                '{"e2el": 600000}',
+                 "--cuda-graph-max-bs-decode",
+                 2,
+                 *other_args,
+@@ -259,6 +261,7 @@ class TestEnableMetrics(CustomTestCase):
+                 "sglang:request_time_per_output_token_seconds_count",
+                 {"is_streaming": "true"},
+             ),
++            ("sglang:num_good_requests_total", {"is_streaming": "true"}),
+         ]
+         _check_metrics_positive(self, metrics, metrics_to_check)
+ 
+diff --git a/test/registered/unit/managers/test_tokenizer_manager_rid_cleanup.py b/test/registered/unit/managers/test_tokenizer_manager_rid_cleanup.py
+index f5dfc10b58..981534a99b 100644
+--- a/test/registered/unit/managers/test_tokenizer_manager_rid_cleanup.py
++++ b/test/registered/unit/managers/test_tokenizer_manager_rid_cleanup.py
+@@ -480,6 +480,7 @@ class TestRequestTpotGating(CustomTestCase):
+         *,
+         stream=False,
+         prefill_finished_time=0.0,
++        key="time_per_output_token",
+     ):
+         tm = _make_tokenizer_manager(self)
+         tm.enable_metrics = True
+@@ -503,7 +504,7 @@ class TestRequestTpotGating(CustomTestCase):
+             batch_output.time_stats = wrap_as_pickle([sched_stats])
+             asyncio.run(tm._handle_batch_output(batch_output))
+         (call,) = tm.metrics_collector.observe_one_finished_request.call_args_list
+-        return call.kwargs["time_per_output_token"]
++        return call.kwargs[key]
+ 
+     def test_single_batch_finish(self):
+         produced = time.perf_counter() - 0.5
+@@ -537,6 +538,13 @@ class TestRequestTpotGating(CustomTestCase):
+                     self.assertGreater(tpot, 0.0)
+                 else:
+                     self.assertIsNone(tpot)
++                # Goodput takes the same requests: it counts none without a TTFT.
++                ttft = self._run(
++                    [(1, _NOT_FINISHED), (3, finished_reason)],
++                    disaggregation_mode=mode,
++                    key="time_to_first_token",
++                )
++                self.assertEqual(ttft is not None, recorded)
+ 
+ 
+ class TestNonStreamingFirstTokenTime(CustomTestCase):
+diff --git a/test/registered/unit/observability/test_metrics_utils.py b/test/registered/unit/observability/test_metrics_utils.py
+index 11ed061830..330793bfc6 100644
+--- a/test/registered/unit/observability/test_metrics_utils.py
++++ b/test/registered/unit/observability/test_metrics_utils.py
+@@ -2,6 +2,7 @@ import unittest
+ 
+ from sglang.srt.observability.utils import (
+     generate_buckets,
++    meets_goodput_slo,
+     two_sides_exponential_buckets,
+ )
+ from sglang.test.ci.ci_register import register_cpu_ci
+@@ -128,6 +129,18 @@ class TestMetricsUtils(unittest.TestCase):
+         for value in result:
+             self.assertIsInstance(value, float)
+ 
++    def test_meets_goodput_slo_requires_every_listed_slo(self):
++        slo = {"ttft": 500, "tpot": 50, "e2el": 3000}
++        met = {"ttft": 0.5, "tpot": 0.04, "e2el": 2.0}
++        self.assertTrue(meets_goodput_slo(goodput_slo=slo, **met))
++        for name, late in (("ttft", 0.6), ("tpot", 0.06), ("e2el", 4.0)):
++            with self.subTest(name):
++                observed = {**met, name: late}
++                self.assertFalse(meets_goodput_slo(goodput_slo=slo, **observed))
++                # An SLO that is not listed is not checked.
++                others = {k: v for k, v in slo.items() if k != name}
++                self.assertTrue(meets_goodput_slo(goodput_slo=others, **observed))
++
+ 
+ if __name__ == "__main__":
+     unittest.main()
+diff --git a/test/registered/unit/observability/test_stat_loggers_di.py b/test/registered/unit/observability/test_stat_loggers_di.py
+index 16250cfc4b..a6a7cee0fd 100644
+--- a/test/registered/unit/observability/test_stat_loggers_di.py
++++ b/test/registered/unit/observability/test_stat_loggers_di.py
+@@ -481,5 +481,57 @@ class TestRequestTimePerOutputToken(CustomTestCase):
+         )
+ 
+ 
++class TestGoodRequests(CustomTestCase):
++    LABELS = {"model_name": "test"}
++    SLO = {"ttft": 500, "tpot": 50, "e2el": 3000}
++
++    def _good_requests(self, goodput_slo, **kwargs):
++        with get_context().override_server_args(
++            prompt_tokens_buckets=None, generation_tokens_buckets=None
++        ):
++            collector = _RecordingTokenizerMetricsCollector(
++                labels=self.LABELS, goodput_slo=goodput_slo
++            )
++        collector.observe_one_finished_request(
++            labels=self.LABELS,
++            prompt_tokens=20,
++            generation_tokens=101,
++            cached_tokens=0,
++            e2e_latency=2.5,
++            has_grammar=False,
++            **kwargs,
++        )
++        return collector.num_good_requests_total.increments
++
++    def test_counted_only_if_every_slo_is_met(self):
++        good = self._good_requests(
++            self.SLO,
++            is_streaming=True,
++            time_to_first_token=0.2,
++            time_per_output_token=0.02,
++        )
++        self.assertEqual(good, [({**self.LABELS, "is_streaming": "true"}, 1)])
++
++        late_tokens = self._good_requests(
++            self.SLO, time_to_first_token=0.2, time_per_output_token=0.08
++        )
++        self.assertEqual(late_tokens, [])
++
++    def test_response_without_decode_interval_meets_tpot_slo(self):
++        good = self._good_requests(
++            self.SLO, time_to_first_token=0.2, time_per_output_token=None
++        )
++        self.assertEqual(len(good), 1)
++
++    def test_not_counted_when_aborted_or_without_slo(self):
++        aborted = self._good_requests({"e2el": 3000}, time_to_first_token=None)
++        self.assertEqual(aborted, [])
++
++        no_slo = self._good_requests(
++            None, time_to_first_token=0.2, time_per_output_token=0.02
++        )
++        self.assertEqual(no_slo, [])
++
++
+ if __name__ == "__main__":
+     unittest.main()
+diff --git a/test/registered/unit/server_args/test_server_args.py b/test/registered/unit/server_args/test_server_args.py
+index 45b41ff254..99fea1e1db 100644
+--- a/test/registered/unit/server_args/test_server_args.py
++++ b/test/registered/unit/server_args/test_server_args.py
+@@ -403,6 +403,26 @@ class TestPrepareServerArgs(CustomTestCase):
+                 ["--model-path", "dummy", "--sampling-mask-max-tokens", "0"]
+             ).resolve_once()
+ 
++    def test_goodput_slo_rejects_unknown_metrics_and_non_positive_values(self):
++        for goodput_slo, valid in (
++            ({"ttft": 500, "tpot": 50, "e2el": 3000}, True),
++            ({"itl": 10}, False),
++            ({"ttft": 0}, False),
++        ):
++            with self.subTest(goodput_slo=goodput_slo):
++                args = ServerArgs(
++                    model_path="dummy",
++                    served_model_name="dummy",
++                    device="cpu",
++                    chunked_prefill_size=-1,
++                    goodput_slo=goodput_slo,
++                )
++                if valid:
++                    args.check_server_args()
++                else:
++                    with self.assertRaisesRegex(AssertionError, "--goodput-slo"):
++                        args.check_server_args()
++
+     def test_legacy_sampling_mask_env_requires_migration(self):
+         """Legacy configuration must not silently disable PD sampling masks."""
+         for value in ("0", "128", "invalid", ""):
+-- 
+2.39.0
+

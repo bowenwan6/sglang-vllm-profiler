@@ -1,0 +1,20 @@
+gpu: NVIDIA H200, 595.71.05
+nvcc: Build cuda_13.0.r13.0/compiler.36424714_0
+sglang: 1a9681a340c3015c8152f1e060b32f7b2964393c main-upstream (ref pr-c-head)
+aiohttp==3.14.5
+flashinfer-cubin==0.7.1
+flashinfer-jit-cache==0.7.1+cu130
+flashinfer-python==0.7.1
+nvidia-cuda-nvcc==13.4.92
+prometheus-client==0.26.0
+python-dateutil==2.9.0.post0
+python-multipart==0.0.32
+sglang-kernel==0.4.9
+torch==2.14.1
+torch-c-dlpack-ext==0.1.5
+torch-memory-saver==0.0.10
+torchaudio==2.11.0
+torchcodec==0.17.0
+torchvision==0.29.1
+transformers==5.19.0
+xgrammar==0.2.7

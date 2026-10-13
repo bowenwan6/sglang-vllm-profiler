@@ -1,0 +1,14 @@
+setup conda/env/repos                          ok
+branch head installed                          ok (1a9681a340 on fc404bbbb3)
+unit files (changed + neighbours)              PASS (36 of 36 files pass; 0 fail on the base commit too)
+mutation check                                 PASS (12 of 12 mutations caught)
+ruff format --check                            PASS
+ruff check                                     PASS
+isort --check                                  PASS
+codespell                                      PASS
+pre-commit (12 files)                          PASS (16 hooks passed, 15 skipped as not applicable)
+--goodput-slo in --help                        PASS
+GPU test test_metrics_1gpu                     PASS
+GPU test red without the wiring                PASS
+models                                         ok (17G)
+live server: counter == recount                FAIL (see verify_summary.json)

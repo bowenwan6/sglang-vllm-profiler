@@ -105,3 +105,18 @@ the per-request records the benchmark scores so that the recount is exact). 21 m
 | 7. release | Mac | after file count and byte total match on both sides: `radix release`, `radix whoami` |
 
 Nothing of this runs on the Mac except lint (pinned `ruff`, `isort`, `codespell` through `uvx`).
+
+## Session P5 — PR-C's head (2026-10-13)
+
+Same flow as P4 with the `prc_*` scripts; the branch comes from the fork, so no bundle is needed.
+
+| Step | Where | Command |
+|---|---|---|
+| 1. copy | Mac | `setup_node.sh` → `~/sgl/`; `prc_node.sh`, `prc_verify.py`, `prc_mutate.py`, `p1_bench.py` → `~/sgl/prc/` |
+| 2. run | node, tmux `sgl-install:prc` | `EXPECT_SHA=… BASE_SHA=… DEADLINE_EPOCH=… bash ~/sgl/prc/prc_node.sh` (15 min up to the live step, 7 min for it) |
+| 3. one server only | node | `python prc_verify.py --out … --only workers2` (tags: `slo3`, `slo1`, `reject`, `noslo`, `workers2`) |
+| 4. sync | Mac | `NODE=… KNOWN_HOSTS=… bash scripts/prc_sync.sh` |
+| 5. release | Mac | `radix release <machine-id>` — name the machine: another session may hold its own assignment |
+
+Do not run `pkill -f sglang.launch_server` inside an `ssh … '<command>'` line: the pattern matches the remote
+shell that carries the command and ends it.

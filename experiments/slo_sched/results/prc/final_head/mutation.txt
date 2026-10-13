@@ -1,0 +1,14 @@
+red   | good if any SLO is met | FAIL: test_meets_goodput_slo_requires_every_listed_slo
+red   | seconds compared with milliseconds | FAIL: test_meets_goodput_slo_requires_every_listed_slo
+red   | unlisted SLOs applied as 0 | FAIL: test_meets_goodput_slo_requires_every_listed_slo
+red   | aborted request is scored | ERROR: test_not_counted_when_aborted_or_without_slo
+red   | scored without --goodput-slo | ERROR: test_not_counted_when_aborted_or_without_slo
+red   | undefined TPOT fails the SLO | ERROR: test_response_without_decode_interval_meets_tpot_slo
+red   | counter without the is_streaming label | ERROR: test_counted_only_if_every_slo_is_met
+red   | TPOT SLO checked against TTFT | ERROR: test_counted_only_if_every_slo_is_met
+red   | TTFT passed for aborts and PD prefill | FAIL: test_multi_batch_records_only_completed_decode
+red   | unknown key accepted | FAIL: test_goodput_slo_rejects_unknown_metrics_and_non_positive_values
+red   | zero accepted | FAIL: test_goodput_slo_rejects_unknown_metrics_and_non_positive_values
+red   | validation not called | FAIL: test_goodput_slo_rejects_unknown_metrics_and_non_positive_values
+restored files pass: True
+MUTATIONS 12, survivors 0: none

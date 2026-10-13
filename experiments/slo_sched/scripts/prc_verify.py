@@ -10,7 +10,8 @@ good requests can be recounted on the client. After each phase the growth of the
 on /metrics must equal the recount, separately for is_streaming true and false.
 
 Servers: three SLOs; one SLO; a queue limit that rejects part of a burst (a rejected
-request is aborted and must not count); no --goodput-slo (the counter must stay empty).
+request is aborted and must not count); no --goodput-slo (the counter must stay empty);
+three SLOs with two tokenizer workers.
 
   python prc_verify.py --out ~/sgl/logs/prc --deadline-epoch <unix time to stop by>
 
@@ -37,6 +38,7 @@ PHASES = ((8, 300), (64, 900), (256, 1500), (1024, 2500))
 SLO1_PHASES = ((8, 300), (64, 900), (512, 2000))
 BURST = ((256, 600),)
 QUEUE_LIMIT = ["--max-running-requests", "32", "--max-queued-requests", "16"]
+TWO_WORKERS = ["--tokenizer-worker-num", "2"]
 # A request this close to an SLO may fall on either side of it in the recount:
 # TPOT is rebuilt as 1 / decode_throughput, which can differ in the last bit.
 BOUNDARY_MS = 1e-6
@@ -157,7 +159,7 @@ class Verify(Runner):
         self.checks.append({"check": name, "ok": bool(ok), "detail": detail})
         self.say(f"  {'ok  ' if ok else 'FAIL'} {name} {detail}")
 
-    def server(self, tag, slo_ms, phases, seed, extra_args=()):
+    def run_server(self, tag, slo_ms, phases, seed, extra_args=(), expect_rejects=False):
         extra = ["--enable-metrics", *extra_args]
         if slo_ms is not None:
             extra += ["--goodput-slo", json.dumps(slo_ms)]
@@ -208,7 +210,7 @@ class Verify(Runner):
                     f"num_requests_total +{total:g}",
                 )
             self.check(f"{name}: every finished response has its latencies", untimed == 0, f"{untimed}")  # fmt: skip
-            if extra_args:
+            if expect_rejects:
                 self.check(
                     f"{name}: part of the burst is rejected",
                     0 < row["not_finished"] < n,
@@ -227,23 +229,27 @@ class Verify(Runner):
             _, text = scrape(self.a.port)
             samples = [line for line in text.splitlines() if line.startswith("sglang:num_good_requests_total")]  # fmt: skip
             self.check(f"{tag}: no samples without --goodput-slo", not samples, f"{len(samples)} samples")  # fmt: skip
-        elif not extra_args:
+        elif not expect_rejects:
             self.check(f"{tag}: some phase has both good and late requests", mixed)
         (self.out / f"metrics_{tag}.txt").write_text(text)
         self.stop_server()
 
     def run(self):
         plan = (
-            ("slo3", SLO3, PHASES, 100, ()),
-            ("slo1", SLO1, SLO1_PHASES, 200, ()),
-            ("reject", LENIENT, BURST, 300, QUEUE_LIMIT),
-            ("noslo", None, PHASES[1:2], 400, ()),
+            ("slo3", SLO3, PHASES, 100, (), False),
+            ("slo1", SLO1, SLO1_PHASES, 200, (), False),
+            ("reject", LENIENT, BURST, 300, QUEUE_LIMIT, True),
+            ("noslo", None, PHASES[1:2], 400, (), False),
+            ("workers2", SLO3, PHASES[1:], 500, TWO_WORKERS, False),
         )
-        for tag, slo_ms, phases, seed, extra_args in plan:
+        only = set(filter(None, self.a.only.split(",")))
+        for tag, slo_ms, phases, seed, extra_args, expect_rejects in plan:
+            if only and tag not in only:
+                continue
             if self.out_of_time():
                 self.check(f"{tag}: ran", False, "skipped, out of time")
                 continue
-            self.server(tag, slo_ms, phases, seed, extra_args)
+            self.run_server(tag, slo_ms, phases, seed, extra_args, expect_rejects)
         self.stop_server()
         failed = [c for c in self.checks if not c["ok"]]
         summary = {"checks": len(self.checks), "failed": failed}
@@ -258,6 +264,7 @@ def main():
     p.add_argument("--model", default="Qwen/Qwen3-8B")
     p.add_argument("--port", type=int, default=30000)
     p.add_argument("--deadline-epoch", type=float, default=0.0)
+    p.add_argument("--only", default="", help="comma list of server tags")
     p.add_argument("--dry-run", action="store_true")
     sys.exit(Verify(p.parse_args()).run())
 

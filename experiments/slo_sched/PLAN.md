@@ -393,3 +393,20 @@ commits to `7224fce1b5` and verified on a node. Account: section 7 of
   from `--output-details` disagreed by one request in one per-SLO count (latency is not in the details;
   the request sits 20 µs from the line); `scripts/pra_capture.py` makes the recount exact, and nine runs
   pass 59 of 59 checks. Section 8 of `results/pra_usage.md`.
+
+## Outcome — session P5: PR-C, a server-side goodput counter (2026-10-13, 06:40–07:12 UTC)
+
+After PR-B was dropped, Bowen chose the first of five options drawn from the re-read paper: the online twin of
+PR-A. Branch `pr/goodput-metric` @ `f0593274f9` adds `--goodput-slo` and `sglang:num_good_requests_total`.
+
+- Verified on one H200 in 31 minutes: 36 CPU unit files, 12 of 12 mutations caught, pre-commit, upstream's GPU
+  metrics test green and red without the wiring, and the counter equal to an exact recount in 12 live phases
+  (76 of 76 checks). The first attempt of the live step crashed in the checking script and was repeated.
+- The joint count is not what the single-SLO shares suggest: at concurrency 256, 96.8 % of requests met the
+  TTFT SLO and 94.7 % the TPOT SLO, 91.7 % met all three; at 1024 the shares were 64.8 / 14.5 / 46.7 % and
+  11.8 % together.
+- A request rejected by `--max-queued-requests` is counted by neither `sglang:num_requests_total` nor the
+  latency histograms, so attainment over that counter ignores shed load.
+- Not covered: PD mode on a live server, the Ray backend, embedding requests.
+
+Details, the reviewer questions and the list of precedents: [`upstream/pr_c/PR_DESCRIPTION.md`](upstream/pr_c/PR_DESCRIPTION.md).
