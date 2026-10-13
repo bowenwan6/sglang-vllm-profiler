@@ -4,7 +4,8 @@
 Runs on the node inside the sgl-profiler env, after pra_node.sh has installed the branch
 head. Every cell is one bench_serving run with --output-details. For a cell with --goodput
 three things are compared: the fields in the result file, the block printed to the console
-and a recount from the per-request details. One cell runs without the flag and must show
+and a recount from the per-request records the benchmark scored (kept by pra_capture.py;
+--output-details has no end-to-end latency, so a recount from it is only approximate). One cell runs without the flag and must show
 neither the block nor the fields.
 
   python pra_verify.py --out ~/sgl/logs/pra --deadline-epoch <unix time to stop by>
@@ -17,23 +18,24 @@ import json
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 from p1_bench import ARRIVAL_SPAN_S, SLO_MS, Runner, slo_args
+
+CAPTURE = Path(__file__).resolve().parent / "pra_capture.py"
 
 GOODPUT_KEYS = ("goodput_slos_ms", "request_goodput", "slo_attainment", "slo_attainment_by_metric")  # fmt: skip
 EXTRA_SWEEP = (0.5, 0.8, 1.25, 2.0)
 
 
-def recount(result, slo_ms):
-    """Good requests, and requests meeting each SLO alone, from --output-details."""
+def recount(requests, slo_ms):
+    """Good requests, and requests meeting each SLO alone, from the captured records."""
     good = 0
     by_metric = dict.fromkeys(slo_ms, 0)
-    for ttft, itl, out_len, err in zip(
-        result["ttfts"], result["itls"], result["output_lens"], result["errors"]
-    ):
-        if err:
+    for req in requests:
+        if not req["success"]:
             continue
-        latency = ttft + sum(itl)
+        ttft, latency, out_len = req["ttft"], req["latency"], req["output_len"]
         tpot = (latency - ttft) / (out_len - 1) if out_len > 1 else 0.0
         observed = {"ttft": ttft * 1000, "tpot": tpot * 1000, "e2el": latency * 1000}
         met = {name: observed[name] <= slo for name, slo in slo_ms.items()}
@@ -67,7 +69,7 @@ class Verifier(Runner):
     def bench_cmd(self, cell, *, rate, num_prompts, slo_ms, dataset, seed, max_concurrency,
                   backend="sglang-oai-chat", goodput=True):  # fmt: skip
         cmd = [
-            sys.executable, "-m", "sglang.bench_serving",
+            sys.executable, str(CAPTURE), str(self.out / "cells" / f"{cell}.capture.json"),
             "--backend", backend, "--host", "127.0.0.1", "--port", str(self.a.port),
             "--model", self.a.model, *dataset,
             "--num-prompts", str(num_prompts), "--request-rate", str(rate),
@@ -99,9 +101,13 @@ class Verifier(Runner):
             self.check(cell, "bench_serving exits 0 and writes a result", False, f"rc={rc}")
             return None
         result = json.loads(path.read_text().strip().splitlines()[-1])
+        captured = json.loads((self.out / "cells" / f"{cell}.capture.json").read_text())
         block = printed_block(log_path.read_text())
         sent = len(result["ttfts"])
         failed = sum(bool(e) for e in result["errors"])
+        self.check(cell, "captured records match the result", len(captured["requests"]) == sent
+                   and captured["dur_s"] == result["duration"]
+                   and sum(not r["success"] for r in captured["requests"]) == failed)  # fmt: skip
         row = {
             "cell": cell, "backend": backend, "goodput_flag": goodput, "params": params or {},
             "sent": sent, "failed_requests": failed,
@@ -121,7 +127,7 @@ class Verifier(Runner):
         if not all(k in result for k in GOODPUT_KEYS):
             self.record(row)
             return row
-        good, by_metric = recount(result, SLO_MS)
+        good, by_metric = recount(captured["requests"], SLO_MS)
         good_reported = round(result["slo_attainment"] * sent)
         by_metric_reported = {k: round(v * sent) for k, v in result["slo_attainment_by_metric"].items()}  # fmt: skip
         self.check(cell, "SLOs in the result are the ones given", result["goodput_slos_ms"] == SLO_MS)  # fmt: skip
