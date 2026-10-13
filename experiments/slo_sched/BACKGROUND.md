@@ -55,6 +55,24 @@ Four readings that shape this plan:
 3. **EDF without shedding collapses** (Fig. 21, and Appendix D.1 proves it is not competitive).
 4. **Compound requests are not needed** for the effect: two-class mixes gain 1.7–1.8×.
 
+**Re-read on 2026-10-13 (paper text of arXiv v3 and the artifact @ HEAD), after PR-B was dropped.**
+
+- `waiting_time` is a **per-request API parameter**, next to `deadline`, `target_ttft` and `target_tbt`
+  (§5: `client.responses.create(model, input, deadline=None, target_tbt=0.2, target_ttft=5,
+  waiting_time=5)`); "requests unscheduled beyond it are dropped". PR-B was exactly this parameter.
+- The paper text has no rule that drops a request the moment it is predicted to miss. What is computed
+  ahead of time is the priority: in the artifact (`jitserve/scheduler/policy.py`, `SLOPolicy`) the
+  reward of a request is multiplied by `(deadline / predicted_finish) ** penalty_factor`, the ratio
+  clamped to [1e-6, 1], and priority = reward / remaining time. A request predicted to finish late
+  sinks in the order, is not scheduled, and then falls to `waiting_time`. `slo_scheduler.py` also aborts
+  every pending request when nothing has run for 2000 iterations (`_stop_dull_scheduling`).
+- Predicted finish = time already served + remaining length upper bound × measured time per scheduling
+  step; priorities are cached and recomputed every `schedule_interval` = 50 scheduler calls.
+- §6.2: JITServe reaches 96–98 % of Sarathi-Serve's throughput. It trades a little throughput for
+  goodput under load; nothing in it makes the engine faster.
+- §4.2, Fig. 8: the batch-composition half of GMAX rests on one observation made on vLLM, that a batch
+  with heterogeneous input lengths decodes slower per token. Not tested on SGLang.
+
 ## 2. Where SGLang is
 
 ### 2.1 Mechanism facts (read from source, `sgl-project/sglang` `upstream/main` @ `50be533d09`, 2026-10-01)
