@@ -1,0 +1,6 @@
+worktree at fd40750d7 feat(bench): report goodput and SLO attainment in bench_serving; base b524de2de 2026-10-06 [diffusion] optimization: release the allocator c
+imports /data/bowenwan6/home/sgl/sglang-pra/python/sglang/__init__.py
+PASS test/registered/unit/bench/test_bench_serving_goodput.py :: 8 passed, 21 warnings, 8 subtests passed in 10.21s
+pre-commit on 3 files: rc=0
+    hooks passed: 16, failed: 0
+DONE

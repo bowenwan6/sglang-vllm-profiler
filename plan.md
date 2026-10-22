@@ -9,6 +9,19 @@
 
 ---
 
+## 0. Status on 2026-10-22
+
+| Track | State | Record |
+|---|---|---|
+| #2 default-overlap rebaseline | done, issue closed | §1 |
+| #9 Qwen3.5 DeepStack | closed 2026-09-03, `NOT_APPLICABLE_QWEN35` | §7 |
+| Qwen3-VL BCG DeepStack fix | upstream PR [sgl-project/sglang#33726](https://github.com/sgl-project/sglang/pull/33726) open; revalidated on 2026-10-17 on 2× H200 at `ccfda8dfd9` (M12): the fix is still needed, and with it BCG and FULL follow eager to bf16 ties | §10.7 |
+| #4 image+text + CUDA IPC (round 3) | done 2026-09-06 | §11–§12 |
+| Q3 ViT CUDA graph | done 2026-09-29: H1 not supported as pre-registered, H2 not supported as written, H3 supported | §12.6 |
+| S1 SLO-aware serving | PR-A [sgl-project/sglang#43967](https://github.com/sgl-project/sglang/pull/43967) merged 2026-10-18; PR-C [sgl-project/sglang#45643](https://github.com/sgl-project/sglang/pull/45643) opened 2026-10-21; PR-B dropped 2026-10-13 | §13 |
+| #5 graph-enablement policy | partly answered by #4 v3; the concurrency axis is missing | §3 |
+| #3 Qwen3.5 transfer | not run | §3 |
+
 ## 1. Current mainline
 
 - **Case A TTFT gap is real on the production default.** v2 #2 (clean, GPU 1,
@@ -305,6 +318,8 @@ the current merge.
   under user control.
 
 ## 5. Immediate next steps
+
+> The list below is the 2026-08-29 record; the current state of every track is §0.
 
 > Rewritten 2026-08-29. The §7 correctness detour is finished and its fix is
 > upstream; the profiling mainline resumes at #4. Detailed work packages and
@@ -1482,6 +1497,25 @@ given for each step. Detail in
 * Rewriting or repurposing the §7 Qwen3.5 close-out or the §4
   Qwen3-VL PCG capture-stream evidence.
 
+### 10.7 Upstream state and the M12 revalidation (recorded 2026-10-22)
+
+The fix is upstream PR [sgl-project/sglang#33726](https://github.com/sgl-project/sglang/pull/33726)
+(`fix(bcg): preserve Qwen3-VL DeepStack inputs during replay`), open and waiting for an approving review.
+**M12 (2026-10-17, 2× H200, 1.7 GPU-hours)** revalidated it at head `ccfda8dfd9`, a merge of `main`
+`80f40522cd`:
+
+- The fix is still needed: `main` plus the two allowlist lines, without the slot, changes 29 of 31 image
+  and video answers under BCG.
+- With the PR, BCG follows eager to bf16 ties on Qwen3-VL-8B at TP 1 and 2 and at chunk sizes 8192 and
+  2048, FULL too; the 30B-A3B is noisier under BCG, text-only requests included. Adding the encode-once
+  change of sgl-project/sglang#44129 changes nothing.
+- `main`'s FULL prefill backend drops the DeepStack inputs as well; the PR fixes that path for the
+  Qwen3-VL family.
+- The pre-registered verdict is FAIL as written, on three rules not about DeepStack (C1's tolerance is
+  below the bf16 step, a tie in the third C2 pair, P-1 text +1.1 ms against 1.0 ms).
+
+Report: [`results/m12_revalidation_2xh200_20261017T1741Z/report.md`](experiments/qwen3vl_bcg_deepstack_fix/results/m12_revalidation_2xh200_20261017T1741Z/report.md).
+
 ## 11. Issue #4 execution plan v3 (drafted 2026-09-03; execution started 2026-09-04)
 
 > **Execution status.** Phases 0 and 1 are complete and the phase-1 gate passed;
@@ -2037,8 +2071,8 @@ to the Mac every two minutes. Amended 2026-09-29 after a two-window review, befo
 
 **Scope.** A mechanism study with an upper bound (c=1, fixed shape) on one model and one GPU class.
 Not a deployment claim. The publishable version additionally needs the same predictor on the LM
-stage (PR #33726's branch), a second model (Qwen2.5-VL-7B shares the runner), a second GPU class,
-hit rates on a real resolution distribution, and a bucketed-ViT-graph prototype.
+stage (PR #33726's branch), a second model (Qwen2.5-VL-7B shares the runner), a second GPU class
+and hit rates on a real resolution distribution.
 
 **Outcome (2026-09-29).** Run in two node sessions (5 GPU-hours). H1 NOT SUPPORTED as pre-registered: the
 graph's gain is predicted within ~2 ms at 256²–640² (measured 11.9–13.5 ms, −20 % to −29 % of TTFT), but the
@@ -2050,3 +2084,49 @@ overhead the graph recovers. H3 SUPPORTED: mixed shapes give 167 captures/300, m
 Side findings: default-flag ViT graphs change outputs (interpolation flag), the bf16 encoder's 2–7 %
 implementation noise floor, and the rotary cost. Details and deviations: `q3_vit_graph/PLAN.md` "Outcome";
 tables: `q3_vit_graph/results/q3_report.md`.
+
+# 13. S1 — SLO-aware serving on SGLang: goodput benchmark (PR-A) and per-request waiting timeout (PR-B)
+
+> Plan, acceptance criteria and server sessions: [`experiments/slo_sched/PLAN.md`](experiments/slo_sched/PLAN.md).
+> Paper and source facts: [`BACKGROUND.md`](experiments/slo_sched/BACKGROUND.md). PR-B research:
+> [`PRB_RESEARCH.md`](experiments/slo_sched/PRB_RESEARCH.md). Merged into `main` on 2026-10-22.
+> This section is the pointer; it gets a dated outcome paragraph after each stage, nothing else.
+> A separate track: it does not belong to roadmap issues #1–#5.
+
+**Why.** JITServe (NSDI '26, arXiv 2504.20068) reports 1.4–6.3× goodput on mixed-SLO traffic. None of
+it is in SGLang, and a port is not realistic: the artifact subclasses vLLM's V0 scheduler, paper-sized
+scheduler PRs stall upstream, and upstream's own SLO work is in the router. Two pieces are small and
+useful by themselves. The benchmark cannot say how many requests met an SLO (vLLM's can, since
+2024-10). The engine can shed late work only with one global timeout, which cannot suit interactive
+and batch requests at once.
+
+**Stages (thresholds fixed before any server run; written 2026-10-05).**
+- **Stage 1 — PR-A.** `--goodput ttft:… tpot:… e2el:…` in `sglang.benchmark.serving`: request goodput,
+  SLO attainment, per-SLO attainment. Unit-tested on the Mac, then used on four tasks on one H200
+  with Qwen3-8B (load sweep, batch cap, queue policy under mixed lengths, global timeout). "Useful"
+  means: the sweep shows a knee (goodput ≥ 30 % below its peak while throughput is within 10 % of
+  its own), and in at least one other task the best configuration by throughput or mean TTFT is not
+  the best by goodput (gap ≥ max(5 %, 3 σ)).
+- **Stage 2 — PR-B research (done 2026-10-05).** Only global waiting/running timeouts exist; no
+  per-request proposal in sglang or vllm; Triton's queue policy is the precedent; the field follows
+  `priority`'s path and is enforced in the existing rank-0 scan, under 150 changed lines. Go.
+- **Stage 3 — PR-B.** Field `waiting_timeout`, effective bound the smaller of it and the global one.
+  Debug on unit tests, a dummy-weight server, then the real model. Benchmark against no timeout and
+  the best single global value on a two-class surge (accept: ≥ max(5 pp, 3 σ) attainment) and on
+  callers with budgets (accept: wasted tokens halved and ≥ 5 pp), with a no-op control inside A/A
+  noise and a one-class neutral case reported as it falls. Both use cases failing means no PR-B.
+
+**Scope.** One dense model, one GPU, TP = 1, text. Three server sessions of ≤ 3 h (≈ 6 GPU-hours,
+cap 9), each announced with its plan and started only after approval. Deadline-aware ordering, the
+length predictor, decode pacing and compound requests are out of scope.
+
+**Outcome (2026-10-22).** Five node sessions (P1–P5, 2026-10-05 to 10-13, one H200 each, two GPUs for
+part of P3). PR-A met its usefulness rule on the load sweep (goodput −79 % while throughput rose) and
+in T4 once in-stream aborts are counted as failures; it was opened as
+[sgl-project/sglang#43967](https://github.com/sgl-project/sglang/pull/43967) on 10-13 and merged on 10-18.
+PR-B helped only under priority scheduling in overload and did nothing under the default FCFS order;
+Bowen dropped it on 10-13 (`experiments/slo_sched/results/prb_results.md`). In its place PR-C, a
+server-side counter of requests that meet their SLOs (`--goodput-slo`, `sglang:num_good_requests_total`),
+was verified on a node on 10-13 and opened as
+[sgl-project/sglang#45643](https://github.com/sgl-project/sglang/pull/45643) on 10-21. Details:
+`experiments/slo_sched/PLAN.md`, the "Outcome" sections.

@@ -1,0 +1,8 @@
+rc=0 | Ran 10 tests in 0.000s | OK | test/registered/unit/observability/test_metrics_utils.py
+rc=0 | Ran 18 tests in 0.066s | OK | test/registered/unit/observability/test_stat_loggers_di.py
+rc=0 | Ran 45 tests in 0.288s | OK | test/registered/unit/managers/test_tokenizer_manager_rid_cleanup.py
+rc=0 | Ran 301 tests in 2.528s | OK | test/registered/unit/server_args/test_server_args.py
+rc=0 | Ran 4 tests in 0.022s | OK | test/registered/unit/server_args/test_server_args_docs_coverage.py
+rc=0 | Ran 12 tests in 0.103s | OK | test/registered/unit/test_server_args_migration.py
+pre-commit rc=0 | 16 passed, 0 failed, 12 files
+tree clean: yes | HEAD f0593274f9ef5bcbdcc11fdff331d9d4ce310f97

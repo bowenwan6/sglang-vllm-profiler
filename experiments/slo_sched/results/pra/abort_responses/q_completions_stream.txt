@@ -1,0 +1,10 @@
+HTTP/1.1 200 OK
+content-type: text/event-stream; charset=utf-8
+vary: Origin
+Transfer-Encoding: chunked
+
+data: {"error": {"object": "error", "message": "Request waiting timeout reached.", "type": "SERVICE_UNAVAILABLE", "param": null, "code": 503}}
+
+data: [DONE]
+
+[curl_exit=0 after=2.024414288s]

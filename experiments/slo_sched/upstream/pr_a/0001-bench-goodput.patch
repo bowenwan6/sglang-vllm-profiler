@@ -1,0 +1,304 @@
+From 0dcb7e0bae6e0e32baa88cd9adb9ee1839f1cfce Mon Sep 17 00:00:00 2001
+From: Bowen Wang <wangbowen1001@yahoo.com>
+Date: Mon, 12 Oct 2026 20:50:03 -0400
+Subject: [PATCH] [Benchmark] Report goodput and SLO attainment in
+ bench_serving
+
+Add --goodput KEY:VALUE pairs (ttft, tpot, e2el, in milliseconds; the
+spelling vLLM's benchmark uses). A request is good if it succeeded and met
+every listed SLO. The run then reports request goodput (good requests per
+second), SLO attainment over all requests sent, and the attainment of each
+listed SLO, in the console output and in the result file. Without the flag
+the output and the result fields are unchanged.
+---
+ docs/docs/developer_guide/bench_serving.mdx   | 20 ++++++
+ python/sglang/benchmark/goodput.py            | 68 +++++++++++++++++++
+ python/sglang/benchmark/serving.py            | 40 +++++++++++
+ .../unit/bench/test_bench_serving_goodput.py  | 62 +++++++++++++++++
+ 4 files changed, 190 insertions(+)
+ create mode 100644 python/sglang/benchmark/goodput.py
+ create mode 100644 test/registered/unit/bench/test_bench_serving_goodput.py
+
+diff --git a/docs/docs/developer_guide/bench_serving.mdx b/docs/docs/developer_guide/bench_serving.mdx
+index a5cb473314..8f9abd0143 100644
+--- a/docs/docs/developer_guide/bench_serving.mdx
++++ b/docs/docs/developer_guide/bench_serving.mdx
+@@ -245,6 +245,25 @@ Printed after each run:
+ 
+ The script also retokenizes generated text with the configured tokenizer and reports "retokenized" counts.
+ 
++### Goodput
++
++Throughput counts every completed request, including the ones that came back too late to be useful. Pass service level objectives with `--goodput` to count only the requests that met them:
++
++```bash Command
++python3 -m sglang.bench_serving \
++  --backend sglang --host 127.0.0.1 --port 30000 \
++  --num-prompts 1000 --request-rate 16 \
++  --goodput ttft:500 tpot:50 e2el:20000
++```
++
++Each entry is `KEY:VALUE` in milliseconds, with `KEY` one of `ttft`, `tpot`, `e2el` (end-to-end latency). A request is good if it succeeded and met every listed SLO; a single-token response has a TPOT of 0. The run then also prints:
++
++- Request goodput (req/s): good requests per second
++- SLO attainment (%): good requests over all requests sent, so failed requests count as misses
++- One attainment line per listed SLO, which shows which SLO is the binding one
++
++Sweeping `--request-rate` and reading goodput gives the highest rate the deployment sustains within its SLOs: throughput keeps rising or flattens under overload, goodput peaks and then falls.
++
+ ### JSONL output format
+ 
+ When `--output-file` is set, one JSON object is appended per run. Base fields:
+@@ -253,6 +272,7 @@ When `--output-file` is set, one JSON object is appended per run. Base fields:
+ - Duration and totals: completed, total_input_tokens, total_output_tokens, retokenized totals
+ - Throughputs and latency statistics as printed in the console
+ - `accept_length` when available (sglang)
++- `goodput_slos_ms`, `request_goodput`, `slo_attainment`, `slo_attainment_by_metric` when `--goodput` is given
+ 
+ With `--output-details`, an extended object also includes arrays:
+ 
+diff --git a/python/sglang/benchmark/goodput.py b/python/sglang/benchmark/goodput.py
+new file mode 100644
+index 0000000000..8ee381f16b
+--- /dev/null
++++ b/python/sglang/benchmark/goodput.py
+@@ -0,0 +1,68 @@
++"""Goodput for the serving benchmark: the requests that met every given latency SLO."""
++
++from __future__ import annotations
++
++from typing import TYPE_CHECKING
++
++import msgspec
++
++if TYPE_CHECKING:
++    from sglang.benchmark.serving import RequestFuncOutput
++
++GOODPUT_SLO_METRICS = ("ttft", "tpot", "e2el")
++
++
++class GoodputMetrics(msgspec.Struct, frozen=True):
++    """Field names are the keys written to the benchmark result file."""
++
++    goodput_slos_ms: dict[str, float]
++    request_goodput: float  # good requests per second
++    slo_attainment: float  # good requests / requests sent
++    slo_attainment_by_metric: dict[str, float]
++
++
++def calculate_goodput(
++    outputs: list[RequestFuncOutput], goodput_slos: dict[str, float], dur_s: float
++) -> GoodputMetrics:
++    num_good = 0
++    num_met = dict.fromkeys(goodput_slos, 0)
++    for output in outputs:
++        if not output.success:
++            continue
++        # A single-token response has no inter-token interval; its TPOT counts as 0.
++        tpot = 0.0
++        if output.output_len > 1:
++            tpot = (output.latency - output.ttft) / (output.output_len - 1)
++        observed_ms = {
++            "ttft": output.ttft * 1000,
++            "tpot": tpot * 1000,
++            "e2el": output.latency * 1000,
++        }
++        met = [name for name, slo in goodput_slos.items() if observed_ms[name] <= slo]
++        for name in met:
++            num_met[name] += 1
++        if len(met) == len(goodput_slos):
++            num_good += 1
++    return GoodputMetrics(
++        goodput_slos_ms=goodput_slos,
++        request_goodput=num_good / dur_s,
++        slo_attainment=num_good / len(outputs),
++        slo_attainment_by_metric={
++            name: count / len(outputs) for name, count in num_met.items()
++        },
++    )
++
++
++def print_goodput(goodput: GoodputMetrics) -> None:
++    slos = " ".join(f"{name}:{slo:g}" for name, slo in goodput.goodput_slos_ms.items())
++    print("{s:{c}^{n}}".format(s="Goodput", n=50, c="-"))
++    print("{:<40} {:<10}".format("SLOs (ms):", slos))
++    print(
++        "{:<40} {:<10.2f}".format("Request goodput (req/s):", goodput.request_goodput)
++    )
++    print(
++        "{:<40} {:<10.2f}".format("SLO attainment (%):", goodput.slo_attainment * 100)
++    )
++    for name, attainment in goodput.slo_attainment_by_metric.items():
++        label = f"{name.upper()} SLO attainment (%):"
++        print("{:<40} {:<10.2f}".format(label, attainment * 100))
+diff --git a/python/sglang/benchmark/serving.py b/python/sglang/benchmark/serving.py
+index ecfec3609e..f4a22e6570 100644
+--- a/python/sglang/benchmark/serving.py
++++ b/python/sglang/benchmark/serving.py
+@@ -34,6 +34,7 @@ from pathlib import Path
+ from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Tuple, Union
+ 
+ import aiohttp
++import msgspec
+ import numpy as np
+ import orjson
+ import requests
+@@ -42,6 +43,11 @@ from transformers import AutoTokenizer, PreTrainedTokenizerBase
+ 
+ from sglang.benchmark.datasets import DatasetRow, get_dataset
+ from sglang.benchmark.datasets.mooncake import get_mooncake_request_over_time
++from sglang.benchmark.goodput import (
++    GOODPUT_SLO_METRICS,
++    calculate_goodput,
++    print_goodput,
++)
+ from sglang.benchmark.utils import (
+     get_tokenizer,
+     parse_custom_headers,
+@@ -1666,6 +1672,11 @@ async def benchmark(
+         accept_length=accept_length,
+         plot_throughput=args.plot_throughput,
+     )
++    goodput = None
++    if args.goodput:
++        goodput = calculate_goodput(
++            outputs=outputs, goodput_slos=dict(args.goodput), dur_s=benchmark_duration
++        )
+ 
+     print("\n{s:{c}^{n}}".format(s=" Serving Benchmark Result ", n=50, c="="))
+     print("{:<40} {:<10}".format("Backend:", backend))
+@@ -1735,6 +1746,8 @@ async def benchmark(
+     print("{:<40} {:<10.2f}".format("Concurrency:", metrics.concurrency))
+     if accept_length:
+         print("{:<40} {:<10.2f}".format("Accept length:", accept_length))
++    if goodput:
++        print_goodput(goodput)
+     print("{s:{c}^{n}}".format(s="End-to-End Latency", n=50, c="-"))
+     print(
+         "{:<40} {:<10.2f}".format("Mean E2E Latency (ms):", metrics.mean_e2e_latency_ms)
+@@ -1894,6 +1907,9 @@ async def benchmark(
+             "max_concurrent_requests": metrics.max_concurrent_requests,
+         }
+ 
++        if goodput:
++            result.update(msgspec.structs.asdict(goodput))
++
+         if args.cache_report:
+             result["cache_report"] = {
+                 "total_prompt_tokens": total_prompt_tokens,
+@@ -2019,6 +2035,9 @@ def run_benchmark(args_: argparse.Namespace):
+     if not hasattr(args, "cache_report"):
+         args.cache_report = False
+ 
++    if not hasattr(args, "goodput"):
++        args.goodput = None
++
+     if getattr(args, "print_requests", False):
+         assert args.backend == "sglang-oai-chat"  # only support this now
+ 
+@@ -2219,6 +2238,17 @@ def _finite_positive_float(value) -> float:
+     return parsed
+ 
+ 
++def _goodput_slo(pair: str) -> Tuple[str, float]:
++    """argparse type for one --goodput KEY:VALUE entry; VALUE is in milliseconds."""
++    name, _, value = pair.partition(":")
++    if name not in GOODPUT_SLO_METRICS:
++        raise argparse.ArgumentTypeError(
++            f"expected KEY:VALUE with KEY in {', '.join(GOODPUT_SLO_METRICS)}, "
++            f"got {pair!r}"
++        )
++    return name, _finite_positive_float(value)
++
++
+ def _validate_parsed_gsp_args(
+     parser: argparse.ArgumentParser, args: argparse.Namespace
+ ) -> None:
+@@ -2447,6 +2477,16 @@ def cli_main():
+     parser.add_argument(
+         "--output-details", action="store_true", help="Output details of benchmarking."
+     )
++    parser.add_argument(
++        "--goodput",
++        nargs="+",
++        type=_goodput_slo,
++        default=None,
++        metavar="KEY:VALUE",
++        help="SLOs for goodput as KEY:VALUE pairs in milliseconds, with KEY in "
++        f"{', '.join(GOODPUT_SLO_METRICS)}, e.g. --goodput ttft:500 tpot:50. A request "
++        "counts toward goodput only if it succeeds and meets every given SLO.",
++    )
+     parser.add_argument(
+         "--print-requests",
+         action="store_true",
+diff --git a/test/registered/unit/bench/test_bench_serving_goodput.py b/test/registered/unit/bench/test_bench_serving_goodput.py
+new file mode 100644
+index 0000000000..f291afa761
+--- /dev/null
++++ b/test/registered/unit/bench/test_bench_serving_goodput.py
+@@ -0,0 +1,62 @@
++"""Unit tests for the goodput bench_serving reports under --goodput."""
++
++import argparse
++import unittest
++
++from sglang.benchmark.goodput import calculate_goodput
++from sglang.benchmark.serving import RequestFuncOutput, _goodput_slo
++from sglang.test.ci.ci_register import register_cpu_ci
++from sglang.test.test_utils import CustomTestCase
++
++register_cpu_ci(est_time=5, suite="base-a-test-cpu")
++
++DURATION_S = 10.0
++
++
++def _output(ttft, latency, output_len, success=True):
++    return RequestFuncOutput(
++        success=success, ttft=ttft, latency=latency, output_len=output_len
++    )
++
++
++# ttft / tpot / e2el in ms: 100 / 100 / 900, 500 / 100 / 900, 200 / 200 / 2200,
++# 200 / 0 / 200 (a single token), then one failed request.
++OUTPUTS = [
++    _output(ttft=0.1, latency=0.9, output_len=9),
++    _output(ttft=0.5, latency=0.9, output_len=5),
++    _output(ttft=0.2, latency=2.2, output_len=11),
++    _output(ttft=0.2, latency=0.2, output_len=1),
++    _output(ttft=0.0, latency=0.0, output_len=0, success=False),
++]
++
++
++class TestBenchServingGoodput(CustomTestCase):
++    def test_request_is_good_only_if_it_meets_every_listed_slo(self):
++        all_three = {"ttft": 3 / 5, "tpot": 3 / 5, "e2el": 3 / 5}
++        # (--goodput entries, good requests, attainment of each listed SLO alone)
++        cases = [
++            (["ttft:300", "tpot:150", "e2el:1000"], 2, all_three),
++            (["ttft:300"], 3, {"ttft": 3 / 5}),
++            # Dividing by output_len instead would give 88.9 and 80 ms, and pass.
++            (["tpot:95"], 1, {"tpot": 1 / 5}),
++        ]
++        for entries, num_good, by_metric in cases:
++            with self.subTest(entries=entries):
++                goodput = calculate_goodput(
++                    outputs=OUTPUTS,
++                    goodput_slos=dict(map(_goodput_slo, entries)),
++                    dur_s=DURATION_S,
++                )
++                self.assertEqual(goodput.request_goodput, num_good / DURATION_S)
++                self.assertEqual(goodput.slo_attainment, num_good / len(OUTPUTS))
++                self.assertEqual(goodput.slo_attainment_by_metric, by_metric)
++
++    def test_invalid_slo_entries_are_rejected(self):
++        for entry in ["itl:10", "ttft:0"]:
++            with self.subTest(entry=entry):
++                with self.assertRaises(argparse.ArgumentTypeError):
++                    _goodput_slo(entry)
++
++
++if __name__ == "__main__":
++    unittest.main()
+-- 
+2.39.0
+

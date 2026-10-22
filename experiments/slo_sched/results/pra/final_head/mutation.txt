@@ -1,0 +1,13 @@
+red   | good if any SLO is met | FAIL: test_request_is_good_only_if_it_meets_every_listed_slo
+red   | attainment over completed requests | FAIL: test_request_is_good_only_if_it_meets_every_listed_slo
+red   | tpot divides by output_len | FAIL: test_request_is_good_only_if_it_meets_every_listed_slo
+red   | no single-token guard | ERROR: test_request_is_good_only_if_it_meets_every_listed_slo
+red   | failed request is scored | FAIL: test_request_is_good_only_if_it_meets_every_listed_slo
+red   | unlisted SLOs applied as 0 | ERROR: test_request_is_good_only_if_it_meets_every_listed_slo
+red   | seconds compared with milliseconds | FAIL: test_request_is_good_only_if_it_meets_every_listed_slo
+red   | goodput per request, not per second | FAIL: test_request_is_good_only_if_it_meets_every_listed_slo
+red   | per-SLO attainment counts good requests only | FAIL: test_request_is_good_only_if_it_meets_every_listed_slo
+red   | unknown key accepted | FAIL: test_invalid_slo_entries_are_rejected
+red   | value not validated | FAIL: test_invalid_slo_entries_are_rejected
+restored files pass: True
+MUTATIONS 11, survivors 0: none

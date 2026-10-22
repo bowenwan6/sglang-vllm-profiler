@@ -21,7 +21,7 @@ latency gap comes from — not a generic benchmark ranking.
 
 ## Overview
 
-This repo holds three tracks:
+This repo holds four tracks:
 
 1. **`qwen3vl8b`** — the original TTFT-gap investigation on Qwen3-VL-8B-Instruct, asking a focused
    question: **where does SGLang's time-to-first-token (TTFT) gap versus vLLM come from?** The goal
@@ -30,9 +30,8 @@ This repo holds three tracks:
    optimization. Organised as a phase-gated pipeline (Phase 0 → 5): prove the two servers are
    comparable, establish a baseline, shape / de-noise the workloads, collect torch-profiler traces,
    triage them, and validate the top hypothesis. See §Directory Layout below and `plan.md` §1–§6.
-   **Text-only Case A/C (#2) and the image+text arm (#4, round 3) are complete.** The next question,
-   whether a CUDA graph pays inside the vision encoder (Q3), is pre-registered on branch
-   [`exp/q3-vit-graph`](https://github.com/bowenwan6/sglang-vllm-profiler/tree/exp/q3-vit-graph/experiments/qwen3vl8b/q3_vit_graph).
+   **Text-only Case A/C (#2), the image+text arm (#4, round 3) and the ViT CUDA-graph study (Q3,
+   [`q3_vit_graph/`](experiments/qwen3vl8b/q3_vit_graph/)) are complete.**
 2. **`qwen35_4b`** — correctness-first sub-track, **concluded**. Two questions were asked and
    answered: the DeepStack gap on `Qwen/Qwen3.5-4B` is `NOT_APPLICABLE_QWEN35` (every shipped
    Qwen3.5 checkpoint has an empty DeepStack index list), and the GDN study returned
@@ -43,9 +42,12 @@ This repo holds three tracks:
 3. **`qwen3vl_bcg_deepstack_fix`** — spun out of #9. A real, live-fire correctness bug: a
    BCG-replayed Qwen3-VL image prefill dropped its DeepStack contribution. Fixed, validated
    `FAIL → PASS`, and upstreamed as
-   **[sgl-project/sglang#33726](https://github.com/sgl-project/sglang/pull/33726)** (open and
-   approved; it needs current upstream `main` merged in before it can land). Current state:
-   [`upstream_handoff.md`](experiments/qwen3vl_bcg_deepstack_fix/upstream_handoff.md).
+   **[sgl-project/sglang#33726](https://github.com/sgl-project/sglang/pull/33726)** (open; revalidated
+   on 2026-10-17 on 2× H200 against current `main`, `plan.md` §10.7).
+4. **`slo_sched`** — SLO-aware serving on SGLang (S1), after JITServe (NSDI '26). A goodput option for
+   the benchmark ([sgl-project/sglang#43967](https://github.com/sgl-project/sglang/pull/43967), merged)
+   and a server-side goodput counter ([sgl-project/sglang#45643](https://github.com/sgl-project/sglang/pull/45643),
+   open); a per-request waiting timeout was measured and dropped. See `plan.md` §13.
 
 ## Main Findings
 
@@ -108,23 +110,24 @@ Clean validation focuses on **Case A** (the actionable gap) and **Case C** (the 
 | 5 — Validation | clean Case A/C validation | ✅ Complete for scoped A/C clean validation |
 | v2 #2 — Default-overlap rebaseline | production-default overlap-ON Case A/C baseline + PCG re-test | ✅ Complete / PASS (`experiments/qwen3vl8b/v2/caseAC_rebaseline/results/`) |
 
-### Track status (as of 2026-09-29)
+### Track status (as of 2026-10-22)
 
 | Track | Issue | Status |
 |---|---|---|
 | Default-overlap rebaseline | [#2](https://github.com/bowenwan6/sglang-vllm-profiler/issues/2) | ✅ Complete / PASS — closed |
 | Qwen3.5 DeepStack question | [#9](https://github.com/bowenwan6/sglang-vllm-profiler/issues/9) | ✅ **Closed 2026-09-03** — verdict `NOT_APPLICABLE_QWEN35` ([conclusion](experiments/qwen35_4b/issue9_conclusion.md)) |
-| Qwen3-VL BCG DeepStack fix | (spun out of #9) | ✅ Fixed + validated; upstream PR [#33726](https://github.com/sgl-project/sglang/pull/33726) open and approved. It needs current upstream `main` merged in (the last check showed a conflict in `prefill_cuda_graph_runner.py`), then a fresh smoke run |
+| Qwen3-VL BCG DeepStack fix | (spun out of #9) | ✅ Fixed + validated; upstream PR [#33726](https://github.com/sgl-project/sglang/pull/33726) open. Revalidated 2026-10-17 at head `ccfda8dfd9` (M12, 2× H200): still needed on current `main`; with it BCG and FULL follow eager to bf16 ties ([report](experiments/qwen3vl_bcg_deepstack_fix/results/m12_revalidation_2xh200_20261017T1741Z/report.md)) |
 | Qwen3-VL image+text + CUDA IPC | [#4](https://github.com/bowenwan6/sglang-vllm-profiler/issues/4) | ✅ **Measured and reported** — [`issue4_v3_report.pdf`](experiments/qwen3vl8b/v3_issue4/issue4_v3_report.pdf) (7 pp). **Transport `cuda_ipc` is worth −28.2% of TTFT** and is not the default. The prefill graph pays **−16.3% at 256×256 and −14.0% at 360p**, nothing measurable at 720p+; what it recovers in *ms* is set by prefill token count almost regardless of composition, the *percentage* by composition. On a mixed stream the net stays positive to a **43–59% image share** on TTFT and further on e2e. Against a **real 1M-request production size distribution**, though, only **15.2% of requests** land where a material win was measured ([`workload_realism.md`](experiments/qwen3vl8b/v3_issue4/workload_realism.md)) — the deliverable is the curve, not a threshold. SGLang is **36.9% faster than vLLM** on the image path, reversing #2's text-only result. |
 | Qwen3.5 SGLang-vs-vLLM transfer | [#3](https://github.com/bowenwan6/sglang-vllm-profiler/issues/3) | ❌ **Not run.** The DeepStack and GDN studies answer different questions. |
 | Selective / default-on graph policy | [#5](https://github.com/bowenwan6/sglang-vllm-profiler/issues/5) | 🟡 **Partly answered by #4 v3.** The backend sweep exists: BCG pays below ~250 visual tokens and is neutral above; PCG is **unmeasurable on current upstream** (92% eager fallback, [`pcg_eager_fallback_finding.md`](experiments/qwen3vl8b/v3_issue4/pcg_eager_fallback_finding.md)). What #5 still needs is the concurrency axis. |
-| ViT CUDA graph (Q3) | — | 🟡 **Pre-registered 2026-09-29** on branch [`exp/q3-vit-graph`](https://github.com/bowenwan6/sglang-vllm-profiler/tree/exp/q3-vit-graph/experiments/qwen3vl8b/q3_vit_graph): does capturing the vision encoder in a CUDA graph pay, and can the gain be predicted from an eager trace alone? |
+| ViT CUDA graph (Q3) | — | ✅ **Done 2026-09-29.** H1 (gain predictable from an eager profile) not supported as pre-registered, H2 not supported as written, H3 (mixed shapes cost captures and memory) supported — [`q3_report.md`](experiments/qwen3vl8b/q3_vit_graph/results/q3_report.md), `plan.md` §12.6 |
+| SLO-aware serving (S1) | — | ✅ **PR-A merged 2026-10-18** ([#43967](https://github.com/sgl-project/sglang/pull/43967)), **PR-C open** since 2026-10-21 ([#45643](https://github.com/sgl-project/sglang/pull/45643)), PR-B dropped 2026-10-13 after measurement — [`slo_sched/PLAN.md`](experiments/slo_sched/PLAN.md), `plan.md` §13 |
 
 ## Directory Layout
 
 | Path | Contents |
 |---|---|
-| `plan.md` | **Research source of truth**: current mainline, roadmap and the record of every sub-track (§1–§12). |
+| `plan.md` | **Research source of truth**: status (§0), current mainline, roadmap and the record of every sub-track (§1–§13). |
 | `datasets/qwen3vl8b/` | Canonical text workloads `caseA..D.jsonl`; their sha256 is pinned in each run's metadata. Never regenerated mid-project. |
 | `tools/radix/setup_node.sh` | Rebuilds the profiling environment on an SGLang community (RADIX) GPU node. |
 | `experiments/qwen3vl8b/v1/` | **Round 1 — Phases 0–5.** `phase0/`…`phase5/` (summaries, scripts, run metadata), `analysis/` (Phase 4 triage, Phase 5 launch-gap analysis), `traces/` (Phase 3 torch-profiler traces, Git LFS), `logs/` (server and orchestrator logs, Git LFS), `reports/` (v1 narrative reports), `v1_archive_plan.md` (the full v1 plan). |
@@ -132,6 +135,7 @@ Clean validation focuses on **Case A** (the actionable gap) and **Case C** (the 
 | `experiments/qwen3vl8b/v3_issue4/` | **Round 3 — #4 image+text + CUDA IPC (✅ 2026-09-06).** `manifest.md` (frozen stack), `progress.md` (step log), `issue4_v3_report.pdf`, `imgA_report.md`, `imgR_report.md`, `q1_report.md`, `q2_report.md`, `workload_realism.md`, `pcg_eager_fallback_finding.md`, `figures/`, `scripts/`. |
 | `experiments/qwen35_4b/` | **Qwen3.5-4B correctness sub-track — concluded.** DeepStack verdict `NOT_APPLICABLE_QWEN35` ([`issue9_conclusion.md`](experiments/qwen35_4b/issue9_conclusion.md)); GDN verdict `PASS_BCG_GDN_NOTABLE_GAP` ([`gdn/final_report.md`](experiments/qwen35_4b/gdn/final_report.md)). |
 | `experiments/qwen3vl_bcg_deepstack_fix/` | **Qwen3-VL BCG DeepStack replay-slot fix** — upstream PR [#33726](https://github.com/sgl-project/sglang/pull/33726). Start at [`upstream_handoff.md`](experiments/qwen3vl_bcg_deepstack_fix/upstream_handoff.md); `results/` holds the r2 baseline and the m* milestone evidence (m10 = post-merge smoke). The two `*submission*.md` files are superseded snapshots. |
+| `experiments/slo_sched/` | **S1 — SLO-aware serving.** `PLAN.md` (plan and dated outcomes), `BACKGROUND.md` (JITServe and SGLang facts), `PRB_PLAN.md` / `PRB_RESEARCH.md` (the dropped PR-B), `results/` (session reports), `scripts/` (client, runners, node checks), `upstream/` (patches and texts of PR-A and PR-C). |
 
 ## How To Read This Repo
 
@@ -184,10 +188,6 @@ Clean validation focuses on **Case A** (the actionable gap) and **Case C** (the 
 
 ## Next Step
 
-- **Q3 — ViT CUDA graph:** pre-registered 2026-09-29 on branch
-  [`exp/q3-vit-graph`](https://github.com/bowenwan6/sglang-vllm-profiler/tree/exp/q3-vit-graph/experiments/qwen3vl8b/q3_vit_graph) (`plan.md` §12.6 on that branch); runs on an SGLang community GPU node.
-- **PR #33726:** merge current upstream `main` into the PR branch, re-run the dense and MoE smokes, and
-  report the result on the PR.
 - **#5 — graph-enablement policy:** #4 v3 supplied the backend sweep; the concurrency (load) axis is still
   missing. Decide PCG vs BCG explicitly — **BCG must not silently replace the PCG arm** (different backends).
 - **#3 — the Qwen3.5 transfer check** (after a common environment pin): clean Case A/C, SGLang default vs

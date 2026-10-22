@@ -1,0 +1,9 @@
+worktree at 6baf9e5d7 perf(scheduler): test the two waiting bounds separately in the timeout scan; base b524de2de 2026-10-06 [diffusion] optimization: release the allocator c
+imports /data/bowenwan6/home/sgl/sglang-prb/python/sglang/__init__.py
+PASS test/registered/unit/managers/test_scheduler_timeouts.py :: 13 passed, 22 warnings, 10 subtests passed in 12.26s
+PASS test/registered/unit/managers/test_io_struct.py :: 60 passed, 2 skipped, 24 warnings, 16 subtests passed in 10.09s
+PASS test/registered/unit/entrypoints/openai/test_serving_completions.py :: 22 passed, 21 warnings, 2 subtests passed in 10.02s
+PASS test/registered/unit/entrypoints/openai/test_serving_chat.py :: 151 passed, 70 warnings, 90 subtests passed in 43.34s
+pre-commit on 13 files: rc=0
+    hooks passed: 16, failed: 0
+DONE

@@ -1,0 +1,16 @@
+  warnings.warn(f"Only CUDA, MUSA and NPU support GGUF quantization currently.")
+  warnings.warn(
+global off, field never seen                               n=0:      1.20 us  n=1000:      1.19 us  n=10000:      1.18 us
+global 60 s, no request bound                              n=0:      1.29 us  n=1000:     58.35 us  n=10000:   1054.91 us
+  warnings.warn(f"Only CUDA, MUSA and NPU support GGUF quantization currently.")
+  warnings.warn(
+global off, field never seen                               n=0:      1.19 us  n=1000:      1.19 us  n=10000:      1.19 us
+global 60 s, no request bound                              n=0:      1.29 us  n=1000:     90.79 us  n=10000:   1526.96 us
+global off, field seen, no queued request carries one      n=0:      1.30 us  n=1000:     62.76 us  n=10000:   1203.63 us
+global off, every queued request carries 3600 s            n=0:      1.31 us  n=1000:    120.15 us  n=10000:   1977.01 us
+global 60 s, every queued request carries 3600 s           n=0:      1.30 us  n=1000:    123.52 us  n=10000:   2058.85 us
+global off, field never seen                               n=0:      1.19 us  n=1000:      1.18 us  n=10000:      1.18 us
+global 60 s, no request bound                              n=0:      1.33 us  n=1000:     60.20 us  n=10000:   1002.51 us
+global off, field seen, no queued request carries one      n=0:      1.31 us  n=1000:     77.30 us  n=10000:   1377.82 us
+global off, every queued request carries 3600 s            n=0:      1.32 us  n=1000:     98.49 us  n=10000:   1620.24 us
+global 60 s, every queued request carries 3600 s           n=0:      1.32 us  n=1000:     92.03 us  n=10000:   1584.99 us

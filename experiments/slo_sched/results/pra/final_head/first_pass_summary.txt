@@ -1,0 +1,12 @@
+setup conda/env/repos                        ok
+branch head installed                        ok (0dcb7e0bae on e775fa7253)
+unit files (ours + 5 neighbours)             PASS (6 of 6 files)
+mutation check                               PASS (11 of 11 mutations caught)
+ruff format --check                          PASS
+ruff check                                   PASS
+isort --check                                PASS
+codespell                                    PASS
+pre-commit (4 files)                         PASS (16 hooks passed, 15 skipped as not applicable)
+--goodput in --help                          PASS
+model                                        ok (16G)
+live server: reported == recount             FAIL (see verify_summary.json)

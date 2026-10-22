@@ -1,0 +1,12 @@
+HTTP/1.1 200 OK
+content-type: text/event-stream; charset=utf-8
+vary: Origin
+Transfer-Encoding: chunked
+
+data: {"error": {"object": "error", "message": "Request waiting timeout reached.", "type": "SERVICE_UNAVAILABLE", "param": null, "code": 503}}
+
+data: {"id":"fe7ea10c5eae439389ce9ae50b37604d","object":"chat.completion.chunk","created":1791170054,"model":"Qwen/Qwen3-8B","choices":[],"usage":{"prompt_tokens":0,"total_tokens":0,"completion_tokens":0,"prompt_tokens_details":null,"reasoning_tokens":0}}
+
+data: [DONE]
+
+[curl_exit=0 after=2.019861240s]

@@ -1,0 +1,11 @@
+generated: 2026-10-05T02:14:55Z 
+gpu: NVIDIA H200, 595.71.05
+nvcc: Build cuda_13.0.r13.0/compiler.36424714_0
+profiler: e5c5f75b34333cb0c2e25443b939658ab4760d97 main
+sglang: d132f6739ed11a99dc6f3dea8c18f2d77148bbfb main-upstream (ref origin/feat/bench-goodput)
+flashinfer-cubin==0.7.0.post1
+flashinfer-jit-cache==0.7.0.post1+cu130
+flashinfer-python==0.7.0.post1
+sglang-kernel==0.4.9
+torch==2.14.1
+transformers==5.17.0
