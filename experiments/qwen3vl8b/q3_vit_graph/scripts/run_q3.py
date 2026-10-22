@@ -893,7 +893,7 @@ def main() -> None:
     pa.add_argument("--with-rot", action="store_true",
                     help="also run eager with the graph path's unfused rotary (off_rot) to attribute an encoder-output difference")
     pa.add_argument("--with-default-interp", action="store_true",
-                    help="also run the graph arm without --enable-precise-embedding-interpolation (upstream-issue evidence)")
+                    help="also run the graph arm without --enable-precise-embedding-interpolation")
     pj = sub.add_parser("parity-judge", help="re-judge a saved parity.json under the post-hoc downstream rule")
     pj.add_argument("--approved-by", required=True, help="who approved the deviation, e.g. 'Bowen (chat 2026-09-29)'")
     p = sub.add_parser("pilot")

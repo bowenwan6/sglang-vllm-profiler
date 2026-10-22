@@ -140,7 +140,7 @@ def main() -> None:
         if par.get("dumps_default_interp_vs_off"):
             r2 = par["dumps_default_interp_vs_off"].get("rows") or []
             L.append(f"- graph arm with the **default** interpolation flag vs eager: rel_fro "
-                     f"{[round(r.get('rel_fro') or -1, 4) for r in r2]} (upstream-issue evidence)")
+                     f"{[round(r.get('rel_fro') or -1, 4) for r in r2]}")
         L.append("")
     else:
         L.append("not run\n")

@@ -16,7 +16,7 @@ Pre-registered verdict **FAIL**; post-hoc downstream rule (approved by Bowen (ch
 - greedy text: 4/5 fixtures identical; divergences: `image512_colors` at token 6 (off-arm margin 0.00 nat, benign)
 - eager with the unfused rotary vs eager (implementation noise floor): rel_fro [0.0212, 0.0212, 0.0723]
 - graph arm vs eager with the unfused rotary: rel_fro [0.0557, 0.0557, 0.0702]
-- graph arm with the **default** interpolation flag vs eager: rel_fro [0.4694, 0.4694, 0.3105] (upstream-issue evidence)
+- graph arm with the **default** interpolation flag vs eager: rel_fro [0.4694, 0.4694, 0.3105]
 
 ## Pilot: the eager encoder's time budget and the amended H1 prediction
 

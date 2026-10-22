@@ -140,12 +140,10 @@ to buckets, which is how the LM prefill graph already works.
 It is one model on one GPU class, driven at c=1: a **mechanism study with an upper bound**, not a
 deployment recommendation. A publishable finding would additionally need (i) the same predictor
 checked on the LM stage with the LM graph (PR #33726's branch), (ii) a second model with the same
-graph runner (Qwen2.5-VL-7B), (iii) a second GPU class (RADIX has H100s), (iv) hit-rate analysis on a
-real resolution distribution, and (v) ideally a bucketed-ViT-graph prototype that converts the upper
-bound into a deployable gain. Q3 is the first of these steps and is designed so its data feed the
-others unchanged. A by-product for upstream: under default flags the graph and eager paths compute
-different position embeddings (B4); `parity --with-default-interp` records the size of that
-difference as evidence for an issue.
+graph runner (Qwen2.5-VL-7B), (iii) a second GPU class (RADIX has H100s) and (iv) hit-rate analysis on
+a real resolution distribution. Q3 is the first of these steps and is designed so its data feed the
+others unchanged. A by-product: under default flags the graph and eager paths compute different
+position embeddings (B4); `parity --with-default-interp` records the size of that difference.
 
 ## 3. Design
 
@@ -303,7 +301,7 @@ encoder differ by; at the LM level the graph arm (with `--enable-precise-embeddi
 within the eager-vs-eager spread. Two findings stand regardless of what follows: (1) the bf16 Qwen3-VL
 encoder amplifies implementation differences (rotary kernel, rotary-table dtype) to 2–7 % of its output
 norm without changing greedy text; (2) with default flags the ViT CUDA graph changes model outputs
-materially (position-embedding interpolation, B4) — an upstream issue.
+materially (position-embedding interpolation, B4).
 
 **Decision pending (Bowen).** Proceeding to the latency stages requires a *post-hoc* deviation from the
 pre-registered parity gate: judging parity by the downstream rule implemented in
@@ -366,10 +364,10 @@ the graphs. The exact-shape design is a net loss on varied traffic and a clear w
 **Side findings.** (1) With default flags the ViT CUDA graph changes model outputs (encoder rel_fro
 0.31–0.47, greedy text diverging at token 1 with a 1.0-nat margin) because graph mode uses the legacy
 position-embedding interpolation, which follows `--enable-precise-embedding-interpolation` (default off)
-while eager always uses linspace — upstream issue material. (2) The bf16 encoder amplifies implementation
+while eager always uses linspace. (2) The bf16 encoder amplifies implementation
 differences (rotary kernel, table dtype) to 2–7 % of its output norm without changing greedy text; a 2e-2
 encoder-output tolerance is below that noise floor. (3) The graph path's unfused rotary costs 0.75 ms (256²)
-to 8.3 ms (1080p) of GPU time; with the fused kernel inside the graph, the large-image loss would vanish.
+to 8.3 ms (1080p) of GPU time.
 (4) The pilot's 16-vs-128 output-token check differed by 7.5 % on 30 requests (drift-level); the sweep kept
 16 tokens as pre-registered, so absolute TTFT levels are not directly comparable with v3's 128-token cells.
 

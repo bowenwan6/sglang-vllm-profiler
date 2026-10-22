@@ -328,9 +328,8 @@ warning" is indistinguishable from "600 fallbacks on 94% of post-onset calls".
 Anyone reading only the batch-level indicator would have published 144.8 ms as
 "the tc_piecewise number".
 
-This is a genuine upstream finding — the capture-stream eager fallback is not a
-rare transient on Qwen3-VL image serving — but per §11.5 criterion 5 it belongs
-in a **new issue**, not in #4's scope. Recorded as a follow-up.
+The capture-stream eager fallback is not a rare transient on Qwen3-VL image
+serving; per §11.5 criterion 5 it is outside #4's scope.
 
 #### Run-to-run noise at smoke size
 
@@ -390,16 +389,6 @@ result above was already written — but it cost wall-clock time and would have
 silently stalled the phase-2 launch. Stuck shells killed; the sequencing now keys
 off artifacts (a results file appearing, a marker line in a log) rather than off
 process-name polling, which cannot self-match.
-
-### Follow-up drafted, not filed
-
-[`pcg_eager_fallback_finding.md`](pcg_eager_fallback_finding.md) — the
-capture-stream eager fallback written up for a **separate** upstream issue, per
-§11.5 criterion 5. It is a draft in this repo only; **nothing has been filed
-upstream**, since opening an issue is an outward-facing action and is the owner's
-call. It carries the mechanism, the measured magnitude, the reason the batch-level
-indicator cannot see it, a reproduction, and three suggested directions offered as
-options rather than a preferred design.
 
 ---
 
@@ -1149,7 +1138,6 @@ it turned out to matter.
 | [`issue4_v3_report.pdf`](issue4_v3_report.pdf) | 7 pages, every number read from the results JSON by the generator |
 | [`q1_report.md`](q1_report.md) | matched-N composition test |
 | [`q2_report.md`](q2_report.md) | mixed arrival stream, both metrics, confound stated |
-| [`pcg_eager_fallback_finding.md`](pcg_eager_fallback_finding.md) | drafted for a separate upstream issue, **not filed** |
 
 **Answers.** Transport is the large lever (−28.2%). The prefill graph's recovery
 in milliseconds tracks prefill token count almost regardless of composition; the
